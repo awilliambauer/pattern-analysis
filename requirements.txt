@@ -1,0 +1,15 @@
+ipython
+itermplot
+dill
+numpy
+pandas
+scipy
+matplotlib
+scikit-learn
+pygam
+graphviz
+editdistance
+biopython
+tables
+statsmodels
+mpyq
