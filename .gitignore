@@ -13,7 +13,7 @@ venv/
 *.pickle
 .idea/
 __pycache__/
-data/
+/data/
 *.fdb_latexmk
 *.fls
 *.synctex.gz
