@@ -8,13 +8,18 @@ import os
 import sys
 import scouting_detector
 
-files = os.listdir("replays")
+files = os.listdir("replays")[:100]
 
 with open("scouting_stats.csv", 'w', newline = '') as fp:
-    events_out = csv.DictWriter(fp, fieldnames=["Game ID", "Team 1 Scouting Frequency", "Team 1 Scouting Time", "Team 2 Scouting Frequency", "Team 2 Scouting Time", "Winner (team #)"])
+    events_out = csv.DictWriter(fp, fieldnames=["Game ID", "Team 1 Scouting Frequency", "Team 1 Scouting Time", 
+                                                "Team 2 Scouting Frequency", "Team 2 Scouting Time", "Winner (team #)"])
     events_out.writeheader()
     for filename in files:
         game_id = filename.split("_")[1].split(".")[0]
         pathname = "replays/" + filename
-        team1_nums, team1_fraction, team2_nums, team2_fraction, winner = scouting_detector.detect_scouting(pathname)
-        events_out.writerow({"Game ID": game_id, "Team 1 Scouting Frequency": team1_nums, "Team 1 Scouting Time": team1_fraction, "Team 2 Scouting Frequency": team2_nums, "Team 2 Scouting Time": team2_fraction, "Winner (team #)": winner})
+        try:
+            team1_nums, team1_fraction, team2_nums, team2_fraction, winner = scouting_detector.detect_scouting(pathname)
+            events_out.writerow({"Game ID": game_id, "Team 1 Scouting Frequency": team1_nums, "Team 1 Scouting Time": team1_fraction, 
+                             "Team 2 Scouting Frequency": team2_nums, "Team 2 Scouting Time": team2_fraction, "Winner (team #)": winner})
+        except RuntimeError:
+            continue

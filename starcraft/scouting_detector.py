@@ -207,6 +207,16 @@ def scouting_stats(scouting_dict):
 
 def detect_scouting(filename):
     r = sc2reader.load_replay(filename)
+
+    if hasattr(r, "marked_error") and r.marked_error:
+        print("skipping", r.filename, "as it contains errors")
+        print(r.filename, "has build", r.build, "but best available datapack is", r.datapack.id)
+        raise RuntimeError()
+
+    if r.winner is None:
+        print(r.filename, "has no winner information")
+        raise RuntimeError()
+
     tracker_events = r.tracker_events
     game_events = r.game_events
     frames = r.frames
