@@ -8,7 +8,7 @@ import os
 import sys
 import scouting_detector
 
-files = os.listdir("replays")[:100]
+files = os.listdir("replays")
 
 with open("scouting_stats.csv", 'w', newline = '') as fp:
     events_out = csv.DictWriter(fp, fieldnames=["Game ID", "Team 1 Scouting Frequency", "Team 1 Scouting Time", 
