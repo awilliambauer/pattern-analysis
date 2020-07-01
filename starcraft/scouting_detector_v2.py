@@ -175,6 +175,36 @@ def printTime(time_dict):
         print(" -> ", end = "")
         print(time_dict[key])
 
+def scouting_stats(scouting_dict):
+    '''Calculates the number of times a player scouts their opponent and for
+    what fraction of the total time period'''
+    num_times = 0
+    total_time = 0
+    scouting_time = 0
+    cur_scouting = False
+
+    length = len(scouting_dict.keys())
+    if scouting_dict[1] == "Scouting opponent":
+        num_times += 1
+        scouting_time += 1
+        cur_scouting = True
+    total_time += 1
+    frame = 2
+    while(frame <= length):
+        total_time += 1
+        if scouting_dict[frame] == "Scouting opponent":
+            if cur_scouting == True:
+                scouting_time += 1
+            else:
+                num_times += 1
+                scouting_time += 1
+                cur_scouting = True
+        else:
+            cur_scouting = False
+        frame += 1
+    scouting_fraction = scouting_time/total_time
+    return num_times, scouting_fraction
+
 def detect_scouting(filename):
     r = sc2reader.load_replay(filename)
     tracker_events = r.tracker_events
@@ -185,15 +215,10 @@ def detect_scouting(filename):
     allEvents = buildEventDictionaries(tracker_events, game_events)
     team1_scouting_states, team2_scouting_states = buildScoutingDictionaries(allEvents)
 
-    team1_times = toTime(team1_scouting_states, frames, seconds)
-    team2_times = toTime(team2_scouting_states, frames, seconds)
+    #team1_times = toTime(team1_scouting_states, frames, seconds)
+    #team2_times = toTime(team2_scouting_states, frames, seconds)
 
-    print("\n--------Team 1---------")
-    #print(team1_scouting_states)
-    printTime(team1_times)
+    team1_num_times, team1_fraction = scouting_stats(team1_scouting_states)
+    team2_num_times, team2_fraction = scouting_stats(team2_scouting_states)
 
-    print("\n\n--------Team 2---------")
-    #print(team2_scouting_states)
-    printTime(team2_times)
-
-detect_scouting("replays/ggtracker_341316.SC2Replay")
+    return team1_num_times, team1_fraction, team2_num_times, team2_fraction, r.winner.number
