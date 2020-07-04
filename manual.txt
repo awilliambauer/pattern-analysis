@@ -1,0 +1,153 @@
+pattern-analysis manual
+v0.1
+Aaron Bauer
+7/2/2020
+
+**********  check_models.py  **********
+1. load puzzle data for pids according to datapath/config.json
+2. load pattern models
+3. predict patterns on test data
+4. compute pattern features
+5. load user and puzzle data
+6. compute baseline features
+7. fit baseline models
+8. fit pattern models, finding best feature set
+
+constants:
+    SUBPATTERN_KRANGE
+
+functions: 
+    predict_from_saved_model
+        predicts patterns on test_data using saved_model loaded by load_sub_lookup
+    compute_cluster_times
+        computes time and actions spend in each cluster (and normalized versions)
+        returns dataframe with these features merged in
+    compute_subcluster_times
+        computes time and actions spend in each subcluster (and normalized versions)
+        returns dataframe with these features merged in
+    load_sub_lookup
+        loads pattern models
+        takes datapath and subseries_lookup
+
+arguments:
+    datapath
+    --new-ticc
+        runs TICC, producing:
+                datapath/noise_values.txt
+                datapath/all_series.txt
+                datapath/puz_idx_lookup.pickle
+                datapath/idx_lookup.pickle
+    --debug
+        turn on debug logging
+    --no-test
+        exit after loading data
+
+requires:
+    ticc
+    pattern_extraction.py
+    util.py
+
+    datapath/config.json
+    (without --new-ticc)
+        datapath/noise_values.txt
+        datapath/all_series.txt
+        datapath/puz_idx_lookup.pickle
+        datapath/idx_lookup.pickle
+        datapath/all/subpatterns/subseries_lookup.pickle
+        other subpattern files
+    data/user_metadata_v2.csv
+    data/puzzle_categories_latest.csv
+
+
+**********  collab_models.py  **********
+
+
+**********  collab_viz.py  **********
+
+
+**********  compute_time.py  **********
+
+
+**********  dump_events.py  **********
+
+
+**********  dump_metadata.py  **********
+
+
+**********  dump_predicted_patterns.py  **********
+
+
+**********  dump_team_structure.py  **********
+
+
+**********  dump_ubiq.py  **********
+
+
+**********  generate_results.py  **********
+
+
+**********  graph_analysis.py  **********
+
+
+**********  graph_main.py  **********
+
+
+**********  LICENSE  **********
+
+
+**********  make_tree_viz.py  **********
+
+
+**********  model_mozak.py  **********
+
+
+**********  model_sc2.py  **********
+
+
+**********  Node.py  **********
+
+
+**********  parse_PDB.py  **********
+
+
+**********  pattern_extraction.py  **********
+
+
+**********  pattern_model_evaluation.py  **********
+
+
+**********  plot_util.py  **********
+
+
+**********  process_puzzle_meta.py  **********
+
+
+**********  process_puzzle_meta_check.py  **********
+
+
+**********  rank_growth.py  **********
+
+
+**********  RawNode.py  **********
+
+
+**********  requirements.txt  **********
+
+
+**********  team_models.py  **********
+
+
+**********  TMscore  **********
+
+
+**********  TMscore.f  **********
+
+
+**********  tmscore_batch.zsh  **********
+
+
+**********  util.py  **********
+
+
+**********  variation_analysis.py  **********
+

@@ -1,5 +1,4 @@
 ipython
-itermplot
 dill
 numpy
 pandas
