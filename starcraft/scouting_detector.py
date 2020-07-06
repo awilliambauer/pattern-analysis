@@ -203,7 +203,8 @@ def scouting_stats(scouting_dict):
             cur_scouting = False
         frame += 1
     scouting_fraction = scouting_time/total_time
-    return num_times, scouting_fraction
+    scouting_rate = num_times/total_time
+    return scouting_rate, scouting_fraction
 
 def detect_scouting(filename):
     r = sc2reader.load_replay(filename)

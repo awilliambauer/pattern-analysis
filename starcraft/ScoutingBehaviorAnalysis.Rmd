@@ -1,0 +1,67 @@
+---
+title: "Scouting Behavior Analysis"
+author: "Alison Cameron"
+date: "July 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(dplyr)
+library(car)
+library(tidyverse)
+library(broom)
+library("readxl")
+library(Hmisc)
+library(mice)
+```
+
+### Reading Data and Gathering Summary Statistics
+```{r}
+scouting <- read.csv("scouting_stats.csv")
+summary(scouting)
+scouting$Win2 <- ifelse(scouting$Win == 1, "win", "loss")
+```
+
+### Exploratory Data Analysis
+```{r}
+ggplot(scouting, aes(y=ScoutingFrequency, group=Win)) + geom_boxplot()
+ggplot(scouting, aes(y=ScoutingTime, group=Win)) + geom_boxplot()
+ggplot(scouting, aes(x = Win, y = ScoutingTime, color = Win2, shape = Win2)) + geom_point()
+ggplot(scouting, aes(x = Win, y = ScoutingFrequency, color = Win2, shape = Win2)) + geom_point()
+```
+
+### Creating a Binary Logistic Regression Model
+```{r}
+scouting.glm <- glm(Win ~ ScoutingTime + ScoutingFrequency, data = scouting, family = binomial)
+summary(scouting.glm)
+```
+
+Checking if one variable is more significant than the other
+```{r}
+scouting.glm2 <- update(scouting.glm, . ~ . -ScoutingFrequency)
+summary(scouting.glm2)
+anova(scouting.glm2, scouting.glm, test = "Chisq")
+```
+
+```{r}
+scouting.glm3 <- update(scouting.glm, . ~ . -ScoutingTime)
+summary(scouting.glm3)
+anova(scouting.glm3, scouting.glm, test = "Chisq")
+```
+
+ScoutingTime appears to be much more significant than ScoutingFrequency. 
+Therefore, we accept scouting.glm2 to be the more accurate model.
+
+### Interpretation
+```{r}
+oddsIncrease <- exp(7.0653*log(1.1))
+oddsIncrease
+```
+
+For a 10% increase in the time spent scouting an opponent, the odds that a player will win
+increases by a factor of 1.9
+
+
+
