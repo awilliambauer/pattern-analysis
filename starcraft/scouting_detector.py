@@ -14,6 +14,8 @@ def buildEventDictionaries(tracker_events, game_events):
     team2 = 2
     start1 = False
     start2 = False
+    team1_count = 0
+    team2_count = 0
     for t_event in tracker_events:
         #checking for starting bases
         if isinstance(t_event, sc2reader.events.tracker.UnitBornEvent):
@@ -29,9 +31,16 @@ def buildEventDictionaries(tracker_events, game_events):
     for g_event in game_events:
         if isinstance(g_event, sc2reader.events.game.CameraEvent):
             camera_events.append(g_event)
+            if g_event.player.pid == 1:
+                team1_count += 1
+            elif g_event.player.pid == 2:
+                team2_count += 1
         #account for moving terran bases
         elif isinstance(g_event, sc2reader.events.game.TargetUnitCommandEvent) and (g_event.ability_name == "LandCommandCenter" or g_event.ability_name == "LandOrbitalCommand"):
             unit_init_events.append(g_event)
+
+    if team1_count == 0 or team2_count == 0:
+        raise RuntimeError()
 
     return unit_init_events + camera_events
 
@@ -190,7 +199,7 @@ def scouting_stats(scouting_dict):
         cur_scouting = True
     total_time += 1
     frame = 2
-    while(frame <= length):
+    while(frame < length):
         total_time += 1
         if scouting_dict[frame] == "Scouting opponent":
             if cur_scouting == True:
@@ -207,7 +216,11 @@ def scouting_stats(scouting_dict):
     return scouting_rate, scouting_fraction
 
 def detect_scouting(filename):
-    r = sc2reader.load_replay(filename)
+    try:
+        r = sc2reader.load_replay(filename)
+    except:
+        print(filename + " cannot load using sc2reader due to an internal ValueError")
+        raise RuntimeError()
 
     if hasattr(r, "marked_error") and r.marked_error:
         print("skipping", r.filename, "as it contains errors")
@@ -218,18 +231,39 @@ def detect_scouting(filename):
         print(r.filename, "has no winner information")
         raise RuntimeError()
 
+    try:
+        #some datafiles did not have a 'Controller' attribute
+        if r.attributes[1]["Controller"] == "Computer" or r.attributes[2]["Controller"] == "Computer":
+            print(r.filename, "is a player vs. AI game")
+            raise RuntimeError()
+    except:
+        raise RuntimeError()
+
+    if r.length.seconds < 300:
+        print(r.filename, "is shorter than 5 minutes")
+        raise RuntimeError()
+
+    if len(r.players) != 2:
+        print(r.filename, "is not a 1v1 game")
+        raise RuntimeError()
+
     tracker_events = r.tracker_events
     game_events = r.game_events
     frames = r.frames
     seconds = r.length.seconds
 
-    allEvents = buildEventDictionaries(tracker_events, game_events)
-    team1_scouting_states, team2_scouting_states = buildScoutingDictionaries(allEvents)
+    try:
+        allEvents = buildEventDictionaries(tracker_events, game_events)
+        team1_scouting_states, team2_scouting_states = buildScoutingDictionaries(allEvents)
 
-    #team1_times = toTime(team1_scouting_states, frames, seconds)
-    #team2_times = toTime(team2_scouting_states, frames, seconds)
+        #team1_times = toTime(team1_scouting_states, frames, seconds)
+        #team2_times = toTime(team2_scouting_states, frames, seconds)
 
-    team1_num_times, team1_fraction = scouting_stats(team1_scouting_states)
-    team2_num_times, team2_fraction = scouting_stats(team2_scouting_states)
+        team1_num_times, team1_fraction = scouting_stats(team1_scouting_states)
+        team2_num_times, team2_fraction = scouting_stats(team2_scouting_states)
 
-    return team1_num_times, team1_fraction, team2_num_times, team2_fraction, r.winner.number
+        return team1_num_times, team1_fraction, team2_num_times, team2_fraction, r.winner.number
+
+    except:
+        print(filename + "contains errors within scouting_detector")
+        raise

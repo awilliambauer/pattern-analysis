@@ -7,6 +7,7 @@ import sys
 import scouting_detector
 from multiprocessing import Pool
 import argparse
+import time
 
 def generateFields(filename):
     game_id = filename.split("_")[1].split(".")[0]
@@ -31,7 +32,7 @@ if __name__ == "__main__":
     endidx = args.index[1]
 
     files = os.listdir("replays")
-
+    t1 = time.time()
     with open("scouting_stats.csv", 'w', newline = '') as fp:
         events_out = csv.DictWriter(fp, fieldnames=["GameID", "ScoutingFrequency",
                                                     "ScoutingTime", "Win"])
@@ -39,9 +40,12 @@ if __name__ == "__main__":
         #debugging
         if args.d:
             print("debugging!")
+            i = startidx
             for filename in files[startidx:endidx]:
+                print("file #: ", i, "file name: ", filename)
                 game_id = filename.split("_")[1].split(".")[0]
                 pathname = "replays/" + filename
+                i += 1
                 try:
                     team1_nums, team1_fraction, team2_nums, team2_fraction, winner = scouting_detector.detect_scouting(pathname)
                     if winner == 1:
@@ -67,3 +71,5 @@ if __name__ == "__main__":
                                         "ScoutingTime": fields[2], "Win": fields[3]})
                     events_out.writerow({"GameID": fields[4], "ScoutingFrequency": fields[5],
                                         "ScoutingTime": fields[6], "Win": fields[7]})
+
+    print("Running time: ", time.time()-t1)
