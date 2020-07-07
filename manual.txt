@@ -3,6 +3,46 @@ v0.1
 Aaron Bauer
 7/2/2020
 
+**********  data format  **********
+raw data:
+    .pdb files, use parse_PDB in parse_PDB.py to convert metadata entries into dictionary
+    HISTORY entry contains sequence of (uuids, count) pairs to encode solution lineage
+    PDL entry contains key metadata: uid, gid, score, actions (and macros)
+
+.csv files (per-puzzle):
+    produced by process_puzzle.py
+    PID_soln.csv
+        one line per .pdb file with metadata and various ids
+        query foldit mySQL db to link sid with uid and gid
+    PID_hist.csv
+        one line per distinct item in HISTORY sequence
+
+meta.h5 (per-puzzle):
+    TODO: prune/clean up process_puzzle_meta.py
+    dataframe with many computed fields ("df")
+        pid
+        uid
+        frontier_pdbs
+        frontier_tmscores DEFUNCT
+        first_pdb
+        upload_rate TODO: detect multi-client strategy for real
+        lines
+            list of SolvingLines (util.py)
+            a "line" consists of a solution that's the first captured solution in its lineage (i.e., we have no info on parents)
+                and all the descendent solutions
+        evol_lines
+            same as lines, but based on evolver solutions whose parent is from another user
+        energies
+            chronological soloist solution energies
+        timestamps
+            ordered timestamps for soloist solutions
+        time
+            estimated time spent on soloist solutions
+    also includes "bts" (DEFUNCT breakthrough detections) and "puz"
+        "puz" has puzzle-wide metadata including puzzle energy frontier, baseline upload rate (based on mode?),
+            baseline initial energy (modal energy of solutions with only a few actions), initial secondary structure
+
+
 **********  check_models.py  **********
 1. load puzzle data for pids according to datapath/config.json
 2. load pattern models
@@ -60,9 +100,75 @@ requires:
 
 
 **********  collab_models.py  **********
+PROBABLY DEFUNCT
+1. load the data for pid
+2. collect evolver solutions
+3. load (or produce if missing) ticc models for pid/gid data (for each k in --krange)
+    bug? always runs new ticc with krange=range(5, 15)
+4. get patterns
+    bug? hardcoded for k=10, gid=993077, pid=2003433
+5. produce some kind of visualization of collaboration
+    can't find any results, I don't think this ever proved useful
+functions:
+    get_relevant_sids
+        function of the same name also exists in pattern_extraction.py
+        this seems the same but with less error handling
+    get_action_step
+        a subset of load_extend_data in pattern_extraction.py
+    make_collab_series
+        assembles a series of group members' solutions, not sure what's going on with scoretypes
+
+arguments:
+    datapath
+    pid
+    gid
+    --krange
+
+requires:
+    ticc
+    pattern_extraction.py
 
 
 **********  collab_viz.py  **********
+for each pid
+    1. load in data
+    2. collect group member uids, assign colors
+    3. find the evolver relationships
+    4. construct graphviz diagrams
+functions:
+    get_source
+        retrieves the oldest entry in the evolver solution's pdl from a different user
+        excludes bogus entries with no actions or max score
+    col_to_str
+        converts list of 0-1 RGB values to hex string
+    is_corrupted
+        checks for a corrupted evolver solution pdl
+    remove_corrupted
+        returns a list with corrupted solutions filtered out
+    render_collab
+        generates the visualization
+    get_tag
+        constructs ShareTag from solution
+    get_source_tag
+        constructs ShareTag from solution's source
+    get_evolver_uid
+    get_collab_children
+    get_team_structures
+        returns a dictionary of pid -> List of Collaborators
+        not used for the visualization
+
+tuples:
+    ShareTag
+    Collaborator
+
+arguments:
+    pids
+        puzzles to include
+    --debug
+        sequential instead of parallel
+requires:
+    pattern_extraction.get_relevant_sids
+    util.py
 
 
 **********  compute_time.py  **********
