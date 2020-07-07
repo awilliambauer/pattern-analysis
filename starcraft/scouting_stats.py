@@ -7,11 +7,10 @@ import sys
 import scouting_detector
 from multiprocessing import Pool
 import argparse
-import time
 
 def generateFields(filename):
     game_id = filename.split("_")[1].split(".")[0]
-    pathname = "replays/" + filename
+    pathname = "/tmp/replays/" + filename
     try:
         team1_nums, team1_fraction, team2_nums, team2_fraction, winner = scouting_detector.detect_scouting(pathname)
         if winner == 1:
@@ -26,13 +25,12 @@ if __name__ == "__main__":
     #command line argument for debugging
     parser = argparse.ArgumentParser()
     parser.add_argument('--d', action='store_true')
-    parser.add_argument('index', nargs=2, type=int)
+    parser.add_argument('--index', nargs=2, type=int)
     args = parser.parse_args()
     startidx = args.index[0]
     endidx = args.index[1]
 
-    files = os.listdir("replays")
-    t1 = time.time()
+    files = os.listdir("/tmp/replays")
     with open("scouting_stats.csv", 'w', newline = '') as fp:
         events_out = csv.DictWriter(fp, fieldnames=["GameID", "ScoutingFrequency",
                                                     "ScoutingTime", "Win"])
@@ -41,10 +39,10 @@ if __name__ == "__main__":
         if args.d:
             print("debugging!")
             i = startidx
-            for filename in files[startidx:endidx]:
+            for filename in files:
                 print("file #: ", i, "file name: ", filename)
                 game_id = filename.split("_")[1].split(".")[0]
-                pathname = "replays/" + filename
+                pathname = "/tmp/replays/" + filename
                 i += 1
                 try:
                     team1_nums, team1_fraction, team2_nums, team2_fraction, winner = scouting_detector.detect_scouting(pathname)
@@ -61,8 +59,8 @@ if __name__ == "__main__":
                 except RuntimeError:
                     continue
         else:
-            pool = Pool()
-            results = pool.map(generateFields, files[startidx:endidx])
+            pool = Pool(40)
+            results = pool.map(generateFields, files)
             pool.close()
             pool.join()
             for fields in results:
@@ -71,5 +69,3 @@ if __name__ == "__main__":
                                         "ScoutingTime": fields[2], "Win": fields[3]})
                     events_out.writerow({"GameID": fields[4], "ScoutingFrequency": fields[5],
                                         "ScoutingTime": fields[6], "Win": fields[7]})
-
-    print("Running time: ", time.time()-t1)

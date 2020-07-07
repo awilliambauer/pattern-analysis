@@ -9,12 +9,6 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 library(ggplot2)
 library(dplyr)
-library(car)
-library(tidyverse)
-library(broom)
-library("readxl")
-library(Hmisc)
-library(mice)
 ```
 
 ### Reading Data and Gathering Summary Statistics
@@ -56,12 +50,12 @@ Therefore, we accept scouting.glm2 to be the more accurate model.
 
 ### Interpretation
 ```{r}
-oddsIncrease <- exp(7.0653*log(1.1))
+oddsIncrease <- exp(7.20713*log(1.1))
 oddsIncrease
 ```
 
 For a 10% increase in the time spent scouting an opponent, the odds that a player will win
-increases by a factor of 1.9
+increases by a factor of 1.987
 
 
 

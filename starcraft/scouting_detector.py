@@ -31,10 +31,13 @@ def buildEventDictionaries(tracker_events, game_events):
     for g_event in game_events:
         if isinstance(g_event, sc2reader.events.game.CameraEvent):
             camera_events.append(g_event)
-            if g_event.player.pid == 1:
-                team1_count += 1
-            elif g_event.player.pid == 2:
-                team2_count += 1
+            if g_event.player:
+                if g_event.player.pid == 1:
+                    team1_count += 1
+                elif g_event.player.pid == 2:
+                    team2_count += 1
+            else:
+                raise RuntimeError()
         #account for moving terran bases
         elif isinstance(g_event, sc2reader.events.game.TargetUnitCommandEvent) and (g_event.ability_name == "LandCommandCenter" or g_event.ability_name == "LandOrbitalCommand"):
             unit_init_events.append(g_event)
