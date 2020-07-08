@@ -225,10 +225,11 @@ def detect_scouting(filename):
         print(filename + " cannot load using sc2reader due to an internal ValueError")
         raise RuntimeError()
 
-    if hasattr(r, "marked_error") and r.marked_error:
-        print("skipping", r.filename, "as it contains errors")
-        print(r.filename, "has build", r.build, "but best available datapack is", r.datapack.id)
-        raise RuntimeError()
+    # # Only applied to missing ability info, which doesn't matter for scouting detection
+    # if hasattr(r, "marked_error") and r.marked_error:
+    #     print("skipping", r.filename, "as it contains errors")
+    #     print(r.filename, "has build", r.build, "but best available datapack is", r.datapack.id)
+    #     raise RuntimeError()
 
     if r.winner is None:
         print(r.filename, "has no winner information")
