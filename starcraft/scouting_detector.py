@@ -4,6 +4,7 @@
 
 import sc2reader
 import math
+from sc2reader.engine.plugins import APMTracker
 import battle_detector
 
 def buildEventDictionaries(tracker_events, game_events):
@@ -233,8 +234,19 @@ def duringBattle(frame, battles):
         if frame >= battle[0] and frame <= battle[1]:
             return True
 
+def calculateAPM(player):
+    apm_dict = player.apm
+    keys = apm_dict.keys()
+    mins = len(keys)
+    total = 0
+    for key in keys:
+        total += apm_dict[key]
+    apm = total/mins
+    return apm
+
 def detect_scouting(filename):
     try:
+        sc2reader.engine.register_plugin(APMTracker())
         r = sc2reader.load_replay(filename)
     except:
         print(filename + " cannot load using sc2reader due to an internal ValueError")
@@ -274,15 +286,18 @@ def detect_scouting(filename):
     try:
         allEvents = buildEventDictionaries(tracker_events, game_events)
         team1_scouting_states, team2_scouting_states = buildScoutingDictionaries(allEvents)
+
+        battles = battle_detector.buildBattleList(r)
         team1_scouting_states = integrateBattles(team1_scouting_states, battles)
         team2_scouting_states = integrateBattles(team2_scouting_states, battles)
-        #team1_times = toTime(team1_scouting_states, frames, seconds)
-        #team2_times = toTime(team2_scouting_states, frames, seconds)
 
         team1_num_times, team1_fraction = scouting_stats(team1_scouting_states)
         team2_num_times, team2_fraction = scouting_stats(team2_scouting_states)
 
-        return team1_num_times, team1_fraction, team2_num_times, team2_fraction, r.winner.number
+        team1_apm = calculateAPM(r.players[0])
+        team2_apm = calculateAPM(r.players[1])
+
+        return team1_num_times, team1_fraction, team1_apm, team2_num_times, team2_fraction, team2_apm, r.winner.number
 
     except:
         print(filename + "contains errors within scouting_detector")
