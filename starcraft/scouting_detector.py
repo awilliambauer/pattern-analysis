@@ -4,6 +4,7 @@
 
 import sc2reader
 import math
+import battle_detector
 
 def buildEventDictionaries(tracker_events, game_events):
     '''Builds a list of all relevant events for scouting detection'''
@@ -218,6 +219,20 @@ def scouting_stats(scouting_dict):
     scouting_rate = num_times/total_time
     return scouting_rate, scouting_fraction
 
+def integrateBattles(scouting_dict, battles):
+    length = len(scouting_dict.keys())
+    frame = 1
+    while frame < length:
+        if scouting_dict[frame] == "Scouting opponent" and duringBattle(frame, battles):
+            scouting_dict[frame] == "No scouting"
+        frame += 1
+    return scouting_dict
+
+def duringBattle(frame, battles):
+    for battle in battles:
+        if frame >= battle[0] and frame <= battle[1]:
+            return True
+
 def detect_scouting(filename):
     try:
         r = sc2reader.load_replay(filename)
@@ -259,7 +274,8 @@ def detect_scouting(filename):
     try:
         allEvents = buildEventDictionaries(tracker_events, game_events)
         team1_scouting_states, team2_scouting_states = buildScoutingDictionaries(allEvents)
-
+        team1_scouting_states = integrateBattles(team1_scouting_states, battles)
+        team2_scouting_states = integrateBattles(team2_scouting_states, battles)
         #team1_times = toTime(team1_scouting_states, frames, seconds)
         #team2_times = toTime(team2_scouting_states, frames, seconds)
 
