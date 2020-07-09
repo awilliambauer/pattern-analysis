@@ -7,6 +7,7 @@ import sys
 import scouting_detector
 from multiprocessing import Pool
 import argparse
+import time
 
 def generateFields(filename):
     game_id = filename.split("_")[1].split(".")[0]
@@ -24,13 +25,26 @@ def generateFields(filename):
 if __name__ == "__main__":
     #command line argument for debugging
     parser = argparse.ArgumentParser()
-    parser.add_argument('--d', action='store_true')
-    #parser.add_argument('--index', nargs=2, type=int)
+    parser.add_argument('--d', nargs=2, type=int) #debugging, input indeces
+    parser.add_argument('-w', action='store_true')
+    parser.add_argument('-r', action='store_true')
     args = parser.parse_args()
-    #startidx = args.index[0]
-    #endidx = args.index[1]
 
-    files = os.listdir("/tmp/replays")
+    if args.d:
+        startidx = args.d[0]
+        endidx = args.d[1]
+
+    if args.w:
+        files = os.listdir("/tmp/replays")
+    elif args.r:
+        files = []
+        games = open("valid_game_ids.txt", 'r')
+        for line in games:
+            files.append(line.strip())
+        games.close()
+
+    valid_games = []
+    t1 = time.time()
     with open("scouting_stats.csv", 'w', newline = '') as fp:
         events_out = csv.DictWriter(fp, fieldnames=["GameID", "ScoutingFrequency",
                                                     "ScoutingTime", "APM", "Win"])
@@ -39,7 +53,7 @@ if __name__ == "__main__":
         if args.d:
             print("debugging!")
             i = startidx
-            for filename in files:
+            for filename in files[startidx:endidx]:
                 print("file #: ", i, "file name: ", filename)
                 game_id = filename.split("_")[1].split(".")[0]
                 pathname = "/tmp/replays/" + filename
@@ -65,7 +79,14 @@ if __name__ == "__main__":
             pool.join()
             for fields in results:
                 if fields:
+                    filename = "gggreplays_{}.SC2Replay".format(fields[0])
+                    valid_games.append(filename)
                     events_out.writerow({"GameID": fields[0], "ScoutingFrequency": fields[1],
                                         "ScoutingTime": fields[2], "APM": fields[3], "Win": fields[4]})
                     events_out.writerow({"GameID": fields[5], "ScoutingFrequency": fields[6],
                                         "ScoutingTime": fields[7], "APM": fields[8], "Win": fields[9]})
+    if args.w:
+        with open("valid_game_ids.txt", 'w') as file:
+            for game_id in valid_games:
+                file.write(game_id + "\n")
+    print("Run time: ", (time.time()-t1)/60)

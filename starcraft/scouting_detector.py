@@ -285,8 +285,8 @@ def detect_scouting(filename):
         team1_num_times, team1_fraction = scouting_stats(team1_scouting_states)
         team2_num_times, team2_fraction = scouting_stats(team2_scouting_states)
 
-        team1_apm = r.players[0].avg_apm
-        team2_apm = r.players[1].avg_apm
+        team1_apm = r.players[0].avg_apm - r.players[1].avg_apm
+        team2_apm = r.players[1].avg_apm - r.players[0].avg_apm
 
         return team1_num_times, team1_fraction, team1_apm, team2_num_times, team2_fraction, team2_apm, r.winner.number
 

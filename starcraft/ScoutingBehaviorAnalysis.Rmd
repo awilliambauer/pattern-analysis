@@ -18,6 +18,7 @@ summary(scouting)
 scouting$Win2 <- ifelse(scouting$Win == 1, "win", "loss")
 ```
 
+
 ### Exploratory Data Analysis
 ```{r}
 ggplot(scouting, aes(y=ScoutingFrequency, group=Win)) + geom_boxplot()
@@ -26,47 +27,38 @@ ggplot(scouting, aes(x = Win, y = ScoutingTime, color = Win2, shape = Win2)) + g
 ggplot(scouting, aes(x = Win, y = ScoutingFrequency, color = Win2, shape = Win2)) + geom_point()
 ggplot(scouting, aes(x = APM, y = ScoutingFrequency, color = Win2, shape = Win2)) + geom_point()
 ggplot(scouting, aes(x = APM, y = ScoutingTime, color = Win2, shape = Win2)) + geom_point()
+ggplot(scouting, aes(x = ScoutingFrequency, y = ScoutingTime, color = Win2, shape = Win2)) + geom_point()
 ```
 
 ### Creating a Binary Logistic Regression Model
 ```{r}
-scouting.glm <- glm(Win ~ ScoutingTime + ScoutingFrequency + APM + ScoutingTime:APM, data = scouting, family = binomial)
+scouting.glm <- glm(Win ~ (ScoutingTime + ScoutingFrequency + APM)^2, data = scouting, family = binomial)
 summary(scouting.glm)
 anova(scouting.glm, test = "Chisq")
 ```
 
-Removing ScoutingFrequency and the interaction term since they contribute the least to 
+Removing ScoutingFrequency and its interaction terms since they contribute the least to 
 the residual deviance
 ```{r}
-scouting.glm2 <- update(scouting.glm, . ~ . -ScoutingFrequency - ScoutingTime:APM)
+scouting.glm2 <- update(scouting.glm, . ~ . -ScoutingFrequency - ScoutingFrequency:APM - ScoutingTime:ScoutingFrequency)
 summary(scouting.glm2)
 anova(scouting.glm2, scouting.glm, test = "Chisq")
 ```
 
-ANOVA table indicates that the larger model is preferred, so we will try removing one variable at a time, starting with ScoutingFrequency since it contributed the least to the residual deviance
-```{r}
-scouting.glm3 <- update(scouting.glm, . ~ . -ScoutingFrequency)
-summary(scouting.glm3)
-anova(scouting.glm3, scouting.glm, test = "Chisq")
-```
-
-We still prefer the larger model, but we'll try removing the interaction term this time
-```{r}
-scouting.glm4 <- update(scouting.glm, . ~ . -ScoutingTime:APM)
-summary(scouting.glm4)
-anova(scouting.glm4, scouting.glm, test = "Chisq")
-```
-
-We conclude that the largest model is preferred, which includes ScoutingTime, ScoutingFrequency, APM, and an interaction term between ScoutingTime and APM. The decision to include this interaction term was based on a slight correlation between the two variables shown in out exploratory plots.
+ANOVA table indicates that the larger model is preferred, so we accept the original model (If an interaction term is included, the individual variables must also be included)
 
 ### Interpretation
 ```{r}
-timeOdds <- exp(7.444*log(1.1))
+timeOdds <- exp(9.172*log(1.1))
+frequencyOdds <- exp(71.24*log(1.1))
+APModds <- exp(0.001157*log(1.1))
 timeOdds
+frequencyOdds
+APModds
 ```
 
 For a 10% increase in the time spent scouting an opponent, the odds that a player will win
-increases by a factor of 2.033
+increases by a factor of 2.396
 
 
 
