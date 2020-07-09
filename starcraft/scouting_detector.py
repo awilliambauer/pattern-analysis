@@ -7,6 +7,8 @@ import math
 from sc2reader.engine.plugins import APMTracker
 import battle_detector
 
+sc2reader.engine.register_plugin(APMTracker())
+
 def buildEventDictionaries(tracker_events, game_events):
     '''Builds a list of all relevant events for scouting detection'''
 
@@ -234,19 +236,8 @@ def duringBattle(frame, battles):
         if frame >= battle[0] and frame <= battle[1]:
             return True
 
-def calculateAPM(player):
-    apm_dict = player.apm
-    keys = apm_dict.keys()
-    mins = len(keys)
-    total = 0
-    for key in keys:
-        total += apm_dict[key]
-    apm = total/mins
-    return apm
-
 def detect_scouting(filename):
     try:
-        sc2reader.engine.register_plugin(APMTracker())
         r = sc2reader.load_replay(filename)
     except:
         print(filename + " cannot load using sc2reader due to an internal ValueError")
@@ -294,8 +285,8 @@ def detect_scouting(filename):
         team1_num_times, team1_fraction = scouting_stats(team1_scouting_states)
         team2_num_times, team2_fraction = scouting_stats(team2_scouting_states)
 
-        team1_apm = calculateAPM(r.players[0])
-        team2_apm = calculateAPM(r.players[1])
+        team1_apm = r.players[0].avg_apm
+        team2_apm = r.players[1].avg_apm
 
         return team1_num_times, team1_fraction, team1_apm, team2_num_times, team2_fraction, team2_apm, r.winner.number
 

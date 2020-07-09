@@ -67,5 +67,5 @@ if __name__ == "__main__":
                 if fields:
                     events_out.writerow({"GameID": fields[0], "ScoutingFrequency": fields[1],
                                         "ScoutingTime": fields[2], "APM": fields[3], "Win": fields[4]})
-                    events_out.writerow({"GameID": fields[4], "ScoutingFrequency": fields[5],
-                                        "ScoutingTime": fields[6], "APM": fields[7], "Win": fields[8]})
+                    events_out.writerow({"GameID": fields[5], "ScoutingFrequency": fields[6],
+                                        "ScoutingTime": fields[7], "APM": fields[8], "Win": fields[9]})
