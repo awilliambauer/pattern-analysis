@@ -236,13 +236,9 @@ def duringBattle(frame, battles):
         if frame >= battle[0] and frame <= battle[1]:
             return True
 
-def detect_scouting(filename):
-    try:
-        r = sc2reader.load_replay(filename)
-    except:
-        print(filename + " cannot load using sc2reader due to an internal ValueError")
-        raise RuntimeError()
-
+def detect_scouting(replay):
+    r = replay
+    
     # # Only applied to missing ability info, which doesn't matter for scouting detection
     # if hasattr(r, "marked_error") and r.marked_error:
     #     print("skipping", r.filename, "as it contains errors")
