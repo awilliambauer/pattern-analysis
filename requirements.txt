@@ -12,3 +12,4 @@ biopython
 tables
 statsmodels
 mpyq
+sshtunnel

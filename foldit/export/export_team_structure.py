@@ -1,22 +1,13 @@
-import subprocess
-import argparse
-import os
 import sys
-import csv
-import json
 import pickle
-import logging
-from itertools import groupby
 from functools import partial
-import pandas as pd
-import numpy as np
-from util import PDB_Info
-from typing import NamedTuple, Tuple
-from pattern_extraction import get_relevant_sids, load_extend_data, load_TICC_output
-from check_models import load_sub_lookup
-from process_puzzle_meta import process_puzzle_meta
-from collab_viz import *
-from dump_predicted_patterns import pattern_count_from_pdbs
+
+from foldit.foldit_data import load_extend_data
+from pattern_extraction import load_TICC_output
+from foldit.check_models import load_sub_lookup
+from foldit.raw.process_puzzle_meta import process_puzzle_meta
+from foldit.collab_viz import *
+from foldit.export.export_predicted_patterns import pattern_count_from_pdbs
 
 
 def get_team_json(root: Collaborator, pid: str, pattern_count_fn) -> dict:
@@ -31,7 +22,7 @@ def get_team_json(root: Collaborator, pid: str, pattern_count_fn) -> dict:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(prog='dump_team_structure.py')
+    parser = argparse.ArgumentParser(prog='export_team_structure.py')
     parser.add_argument("--overwrite", action='store_true')
     parser.add_argument("--append", action='store_true')
     args = parser.parse_args()

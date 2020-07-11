@@ -3,19 +3,17 @@ from __future__ import print_function, division
 import sys, csv, logging, argparse, subprocess, os.path, pickle, json, colorsys
 from typing import Tuple, Dict
 
-import numpy as np
 from operator import itemgetter
 from functools import partial
 
 from graphviz import Digraph
-import Bio.PDB
 import matplotlib.pyplot as plt
 import editdistance
 
-from Node import Node
-from graph_analysis import *
-from RawNode import RawNode, initialize
-from util import get_ranks, weighted_rmsd, get_atoms
+from foldit.graph.Node import Node
+from foldit.graph.graph_analysis import *
+from foldit.graph.RawNode import RawNode, initialize
+from util import get_ranks
 
 logging.basicConfig(stream=sys.stderr, level=logging.INFO)
 sys.setrecursionlimit(20000)

@@ -19,7 +19,7 @@ raw data:
 
 meta.h5 (per-puzzle):
     TODO: prune/clean up process_puzzle_meta.py
-    dataframe with many computed fields ("df")
+    dataframe with many computed fields ("df") (per-user-per-puzzle)
         pid
         uid
         frontier_pdbs
@@ -41,6 +41,31 @@ meta.h5 (per-puzzle):
     also includes "bts" (DEFUNCT breakthrough detections) and "puz"
         "puz" has puzzle-wide metadata including puzzle energy frontier, baseline upload rate (based on mode?),
             baseline initial energy (modal energy of solutions with only a few actions), initial secondary structure
+
+pipeline in pattern_extraction.py (per-puzzle):
+    load_extend_data(pids, lookups)
+        load_data(pids)
+            loads meta.h5 files for each pid
+        make_lookups(data, lookups)
+            populates three dictionaries
+                soln_lookup:    sid -> solution
+                parent_lookup:  sid -> parent sid
+                child_lookup:   sid -> list of child sids
+        compute_extra_data(row)
+            get_relevant_sids
+            get_deltas
+            (conditionally) evolver data
+            time_played
+        perf
+        TODO: measure of efficiency?
+
+TICC-specific data pipeline
+    input: dataframe from load_extend_data
+    make_series(data, noise?)
+        ?genereate noise
+        make_action_series
+            get_action_stream (util.py)
+    combine_user_series
 
 
 **********  check_models.py  **********

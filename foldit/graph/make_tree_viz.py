@@ -8,9 +8,9 @@ from graphviz import Digraph
 import matplotlib.pyplot as plt
 import editdistance
 
-from Node import Node
-from graph_analysis import *
-from RawNode import RawNode, initialize
+from foldit.graph.Node import Node
+from foldit.graph.graph_analysis import *
+from foldit.graph.RawNode import RawNode, initialize
 from util import get_ranks
 
 logging.basicConfig(stream=sys.stderr, level=logging.INFO)

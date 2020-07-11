@@ -1,3 +1,4 @@
+from foldit.foldit_data import load_extend_data, make_series
 from pattern_extraction import *
 import argparse
 from sklearn import svm, linear_model, ensemble
@@ -19,16 +20,6 @@ from util import category_lookup
 import matplotlib
 matplotlib.use("Agg")
 SUBPATTERN_KRANGE = [5, 10]
-
-
-def predict_from_saved_model(test_data: np.ndarray, saved_model: dict) -> np.ndarray:
-    test_ticc = TICC(window_size=saved_model["window_size"], number_of_clusters=saved_model["number_of_clusters"], num_proc=1)
-    test_ticc.num_blocks = saved_model["num_blocks"]
-    test_ticc.switch_penalty = saved_model["switch_penalty"]
-    test_ticc.trained_model = saved_model["trained_model"]
-    cs = test_ticc.predict_clusters(test_data)
-    test_ticc.pool.close()
-    return cs
 
 
 def compute_cluster_times(data: pd.DataFrame, cluster_lookup: Dict[int, np.ndarray],
@@ -103,18 +94,6 @@ def compute_subcluster_times(data: pd.DataFrame, cluster_lookup: dict, subcluste
                         results[(uid, pid)]["times"]["sk{}_subcluster_{}_action_ratio_k{}".format(k2, scid, k)] = results[(uid, pid)]["times"]["sk{}_subcluster_{}_action_k{}".format(k2, scid, k)] / actions.sum()
     subcluster_times = [v["times"] for v in results.values() if v["valid"]]
     return data.merge(pd.DataFrame(data=subcluster_times), on=['pid', 'uid'])
-
-
-def load_sub_lookup(datapath: str, subseries_lookup: dict, sub_krange=[5, 10]) -> Dict[str, Dict[int, dict]]:
-    sub_lookup = {"clusters": {}, "mrfs": {}, "models": {}, "bics": {}}
-    for k in subseries_lookup:
-        dp = "{}/subpatterns/k{}".format(datapath, k)
-        cs, mrfs, ms, bs = load_TICC_output(dp, ["cid{}".format(cid) for cid in subseries_lookup[k]], sub_krange)
-        sub_lookup["clusters"][k] = {int(k.replace("cid", "")): v for k, v in cs.items()}
-        sub_lookup["mrfs"][k] = {int(k.replace("cid", "")): v for k, v in mrfs.items()}
-        sub_lookup["models"][k] = {int(k.replace("cid", "")): v for k, v in ms.items()}
-        sub_lookup["bics"][k] = {int(k.replace("cid", "")): v for k, v in bs.items()}
-    return sub_lookup
 
 
 if __name__ == "__main__":

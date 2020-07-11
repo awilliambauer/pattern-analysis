@@ -12,6 +12,7 @@ import multiprocessing
 import logging
 import string
 import matplotlib
+
 matplotlib.use("Agg")
 
 # pids with missing data (i.e., pdbs missing for either sid, eid, and/or gid)
@@ -97,6 +98,7 @@ pids_missing_pdl_actions = {'998071',
                             '998219'}
 skip_pids = pids_missing_energies.union(pids_missing_pdl_actions).union(bad_pids)
 
+
 class EnergyComponent(NamedTuple):
     name: str
     weight: float
@@ -121,7 +123,7 @@ class PDB_Info(NamedTuple):
 
 class SnapshotDelta(NamedTuple):
     sid: str
-    parent_sid: str
+    parent_sid: Optional[str]
     timestamp: int
     action_diff: Counter
     macro_diff: Counter
@@ -141,10 +143,18 @@ class SolvingLine(NamedTuple):
     pdb_infos: List[PDB_Info]
     variants: List[SolvingLineVariant]
 
+    @property
+    def energies(self):
+        return [x.energy for x in self.pdb_infos]
+
 
 class EvolvingLine(NamedTuple):
     source: Dict
     pdb_infos: List[PDB_Info]
+
+    @property
+    def energies(self):
+        return [x.energy for x in self.pdb_infos]
 
 
 class PuzzleMeta(NamedTuple):
@@ -163,6 +173,7 @@ class PatternInstance(NamedTuple):
     start_idx: int
     end_idx: int
 
+
 class PatternInstanceExt(NamedTuple):
     cid: int
     uid: str
@@ -180,6 +191,68 @@ class SubPatternInstance(NamedTuple):
     label: str
     start_idx: int
     end_idx: int
+
+
+@pd.api.extensions.register_series_accessor("foldit")
+class FolditSeriesAccessor:
+    def __init__(self, pandas_obj: pd.Series):
+        self._validate(pandas_obj)
+        self._obj = pandas_obj
+
+    @staticmethod
+    def _validate(obj: pd.Series):
+        # verify there is a column latitude and a column longitude
+        if ('lines' not in obj.index or 'evol_lines' not in obj.index) and (obj.name != "lines" and obj.name != "evol_lines"):
+            raise AttributeError("Must have 'lines' and 'evol_lines'.")
+
+    @property
+    def solo_pdbs(self):
+        return [p for l in self._obj.lines for p in l.pdb_infos] if self._obj.lines else []
+
+    @property
+    def evol_pdbs(self):
+        return [p for l in self._obj.evol_lines for p in l.pdb_infos] if self._obj.evol_lines else []
+
+    @property
+    def solo_energies(self):
+        return [p.energy for p in self._obj.foldit.solo_pdbs]
+
+    @property
+    def evol_energies(self):
+        return [p.energy for p in self._obj.foldit.evol_pdbs]
+
+
+@pd.api.extensions.register_dataframe_accessor("foldit")
+class FolditAccessor:
+    def __init__(self, pandas_obj: pd.Series):
+        self._validate(pandas_obj)
+        self._obj = pandas_obj
+
+    @staticmethod
+    def _validate(obj: pd.Series):
+        # verify there is a column latitude and a column longitude
+        if 'lines' not in obj.columns or 'evol_lines' not in obj.columns:
+            raise AttributeError("Must have 'lines' and 'evol_lines'.")
+
+    @property
+    def solo_pdbs(self):
+        return self._obj.apply(lambda r: r.foldit.solo_pdbs, axis=1)
+
+    @property
+    def evol_pdbs(self):
+        return self._obj.apply(lambda r: r.foldit.evol_pdbs, axis=1)
+
+    @property
+    def solo_energies(self):
+        return self._obj.apply(lambda r: r.foldit.solo_energies, axis=1)
+
+    @property
+    def evol_energies(self):
+        return self._obj.apply(lambda r: r.foldit.evol_energies, axis=1)
+
+    # @property
+    # def pdbs(self):
+
 
 
 ROOT_NID = ('00000000-0000-0000-0000-000000000000', 0)
@@ -469,7 +542,8 @@ def time_splits_helper(timestamps, chunk, splits):
                     while session_duration((session_start, end_idx), timestamps) < time_left:
                         end_idx += 1
                     if abs(time_left - (timestamps[end_idx] - timestamps[session_start])) > abs(
-                            time_left - (timestamps[end_idx - 1] - timestamps[session_start])) and end_idx > start_idx + 1:
+                            time_left - (
+                                    timestamps[end_idx - 1] - timestamps[session_start])) and end_idx > start_idx + 1:
                         end_idx -= 1
                     logging.debug('splitting session at {}'.format(end_idx))
                     sessions[session_idx] = (end_idx, session_end)
@@ -496,18 +570,21 @@ def get_time_splits(time, timestamps, splits):
 
     if len(ret) == splits - 1 and any(e - s > 0 for s, e in ret):
         idx = np.argmax([t if s != e else 0 for (s, e), t in zip(ret, times)])
-        shifted = ret[:idx] + [(ret[idx][0], ret[idx][1] - 1)] + [(s - 1, e - 1) for s, e in ret[idx + 1:]] + [(ret[-1][1] - 1, ret[-1][1])]
+        shifted = ret[:idx] + [(ret[idx][0], ret[idx][1] - 1)] + [(s - 1, e - 1) for s, e in ret[idx + 1:]] + [
+            (ret[-1][1] - 1, ret[-1][1])]
         logging.debug("short one slice, shifting everything to make another ({} to {})".format(ret, shifted))
         ret = shifted
     if ret[-1][1] < len(timestamps):
         logging.debug("extending final slice to the end ({} to {})".format(ret[-1][1], len(timestamps)))
         ret = ret[:-1] + [(ret[-1][0], len(timestamps))]
-    assert len(ret) == splits or len(timestamps) < 2 * splits, "{} -- wanted {} splits, got {}".format(ret, splits, len(ret))
+    assert len(ret) == splits or len(timestamps) < 2 * splits, "{} -- wanted {} splits, got {}".format(ret, splits,
+                                                                                                       len(ret))
     # assert len(ret) == splits or splits > 12, "{} -- wanted {} splits, got {}".format(ret, splits, len(ret))
     assert all(e1 == s2 for (s1, e1), (s2, e2) in zip(ret, ret[1:]))
     covered_timestamps = np.concatenate([np.arange(s, e) for s, e in ret])
-    assert all(x in covered_timestamps for x in range(len(timestamps))),\
-        "{} -- not all timestamp indices accounted for: {}".format(ret, [x for x in range(len(timestamps)) if x not in covered_timestamps])
+    assert all(x in covered_timestamps for x in range(len(timestamps))), \
+        "{} -- not all timestamp indices accounted for: {}".format(ret, [x for x in range(len(timestamps)) if
+                                                                         x not in covered_timestamps])
     # allowed_deviation = max([max(np.diff(timestamps[s:e]), default=0) for s, e in get_sessions(timestamps) if s != e], default=300) / 2
     # assert all(abs(t - chunk) < max(allowed_deviation, chunk * 0.1) for t in times[:-1]) or len(timestamps) <= 2 * splits, \
     #     "{} -- splits deviate too far from target size ({} ± {}): {}".format(ret, chunk, max(allowed_deviation, chunk * 0.1), times)
@@ -578,9 +655,10 @@ def tmscore(pairs: List[Tuple[str, str]], tmp_input_name: str, atoms_lookup: Dic
 
     # empirically derived formula for chunksize to equalize batch time and spawning time
     # based on estimates that batches run 100 scores in ~1.5s, and Python starts ~6 batches per second
-    chunksize = max(100, (len(pairs) / 0.09)**0.5)
+    chunksize = max(100, (len(pairs) / 0.09) ** 0.5)
     if len(pairs) // chunksize > (multiprocessing.cpu_count() / 4):
-        chunksize = len(pairs) / (multiprocessing.cpu_count() / 4)  # avoid spawning huge numbers of batches as this kills the performance
+        chunksize = len(pairs) / (
+                    multiprocessing.cpu_count() / 4)  # avoid spawning huge numbers of batches as this kills the performance
     splits = np.array_split(pairs, len(pairs) // chunksize if len(pairs) > chunksize else 1)
     ps = []
     for i, split in enumerate(splits):
@@ -621,7 +699,7 @@ def get_overlap(segment, target):
 def load_frame(datafile):
     df = pd.read_hdf(datafile, 'df')
     bts = pd.read_hdf(datafile, 'bts')
-    puz = pd.read_hdf(datafile, 'puz').iloc[0] # tuple gets wrapped in a pandas data structure, so unwrap it here
+    puz = pd.read_hdf(datafile, 'puz').iloc[0]  # tuple gets wrapped in a pandas data structure, so unwrap it here
     logging.debug(datafile)
     return df, bts, puz
 
@@ -644,8 +722,9 @@ def get_data_value(uid, pid, key, data):
 
 
 def get_action_labels():
-    return ['band', 'build', 'cut', 'global_min', 'idealize', 'local_min', 'lock', 
+    return ['band', 'build', 'cut', 'global_min', 'idealize', 'local_min', 'lock',
             'rebuild', 'repack', 'assign_loop', 'save', 'reset', 'ss_load', 'ss_save']
+
 
 def get_action_keys():
     """
@@ -683,7 +762,8 @@ def get_action_keys():
     actionset_ss_save = {'ActionStandaloneSecstructSave', 'ActionNoviceSecstructSave'}
     actionset_ss_load = {'ActionStandaloneSecstructLoad', 'ActionNoviceSecstructLoad'}
 
-    return [actionset_band, {'ActionBuild'}, actionset_cut, actionset_global, {'ActionIdealize'}, {'ActionLocalMinimize'},
+    return [actionset_band, {'ActionBuild'}, actionset_cut, actionset_global, {'ActionIdealize'},
+            {'ActionLocalMinimize'},
             {'ActionLockToggle'}, {'ActionRebuild'}, {'ActionRepack'}, {'ActionSecStructAssignLoop'}, actionset_save,
             actionset_load, actionset_ss_load, actionset_ss_save]
 

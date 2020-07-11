@@ -1,4 +1,4 @@
-from process_puzzle_meta import process_puzzle_meta
+from foldit.raw.process_puzzle_meta import process_puzzle_meta
 from pattern_extraction import load_extend_data
 import logging, sys
 logging.getLogger().setLevel(logging.DEBUG)

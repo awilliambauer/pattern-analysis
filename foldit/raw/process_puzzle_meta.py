@@ -1,16 +1,13 @@
 import csv
-import random
 import numpy as np
 from collections import Counter
 import json
-from itertools import groupby, chain, combinations, takewhile, product
+from itertools import groupby, product
 from functools import partial
-from util import get_atoms, weighted_rmsd, EnergyComponent, skip_pids, iden, get_sessions, get_time_splits, PDB_Info, \
-    session_duration, get_children, ROOT_NID, get_nid, output_atoms, SolvingLine, tmscore, SolvingLineVariant, rmsd,\
+from util import get_atoms, EnergyComponent, get_sessions, PDB_Info, \
+    session_duration, get_children, ROOT_NID, get_nid, SolvingLine, SolvingLineVariant, rmsd,\
     EvolvingLine, PuzzleMeta
-from collab_viz import is_corrupted
-from datetime import datetime, timedelta
-from operator import itemgetter
+from foldit.collab_viz import is_corrupted
 import scipy
 import scipy.spatial
 import scipy.signal
@@ -25,7 +22,6 @@ from concurrent.futures import ProcessPoolExecutor
 import re
 import argparse
 import logging
-import dill
 from typing import List
 
 
@@ -475,7 +471,7 @@ def process_puzzle_meta(pid, overwrite=False, snapshot_threads=15):
             # subprocess.run(["scp", "wannacut:~/foldit/{}".format(setup_file), setup_file], stdout=subprocess.DEVNULL)
         with open(struct_file) as init_pdb:
             content = init_pdb.read()
-            sec_struct = {i: l for i, l in [x.split()[:2] for x in re.findall('^(?!ATOM)\s+?\d+.*',
+            sec_struct = {i: l for i, l in [x.split()[:2] for x in re.findall(r'^(?!ATOM)\s+?\d+.*',
                                                                               content, re.MULTILINE)]}
             assert all(v in ['H', 'E', 'L', 'C'] for v in sec_struct.values())
             atoms = Counter([x.split()[5] for x in re.findall('^ATOM.*', content, re.MULTILINE)])

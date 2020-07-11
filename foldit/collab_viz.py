@@ -13,9 +13,9 @@ import matplotlib.pyplot as plt
 from graphviz import Digraph
 from concurrent.futures import ProcessPoolExecutor
 
+from foldit.foldit_data import get_relevant_sids
 from util import PDB_Info, get_data_value
 from typing import NamedTuple, Tuple, List, Dict
-from pattern_extraction import get_relevant_sids
 import matplotlib
 matplotlib.use("Agg")
 

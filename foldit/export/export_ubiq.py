@@ -1,15 +1,15 @@
-from pattern_extraction import load_extend_data, get_deltas
-from util import collect_pdl_entries, time_played, get_action_labels, get_action_keys
+from foldit.foldit_data import load_extend_data, get_deltas
+from util import collect_pdl_entries, get_action_labels, get_action_keys
 import csv
 import argparse
 import logging
 import os
 import sys
 import numpy as np
-from process_puzzle_meta import process_puzzle_meta
+from foldit.raw.process_puzzle_meta import process_puzzle_meta
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(prog='dump_ubiq.py')
+    parser = argparse.ArgumentParser(prog='export_ubiq.py')
     parser.add_argument("--overwrite", action='store_true')
     parser.add_argument("--append", action='store_true')
     args = parser.parse_args()

@@ -1,6 +1,7 @@
+from foldit.foldit_data import make_action_series, get_deltas, load_extend_data, make_series
 from pattern_extraction import *
-from check_models import predict_from_saved_model, load_sub_lookup
-from util import collect_pdl_entries, time_played, get_action_labels, get_action_keys, get_pattern_label
+from foldit.check_models import predict_from_saved_model, load_sub_lookup
+from util import get_pattern_label
 import csv
 import argparse
 import logging
@@ -8,9 +9,8 @@ import os
 import sys
 import numpy as np
 import pickle
-import string
 from itertools import groupby
-from process_puzzle_meta import process_puzzle_meta
+from foldit.raw.process_puzzle_meta import process_puzzle_meta
 
 
 def get_pattern_count(p, pt, series, subseries_lookup):
@@ -105,7 +105,7 @@ def compute_pattern_counts(pid, best_k, target_pts, noise, mrf_lookup, model_loo
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(prog='dump_predicted_patterns.py')
+    parser = argparse.ArgumentParser(prog='export_predicted_patterns.py')
     parser.add_argument("--overwrite", action='store_true')
     parser.add_argument("--append", action='store_true')
     args = parser.parse_args()

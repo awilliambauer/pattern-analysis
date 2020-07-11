@@ -1,4 +1,4 @@
-from pattern_extraction import load_extend_data
+from foldit.foldit_data import load_extend_data
 from util import collect_pdl_entries, time_played
 import csv
 import argparse
@@ -6,10 +6,10 @@ import logging
 import os
 import sys
 import numpy as np
-from process_puzzle_meta import process_puzzle_meta
+from foldit.raw.process_puzzle_meta import process_puzzle_meta
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(prog='dump_metadata.py')
+    parser = argparse.ArgumentParser(prog='export_metadata.py')
     parser.add_argument("--overwrite", action='store_true')
     parser.add_argument("--append", action='store_true')
     args = parser.parse_args()

@@ -1,16 +1,8 @@
-import csv
-import numpy as np
-import math
-from typing import NamedTuple
-from itertools import groupby
-import logging
 import matplotlib
 matplotlib.use("Agg")
-from pattern_extraction import *
 from datetime import datetime
-from check_models import load_sub_lookup
-from pattern_model_evaluation import *
-from dump_predicted_patterns import get_pattern_count
+from foldit.pattern_model_evaluation import *
+from foldit.export.export_predicted_patterns import get_pattern_count
 
 events = []
 print("loading event dumps")

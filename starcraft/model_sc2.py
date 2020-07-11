@@ -29,7 +29,7 @@ features = [
 krange = [5,6,7,8,9,10,12,15,20]
 
 raw = []
-with open("starcraft/sc2_test_events.csv") as fp:
+with open("sc2_test_events.csv") as fp:
     inr = csv.DictReader(fp)
     for r in inr:
         raw.append(SC2Event(r["uid"], r["game_id"], int(r["frame"]), r["type"]))

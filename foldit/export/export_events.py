@@ -1,4 +1,4 @@
-from pattern_extraction import get_relevant_sids, get_deltas, make_lookups
+from foldit.foldit_data import make_lookups, get_relevant_sids, get_deltas
 from util import load_frame
 import csv
 import pandas as pd
@@ -8,7 +8,7 @@ import os
 import sys
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(prog='dump_events.py')
+    parser = argparse.ArgumentParser(prog='export_events.py')
     parser.add_argument("--overwrite", action='store_true')
     parser.add_argument("datapath")
     parser.add_argument("pid")

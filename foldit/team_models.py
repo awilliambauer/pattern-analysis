@@ -1,6 +1,6 @@
 import os
 from sklearn.ensemble import GradientBoostingRegressor
-from sklearn.ensemble.partial_dependence import plot_partial_dependence
+from sklearn.inspection import plot_partial_dependence
 from sklearn.linear_model import Ridge
 from sklearn.model_selection import cross_val_score, ShuffleSplit, ParameterGrid, GroupShuffleSplit
 from sklearn.feature_selection import RFECV
@@ -292,13 +292,13 @@ if __name__ == "__main__":
 
     if args.ontology_report:
         ontology = make_team_ontology(all_linked_teams.values())
-        ontology_lookup = {(t['uid'], t['pid']): teamtype for teamtype, ts in ont.items() for t in ts}
+        ontology_lookup = {(t['uid'], t['pid']): teamtype for teamtype, ts in ontology.items() for t in ts}
         teamtype_labels = {"minimal": "Minimal", "line": "Line", "one_branch": "One Branch", "one_branch_itr": "One Branch Iterative",
                            "n_branch": "N Branch", "n_branch_itr": "N Branch Iterative", "rich": "Rich", "rich_itr": "Rich Iterative"}
-        make_boxplot([[get_team_perf(t) for t in ts] for ts in ont.values()], [teamtype_labels[teamtype] for teamtype in ont],
+        make_boxplot([[get_team_perf(t) for t in ts] for ts in ontology.values()], [teamtype_labels[teamtype] for teamtype in ontology],
                      "performance", "collab_viz/ontology_perfs.png", ylims=(0.5, 1.02))
-        make_boxplot([[len([t for t in ts if ontology_lookup[(t['uid'], t['pid'])] == teamtype]) / len(ts) for ts in teams_by_pid.values()] for teamtype in ont],
-                     [teamtype_labels[teamtype] for teamtype in ont], "proportion of teams", "collab_viz/ontology_variation.png", ylims=(-0.05, 1))
+        make_boxplot([[len([t for t in ts if ontology_lookup[(t['uid'], t['pid'])] == teamtype]) / len(ts) for ts in teams_by_pid.values()] for teamtype in ontology],
+                     [teamtype_labels[teamtype] for teamtype in ontology], "proportion of teams", "collab_viz/ontology_variation.png", ylims=(-0.05, 1))
 
     solo_pts, evol_pts, both_pts = zip(*[diagnose_patterns(team) for team in all_linked_teams.values()])
     solo_count = Counter(sum([list(x) for x in solo_pts], []))

@@ -1,26 +1,20 @@
+from foldit.foldit_data import load_extend_data, make_series
 from pattern_extraction import *
-from check_models import load_sub_lookup, predict_from_saved_model
+from foldit.check_models import load_sub_lookup, predict_from_saved_model
 from util import get_pattern_label
 import argparse
 from sklearn.ensemble import GradientBoostingRegressor
-from sklearn.linear_model import Ridge
-from sklearn.model_selection import cross_val_score, ShuffleSplit, ParameterGrid, GroupShuffleSplit
+from sklearn.model_selection import cross_val_score, ShuffleSplit, ParameterGrid
 from sklearn.feature_selection import RFECV
-import pygam
 import pickle
 import numpy as np
 import pandas as pd
-import logging
 import json
-import sys
 import os
 import string
-import re
 import matplotlib
 from multiprocessing import Pool
 from statsmodels import robust
-from collections import Counter
-from copy import deepcopy
 from operator import itemgetter
 matplotlib.use("Agg")
 
@@ -94,145 +88,6 @@ def compute_subpattern_times(k: int, subs: tuple, data: pd.DataFrame, cluster_lo
                 #results[(uid, pid)]["times"]["subpattern_{}_action_ratio".format(scid)] = results[(uid, pid)]["times"]["subpattern_{}_action".format(scid)] / actions.sum()
     subcluster_times = [v["times"] for v in results.values() if v["valid"]]
     return data.merge(pd.DataFrame(data=subcluster_times), on=['pid', 'uid'])
-
-
-def get_predicted_lookups(all_series, krange, model_lookup, sub_models, mrf_lookup, puz_idx_lookup, noise):
-    cluster_lookup = {}
-    sub_clusters = {}
-    subseries_lookup = {}
-    for k in krange:
-        print("predicting k =", k)
-        cluster_lookup[k] = predict_from_saved_model(all_series, model_lookup[k])
-        patterns = get_patterns(mrf_lookup[k], cluster_lookup[k], puz_idx_lookup)
-        subseries_lookup[k] = make_subseries_lookup(k, patterns, mrf_lookup[k], all_series, noise)
-        sub_cs = {}        
-        for cid in sub_models[k]:
-            if cid in subseries_lookup[k]:
-                sub_cs[cid] = {}
-                for sub_k in sub_models[k][cid]:
-                    print("    cid =", cid, "({})".format(sub_k))
-                    sub_cs[cid][sub_k] = predict_from_saved_model(subseries_lookup[k][cid]["series"],
-                                                                  sub_models[k][cid][sub_k])
-        sub_clusters[k] = sub_cs
-
-    return cluster_lookup, subseries_lookup, sub_clusters
-
-
-def make_selection_lookups(all_series, pattern_lookup, subseries_lookup, sub_clusters, sub_mrfs):
-    dispersions = {}
-    modes = {}
-    print("computing selection criteria")
-    for k in pattern_lookup:
-        print("k =", k)
-        for cid in {p.cid for p in pattern_lookup[k]["base"]}:
-            print("    cid", cid)
-            ss = [all_series[p.start_idx:p.end_idx] for p in pattern_lookup[k]["base"] if p.cid == cid]
-            ubiqs = np.array([[len([x for x in s[:, i] if x > 0]) / len(s) for i in range(s.shape[1])] for s in ss])
-
-            dispersions[(k, cid, 0)] = np.mean(robust.mad(ubiqs, axis=0))
-            modes[(k, cid, 0)] = stats.mode(np.round(ubiqs, 1)).mode
-
-            if cid not in sub_clusters[k]:
-                continue
-
-            idx_lookup = subseries_lookup[k][cid]["idx_lookup"]
-            ser = subseries_lookup[k][cid]["series"]
-            for sub_k in sub_clusters[k][cid]:
-                if not any(is_null_cluster(mrf) for mrf in sub_mrfs[k][cid][sub_k].values()) or len(idx_lookup) <= sub_k:
-                    continue
-                ps = pattern_lookup[k][cid][sub_k]
-                for sub_cid in {p.cid for p in ps}:
-                    ss = [ser[p.start_idx:p.end_idx] for p in ps if p.cid == sub_cid]
-                    ubiqs = np.array([[len([x for x in s[:, i] if x > 0]) / len(s) for i in range(s.shape[1])] for s in ss])
-                    dispersions[(k, cid, sub_k, sub_cid)] = np.mean(robust.mad(ubiqs, axis=0))
-                    modes[(k, cid, sub_k, sub_cid)] = stats.mode(np.round(ubiqs, 1)).mode
-
-    dispersion_lookup = {tag: [x[1] for x in sorted(xs)] for tag, xs in groupby(sorted(dispersions.items()), lambda x: x[0][:3])}
-    mode_lookup = {tag: [x[1] for x in sorted(xs)] for tag, xs in groupby(sorted(modes.items()), lambda x: x[0][:3])}
-
-    return dispersion_lookup, mode_lookup
-
-
-def dispersion_score(k, candidate, dispersion_lookup, pattern_lookup):
-    sub_weights = [[len([p for p in pattern_lookup[k][cid][sub_k] if p.cid == sub_cid]) for sub_cid in 
-                    sorted({p.cid for p in pattern_lookup[k][cid][sub_k]})] for cid, sub_k in candidate]
-    return np.average([np.average(dispersion_lookup[(k, cid, sub_k)], weights=ws) for ws, (cid, sub_k) in zip(sub_weights, candidate)],
-                      weights=[len(pattern_lookup[k][cid][sub_k]) for cid, sub_k in candidate])
-
-
-def mode_score(k, candidate, mode_lookup):
-    ms = sum((mode_lookup[(k, cid, sub_k)] for cid, sub_k in candidate), [])
-    return np.mean([min([abs(x - m).sum() for x in ms if x is not m]) for m in ms])
-
-
-
-def find_best_dispersion_model(all_series, pattern_lookup, subseries_lookup, sub_clusters):
-    """
-    for each pattern p
-        compute signal ubiquity for each instance of p (for each signal i, compute fraction of instance's duration where i is active)
-        for each signal i, compute the median absolute deviation among ubiquities 
-        (i.e., to what degree do different instances of p vary in terms of how much they involve i)
-        take the mean (i.e, averaged across all signals, how much do instances of p vary), call this DISPERSION
-        also compute the modal ubiquity for each signal
-    ^^^ this is done in make_selection_lookups()
-    for each pattern identified by the initial extraction, we have to choose a recursive model (or no recursive model)
-    we make each of these choices to minimize the mean dispersion of the resulting patterns
-    hence, for each value of k used to perform an initial extraction, we have a candidate model where the choices of recursive models minimize mean dispsersion
-    each of these candidate models are given an overall dispersion score by performing a weighted average of the dispsersions of all patterns in the model
-        weighted according to the number of instances of that pattern--we care more that a very common pattern is cohesive than a very rare one
-    if we were to use only this dispersion score to select the final model,
-    we would have a strong bias toward models that extract many patterns that occur just once or a handful of times, as these patterns will naturally be very cohesive under our definition
-    to mitigate this bias, we take into account the distinctiveness of a model's patterns in the final selection step
-    we measure distinctiveness as the mean nearest-neighbor distance in terms of modal ubiquity across all patterns
-    we rank candidate models by dispersion (smaller is better) and nearest-neighbor distance (larger is better)
-    we sum the two ranks for each candidate and the best candidate is that which has the smallest sum
-    """
-    dispersion_lookup, mode_lookup = make_selection_lookups(all_series, pattern_lookup, subseries_lookup, sub_clusters)
-    disp_scores = {}
-    for k in pattern_lookup:
-        print("k =", k)
-        candidate = []
-        for cid in {p.cid for p in pattern_lookup[k]["base"]}:
-            xs = [(cid, 0)]
-            if cid not in sub_clusters[k]:
-                candidate.append(xs[0])
-                continue
-            idx_lookup = subseries_lookup[k][cid]["idx_lookup"]
-            for sub_k in sub_clusters[k][cid]:
-                if (k, cid, sub_k) not in dispersion_lookup:
-                    print("SKIPPING", k, cid, sub_k)
-                    continue
-                xs.append((cid, sub_k))
-            candidate.append(min(xs, key=lambda x: np.mean(dispersion_lookup[(k, x[0], x[1])])))
-        disp_scores[(k, tuple(candidate))] = dispersion_score(k, candidate, dispersion_lookup, pattern_lookup)
-    disp_ranks = {kc: i for i, (kc, s) in enumerate(sorted(disp_scores.items(), key=itemgetter(1)))}
-    mode_scores = {(k, c): mode_score(k, c, mode_lookup) for k, c in disp_scores}
-    mode_ranks = {kc: i for i, (kc, s) in enumerate(sorted(mode_scores.items(), key=itemgetter(1), reverse=True))}
-
-    # sort the keys to return the smaller k in case of ties
-    return min(sorted(disp_ranks.keys()), key=lambda kc: disp_ranks[kc] + mode_ranks[kc])
-
-
-def score_param(param, model, X, y, cv):
-    # feature selection under these params
-    selector = RFECV(model(**param), step=1, cv=cv)
-    selector.fit(X, y)
-    X_sel = selector.transform(X)
-    # score for these params is CV score fitting on X_sel
-    return np.mean(cross_val_score(model(**param), X_sel, y, cv=cv)), selector.get_support()
-
-
-def load_eval_model(model_dir):
-    with open(model_dir + "/eval/cluster_lookup.pickle", "rb") as fp:
-        cluster_lookup = pickle.load(fp)
-    with open(model_dir + "/eval/subseries_lookup.pickle", "rb") as fp:
-        subseries_lookup = pickle.load(fp)
-    with open(model_dir + "/eval/sub_clusters.pickle", "rb") as fp:
-        sub_clusters = pickle.load(fp)
-    with open(model_dir + "/eval/pattern_lookup.pickle", "rb") as fp:
-        pattern_lookup = pickle.load(fp)
-    best_k, best_subs = eval(open(model_dir + "/eval/best_model.txt").read())
-    return cluster_lookup, subseries_lookup, sub_clusters, pattern_lookup, best_k, best_subs
 
 
 if __name__ == "__main__":
