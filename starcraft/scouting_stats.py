@@ -8,6 +8,7 @@ import scouting_detector
 from multiprocessing import Pool
 import argparse
 import time
+import math
 
 def generateFields(filename):
     game_id = filename.split("_")[1].split(".")[0]
@@ -34,8 +35,21 @@ def generateFields(filename):
 def ranking_stats(replay):
     p1_rank = replay.players[0].highest_league
     p2_rank = replay.players[1].highest_league
-    p1_rel = p1_rank - p2_rank
-    p2_rel = p2_rank - p1_rank
+
+    #checking if rank exists for each player
+    if (p1_rank == 0) or (p1_rank == 8):
+        p1_rank = math.nan
+    if (p2_rank == 0) or (p2_rank == 8):
+        p2_rank = math.nan
+
+    #if rankings exist for both players, then calculate relative ranks
+    if not math.isnan(p1_rank) and not math.isnan(p2_rank):
+        p1_rel = p1_rank - p2_rank
+        p2_rel = p2_rank - p1_rank
+    #if rankings don't exist for both players, then relative ranks are NaN
+    else:
+        p1_rel, p2_rel = math.nan, math.nan
+
     return p1_rank, p1_rel, p2_rank, p2_rel
 
 if __name__ == "__main__":
@@ -80,7 +94,7 @@ if __name__ == "__main__":
                     events_out.writerow({"GameID": fields[7], "ScoutingFrequency": fields[8],
                                         "ScoutingTime": fields[9], "APM": fields[10], "Rank": fields[11],
                                         "Relative Rank": fields[12], "Win": fields[13]})
-        #running with multiprocessing            
+        #running with multiprocessing
         else:
             pool = Pool(40)
             results = pool.map(generateFields, files)

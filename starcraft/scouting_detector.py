@@ -226,19 +226,15 @@ def integrateBattles(scouting_dict, battles):
     length = len(scouting_dict.keys())
     frame = 1
     while frame < length:
-        if scouting_dict[frame] == "Scouting opponent" and duringBattle(frame, battles):
+        if scouting_dict[frame] == "Scouting opponent" and battle_detector.duringBattle(frame, battles):
             scouting_dict[frame] == "No scouting"
         frame += 1
     return scouting_dict
 
-def duringBattle(frame, battles):
-    for battle in battles:
-        if frame >= battle[0] and frame <= battle[1]:
-            return True
-
 def detect_scouting(replay):
+    print("what is going on")
     r = replay
-    
+
     # # Only applied to missing ability info, which doesn't matter for scouting detection
     # if hasattr(r, "marked_error") and r.marked_error:
     #     print("skipping", r.filename, "as it contains errors")

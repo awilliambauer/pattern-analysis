@@ -84,6 +84,11 @@ def buildBattleList(replay):
 
     return battles
 
+def duringBattle(frame, battles):
+    for battle in battles:
+        if frame >= battle[0] and frame <= battle[1]:
+            return True
+
 def toTime(battles, frames, seconds):
     timeList = []
 
