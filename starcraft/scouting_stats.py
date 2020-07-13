@@ -9,6 +9,7 @@ from multiprocessing import Pool
 import argparse
 import time
 import math
+import control_groups
 
 def generateFields(filename):
     game_id = filename.split("_")[1].split(".")[0]
@@ -22,12 +23,13 @@ def generateFields(filename):
 
         team1_nums, team1_fraction, team1_apm, team2_nums, team2_fraction, team2_apm, winner = scouting_detector.detect_scouting(r)
         team1_rank, team1_rel, team2_rank, team2_rel = ranking_stats(r)
+        team1_cps, team1_ratio, team2_cps, team2_ratio = control_groups.control_group_stats(r)
         if winner == 1:
-            fields = (game_id, team1_nums, team1_fraction, team1_apm, team1_rank, team1_rel, 1,
-                        game_id, team2_nums, team2_fraction, team2_apm, team2_rank, team2_rel, 0)
+            fields = (game_id, team1_nums, team1_fraction, team1_apm, team1_rank, team1_rel, team1_cps, team1_ratio, 1,
+                        game_id, team2_nums, team2_fraction, team2_apm, team2_rank, team2_rel, team2_cps, team2_ratio, 0)
         elif winner == 2:
-            fields = (game_id, team1_nums, team1_fraction, team1_apm, team1_rank, team1_rel, 0,
-                        game_id, team2_nums, team2_fraction, team2_apm, team2_rank, team2_rel, 1)
+            fields = (game_id, team1_nums, team1_fraction, team1_apm, team1_rank, team1_rel, team1_cps, team1_ratio, 0,
+                        game_id, team2_nums, team2_fraction, team2_apm, team2_rank, team2_rel, team2_cps, team2_ratio, 1)
         return fields
     except:
         return
@@ -76,8 +78,8 @@ if __name__ == "__main__":
     valid_games = []
     t1 = time.time()
     with open("scouting_stats.csv", 'w', newline = '') as fp:
-        events_out = csv.DictWriter(fp, fieldnames=["GameID", "ScoutingFrequency", "ScoutingTime",
-                                                    "APM", "Rank", "Relative Rank", "Win"])
+        events_out = csv.DictWriter(fp, fieldnames=["GameID", "ScoutingFrequency", "ScoutingTime", "APM",
+                                                    "Rank", "Relative Rank", "CPS", "PvBRatio", "Win"])
         events_out.writeheader()
         #debugging
         if args.d:
@@ -90,10 +92,12 @@ if __name__ == "__main__":
                 if fields:
                     events_out.writerow({"GameID": fields[0], "ScoutingFrequency": fields[1],
                                         "ScoutingTime": fields[2], "APM": fields[3], "Rank": fields[4],
-                                        "Relative Rank": fields[5], "Win": fields[6]})
-                    events_out.writerow({"GameID": fields[7], "ScoutingFrequency": fields[8],
-                                        "ScoutingTime": fields[9], "APM": fields[10], "Rank": fields[11],
-                                        "Relative Rank": fields[12], "Win": fields[13]})
+                                        "Relative Rank": fields[5], "CPS": fields[6],
+                                        "PvBRatio": fields[7], "Win": fields[8]})
+                    events_out.writerow({"GameID": fields[9], "ScoutingFrequency": fields[10],
+                                        "ScoutingTime": fields[11], "APM": fields[12], "Rank": fields[13],
+                                        "Relative Rank": fields[14], "CPS": fields[15],
+                                        "PvBRatio": fields[16], "Win": fields[17]})
         #running with multiprocessing
         else:
             pool = Pool(40)
@@ -106,10 +110,12 @@ if __name__ == "__main__":
                     valid_games.append(filename)
                     events_out.writerow({"GameID": fields[0], "ScoutingFrequency": fields[1],
                                         "ScoutingTime": fields[2], "APM": fields[3], "Rank": fields[4],
-                                        "Relative Rank": fields[5], "Win": fields[6]})
-                    events_out.writerow({"GameID": fields[7], "ScoutingFrequency": fields[8],
-                                        "ScoutingTime": fields[9], "APM": fields[10], "Rank": fields[11],
-                                        "Relative Rank": fields[12], "Win": fields[13]})
+                                        "Relative Rank": fields[5], "CPS": fields[6],
+                                        "PvBRatio": fields[7], "Win": fields[8]})
+                    events_out.writerow({"GameID": fields[9], "ScoutingFrequency": fields[10],
+                                        "ScoutingTime": fields[11], "APM": fields[12], "Rank": fields[13],
+                                        "Relative Rank": fields[14], "CPS": fields[15],
+                                        "PvBRatio": fields[16], "Win": fields[17]})
     if args.w:
         with open("valid_game_ids.txt", 'w') as file:
             for game_id in valid_games:
