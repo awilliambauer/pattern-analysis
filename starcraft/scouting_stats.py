@@ -58,8 +58,7 @@ if __name__ == "__main__":
     #command line argument for debugging
     parser = argparse.ArgumentParser()
     parser.add_argument('--d', nargs=2, type=int) #debugging, input indeces
-    parser.add_argument('-w', action='store_true')
-    parser.add_argument('-r', action='store_true')
+    parser.add_argument('--w', action='store_true')
     args = parser.parse_args()
 
     if args.d:
@@ -68,7 +67,7 @@ if __name__ == "__main__":
 
     if args.w:
         files = os.listdir("/tmp/replays")
-    elif args.r:
+    else:
         files = []
         games = open("valid_game_ids.txt", 'r')
         for line in games:
@@ -89,6 +88,9 @@ if __name__ == "__main__":
                 print("file #: ", i, "file name: ", filename)
                 i += 1
                 fields = generateFields(filename)
+                if args.w:
+                    filename = "gggreplays_{}.SC2Replay".format(fields[0])
+                    valid_games.append(filename)
                 if fields:
                     events_out.writerow({"GameID": fields[0], "ScoutingFrequency": fields[1],
                                         "ScoutingTime": fields[2], "APM": fields[3], "Rank": fields[4],
@@ -106,8 +108,9 @@ if __name__ == "__main__":
             pool.join()
             for fields in results:
                 if fields:
-                    filename = "gggreplays_{}.SC2Replay".format(fields[0])
-                    valid_games.append(filename)
+                    if args.w:
+                        filename = "gggreplays_{}.SC2Replay".format(fields[0])
+                        valid_games.append(filename)
                     events_out.writerow({"GameID": fields[0], "ScoutingFrequency": fields[1],
                                         "ScoutingTime": fields[2], "APM": fields[3], "Rank": fields[4],
                                         "Relative Rank": fields[5], "CPS": fields[6],
@@ -116,7 +119,8 @@ if __name__ == "__main__":
                                         "ScoutingTime": fields[11], "APM": fields[12], "Rank": fields[13],
                                         "Relative Rank": fields[14], "CPS": fields[15],
                                         "PvBRatio": fields[16], "Win": fields[17]})
-    if args.w:
+    #writing to a new file if it doesn't already exist and command line argument exists
+    if args.w and not(os.path.exists("valid_game_ids.txt")):
         with open("valid_game_ids.txt", 'w') as file:
             for game_id in valid_games:
                 file.write(game_id + "\n")

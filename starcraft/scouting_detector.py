@@ -232,7 +232,6 @@ def integrateBattles(scouting_dict, battles):
     return scouting_dict
 
 def detect_scouting(replay):
-    print("what is going on")
     r = replay
 
     # # Only applied to missing ability info, which doesn't matter for scouting detection
