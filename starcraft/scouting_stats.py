@@ -10,6 +10,7 @@ import argparse
 import time
 import math
 import control_groups
+from collections import Counter
 
 def generateFields(filename):
     game_id = filename.split("_")[1].split(".")[0]
@@ -18,7 +19,11 @@ def generateFields(filename):
         try:
             r = sc2reader.load_replay(pathname)
         except:
-            print(filename + " cannot load using sc2reader due to an internal ValueError")
+            (filename + " cannot load using sc2reader due to an internal ValueError")
+            raise RuntimeError()
+
+        if not(r.map_name in map_counter.keys()):
+            print(filename + " is not played on an official Blizzard map")
             raise RuntimeError()
 
         team1_nums, team1_fraction, team1_apm, team2_nums, team2_fraction, team2_apm, winner = scouting_detector.detect_scouting(r)
@@ -26,10 +31,12 @@ def generateFields(filename):
         team1_cps, team1_ratio, team2_cps, team2_ratio = control_groups.control_group_stats(r)
         if winner == 1:
             fields = (game_id, team1_nums, team1_fraction, team1_apm, team1_rank, team1_rel, team1_cps, team1_ratio, 1,
-                        game_id, team2_nums, team2_fraction, team2_apm, team2_rank, team2_rel, team2_cps, team2_ratio, 0)
+                        game_id, team2_nums, team2_fraction, team2_apm, team2_rank, team2_rel, team2_cps, team2_ratio, 0,
+                        r.map_name)
         elif winner == 2:
             fields = (game_id, team1_nums, team1_fraction, team1_apm, team1_rank, team1_rel, team1_cps, team1_ratio, 0,
-                        game_id, team2_nums, team2_fraction, team2_apm, team2_rank, team2_rel, team2_cps, team2_ratio, 1)
+                        game_id, team2_nums, team2_fraction, team2_apm, team2_rank, team2_rel, team2_cps, team2_ratio, 1,
+                        r.map_name)
         return fields
     except:
         return
@@ -53,6 +60,15 @@ def ranking_stats(replay):
         p1_rel, p2_rel = math.nan, math.nan
 
     return p1_rank, p1_rel, p2_rank, p2_rel
+
+def initializeCounter():
+    bliz_maps = open("blizzard_maps.txt", 'r')
+    for line in bliz_maps:
+        map = line.strip()
+        map_counter[map] = 0
+
+map_counter = Counter()
+initializeCounter()
 
 if __name__ == "__main__":
     #command line argument for debugging
@@ -88,10 +104,11 @@ if __name__ == "__main__":
                 print("file #: ", i, "file name: ", filename)
                 i += 1
                 fields = generateFields(filename)
-                if args.w:
-                    filename = "gggreplays_{}.SC2Replay".format(fields[0])
-                    valid_games.append(filename)
                 if fields:
+                    if args.w:
+                        filename = "gggreplays_{}.SC2Replay".format(fields[0])
+                        valid_games.append(filename)
+                    map_counter[fields[18]] += 1
                     events_out.writerow({"GameID": fields[0], "ScoutingFrequency": fields[1],
                                         "ScoutingTime": fields[2], "APM": fields[3], "Rank": fields[4],
                                         "Relative Rank": fields[5], "CPS": fields[6],
@@ -111,6 +128,7 @@ if __name__ == "__main__":
                     if args.w:
                         filename = "gggreplays_{}.SC2Replay".format(fields[0])
                         valid_games.append(filename)
+                    map_counter[fields[18]] += 1
                     events_out.writerow({"GameID": fields[0], "ScoutingFrequency": fields[1],
                                         "ScoutingTime": fields[2], "APM": fields[3], "Rank": fields[4],
                                         "Relative Rank": fields[5], "CPS": fields[6],
@@ -124,4 +142,5 @@ if __name__ == "__main__":
         with open("valid_game_ids.txt", 'w') as file:
             for game_id in valid_games:
                 file.write(game_id + "\n")
+    print(map_counter)
     print("Run time: ", (time.time()-t1)/60)
