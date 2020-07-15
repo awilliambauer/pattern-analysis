@@ -6,6 +6,7 @@ import json
 import numpy as np
 import pickle
 import pandas as pd
+from types import SimpleNamespace
 
 from pattern_viz import plot_labeled_series
 from util import time_played, get_action_labels
@@ -20,42 +21,37 @@ if __name__ == "__main__":
     # revisiting: '2003240', '2003206', '2003125', '2003483', '2003583'
 
     parser = argparse.ArgumentParser(prog='pattern_extraction.py')
-    parser.add_argument("datapath")
-    parser.add_argument('--evolver', action='store_true')
-    parser.add_argument('--overwrite', action='store_true')
-    parser.add_argument('--noplot', action='store_true')
-    parser.add_argument('--debug', action='store_true')
-    parser.add_argument('--pids', nargs='+')
-    parser.add_argument('--num-patterns', nargs='+', type=int)
+    parser.add_argument("config")
     args = parser.parse_args()
 
-    if args.debug:
+    try:
+        with open(args.config) as fp:
+            config = SimpleNamespace(**json.load(fp))
+    except FileNotFoundError:
+        print(f"{args.config} could not be opened")
+
+    if config.debug:
         logging.getLogger().setLevel(logging.DEBUG)
         logging.debug("setting krange to {}".format(args.num_patterns))
 
-    if os.path.exists(args.datapath) and not args.overwrite:
-        logging.error("{} exists and no overwrite flag given".format(args.datapath))
+    if os.path.exists(config.datapath) and not config.overwrite:
+        logging.error("{} exists and no overwrite flag given".format(config.datapath))
         sys.exit(1)
 
-    if not os.path.exists(args.datapath):
-        os.makedirs(args.datapath)
+    if not os.path.exists(config.datapath):
+        os.makedirs(config.datapath)
 
-    if args.pids:
-        pids = args.pids
+    if config.pids:
+        pids = config.pids
 
     krange = range(10, 11)
-    if args.num_patterns:
-        krange = args.num_patterns
-
-    with open(f"{args.datapath}/config.json") as fp:
-        json.dump({"pids": pids,
-                   "evolver": args.evolver,
-                   "krange": krange}, fp)
+    if config.num_patterns:
+        krange = config.num_patterns
 
     soln_lookup = {}
     parent_lookup = {}
     child_lookup = {}
-    data, puz_metas = load_extend_data(pids, soln_lookup, parent_lookup, child_lookup, args.evolver, 600)
+    data, puz_metas = load_extend_data(pids, soln_lookup, parent_lookup, child_lookup, config.evolver, 600)
 
     logging.debug("Constructing time series")
     puz_idx_lookup, series_lookup, noise = make_series(data)
@@ -65,14 +61,14 @@ if __name__ == "__main__":
     idx_lookup, all_series = combine_user_series(series_lookup, noise)
     puz_idx_lookup = {(uid, pid): (s + idx_lookup[uid][0], e + idx_lookup[uid][0]) for (uid, pid), (s, e) in
                       puz_idx_lookup.items()}
-    np.savetxt(f"{args.datapath}/noise_values.txt", noise)
-    np.savetxt(f"{args.datapath}/all_series.txt", all_series)
-    with open(f"{args.datapath}/puz_idx_lookup.pickle", 'wb') as fp:
+    np.savetxt(f"{config.datapath}/noise_values.txt", noise)
+    np.savetxt(f"{config.datapath}/all_series.txt", all_series)
+    with open(f"{config.datapath}/puz_idx_lookup.pickle", 'wb') as fp:
         pickle.dump(puz_idx_lookup, fp)
-    with open(f"{args.datapath}/idx_lookup.pickle", 'wb') as fp:
+    with open(f"{config.datapath}/idx_lookup.pickle", 'wb') as fp:
         pickle.dump(idx_lookup, fp)
 
-    if args.evolver:
+    if config.evolver:
         evol_series_lookup = {}
         for _, r in data.iterrows():
             if r.evol_lines:
@@ -85,20 +81,20 @@ if __name__ == "__main__":
                         ser = make_action_series(deltas)
                         evol_series_lookup["{}_{}_{}".format(r.uid, r.pid, idx)] = ser
         evol_idx_lookup, evol_all_series = combine_user_series(evol_series_lookup, noise)
-        np.savetxt(f"{args.datapath}/evol_all_series.txt", evol_all_series)
-        with open(f"{args.datapath}/evol_idx_lookup.pickle", 'wb') as fp:
+        np.savetxt(f"{config.datapath}/evol_all_series.txt", evol_all_series)
+        with open(f"{config.datapath}/evol_idx_lookup.pickle", 'wb') as fp:
             pickle.dump(evol_idx_lookup, fp)
 
     logging.debug("Running TICC")
-    run_TICC({"all": all_series}, args.datapath, krange)
-    if args.evolver:
-        run_TICC({"all_evol": evol_all_series}, args.datapath, krange)
+    run_TICC({"all": all_series}, config.datapath, krange)
+    if config.evolver:
+        run_TICC({"all_evol": evol_all_series}, config.datapath, krange)
 
-    if args.noplot:
+    if config.noplot:
         sys.exit(0)
 
     logging.debug("Loading TICC output")
-    cluster_lookup, mrf_lookup, model_lookup, bic_lookup = load_TICC_output(args.datapath, ["all", "all_evol"], krange)
+    cluster_lookup, mrf_lookup, model_lookup, bic_lookup = load_TICC_output(config.datapath, ["all", "all_evol"], krange)
     uid = "all"
     for k in mrf_lookup[uid]:
         mrf_lookup[uid][k] = weight_mrfs_by_ubiquity(mrf_lookup[uid][k], all_series, cluster_lookup[uid][k])
@@ -119,7 +115,7 @@ if __name__ == "__main__":
         ser = series_lookup[uid]
         cs = all_clusters[slice(*idx_lookup[uid])]
         plot_labeled_series(np.arange(len(ser)), ser, cs, action_labels, pattern_labels,
-                            f"{args.datapath}/all/{uid}_series_all_k{k}.png")
+                            f"{config.datapath}/all/{uid}_series_all_k{k}.png")
 
     patterns = get_patterns(data, mrf_lookup["all"][k], all_clusters, puz_idx_lookup)
 
@@ -203,8 +199,8 @@ if __name__ == "__main__":
     for k in krange:
         logging.debug("getting patterns for k={}".format(k))
         patterns = get_patterns(data, mrf_lookup["all"][k], cluster_lookup["all"][k], puz_idx_lookup, soln_lookup)
-        if not os.path.exists(args.datapath + "/subpatterns_k{}".format(k)):
-            os.makedirs(args.datapath + "/subpatterns_k{}".format(k))
+        if not os.path.exists(config.datapath + "/subpatterns_k{}".format(k)):
+            os.makedirs(config.datapath + "/subpatterns_k{}".format(k))
         subseries_lookup.setdefault(k, {})
         for cid in range(k):
             if is_null_cluster(mrf_lookup["all"][k][cid]) or cid in subseries_lookup[k]:
@@ -219,13 +215,13 @@ if __name__ == "__main__":
             sslu["series"] = all_subseries
             sslu["idx_lookup"] = sub_idx_lookup
             subseries_lookup[k][cid] = sslu
-            os.makedirs(args.datapath + "/subpatterns_k{}/subpatterns{}".format(k, cid))
-            with open(args.datapath + "/subpatterns_k{}/subpatterns{}/sslu.pickle".format(k, cid), 'wb') as fp:
+            os.makedirs(config.datapath + "/subpatterns_k{}/subpatterns{}".format(k, cid))
+            with open(config.datapath + "/subpatterns_k{}/subpatterns{}/sslu.pickle".format(k, cid), 'wb') as fp:
                 pickle.dump(sslu, fp)
-            run_TICC({"subpatterns{}".format(cid): all_subseries}, args.datapath + "/subpatterns_k{}".format(k), [3, 6, 9, 12])
+            run_TICC({"subpatterns{}".format(cid): all_subseries}, config.datapath + "/subpatterns_k{}".format(k), [3, 6, 9, 12])
 
 
-    sub_cluster_lookup, sub_mrf_lookup, sub_model_lookup, sub_bic_lookup = load_TICC_output(args.datapath, ["subpatterns_1", "subpatterns_2", "subpatterns_3", "subpatterns_4"], krange)
+    sub_cluster_lookup, sub_mrf_lookup, sub_model_lookup, sub_bic_lookup = load_TICC_output(config.datapath, ["subpatterns_1", "subpatterns_2", "subpatterns_3", "subpatterns_4"], krange)
 
     subpattern_lookup = {}
     labels = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"]
