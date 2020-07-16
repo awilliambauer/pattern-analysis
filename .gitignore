@@ -13,15 +13,13 @@ venv/
 *.pickle
 .idea/
 __pycache__/
-/data/
+foldit/data/
+foldit/results
 *.fdb_latexmk
 *.fls
 *.synctex.gz
 \#*#
 .#*
-clustering*/*
-patterns*/*
-!patterns*/config.json
 tmp_data
 starcraft/*.csv
 starcraft/replays/

@@ -8,15 +8,16 @@ import pickle
 import pandas as pd
 from types import SimpleNamespace
 
-from pattern_viz import plot_labeled_series
+from pattern_viz import plot_labeled_series, plot_user_series
 from util import time_played, get_action_labels
 from .foldit_data import load_extend_data, make_series, get_deltas, make_action_series
 from pattern_extraction import combine_user_series, run_TICC, load_TICC_output, weight_mrfs_by_ubiquity, \
-    select_TICC_model, mean_cluster_nearest_neighbor_distance, get_patterns
+    select_TICC_model, mean_cluster_nearest_neighbor_distance, get_patterns, make_subseries_lookup, run_sub_TICC, \
+    load_sub_lookup, get_patterns_lookup, find_best_dispersion_model
 
 if __name__ == "__main__":
-    pids = ['2003433', '2003465', '2003490', '2003195', '2003240', '2003206', '2003483',
-            '2003583']
+    # pids = ['2003433', '2003465', '2003490', '2003195', '2003240', '2003206', '2003483',
+    #         '2003583']
     # denovo: '2003433', '2003111', '2003465', '2003490', '2003195'
     # revisiting: '2003240', '2003206', '2003125', '2003483', '2003583'
 
@@ -32,21 +33,18 @@ if __name__ == "__main__":
 
     if config.debug:
         logging.getLogger().setLevel(logging.DEBUG)
-        logging.debug("setting krange to {}".format(args.num_patterns))
 
-    if os.path.exists(config.datapath) and not config.overwrite:
-        logging.error("{} exists and no overwrite flag given".format(config.datapath))
+    results_path = f"{config.results_dir}/{config.name}"
+    if os.path.exists(results_path) and not config.overwrite:
+        logging.error(f"{results_path} exists and no overwrite flag given")
         sys.exit(1)
 
-    if not os.path.exists(config.datapath):
-        os.makedirs(config.datapath)
+    if not os.path.exists(results_path):
+        os.makedirs(results_path)
 
-    if config.pids:
-        pids = config.pids
+    pids = config.pids
 
-    krange = range(10, 11)
-    if config.num_patterns:
-        krange = config.num_patterns
+    krange = config.krange
 
     soln_lookup = {}
     parent_lookup = {}
@@ -55,17 +53,17 @@ if __name__ == "__main__":
 
     logging.debug("Constructing time series")
     puz_idx_lookup, series_lookup, noise = make_series(data)
-    num_features = next(x for x in series_lookup.values()).shape[1]
+    # num_features = next(x for x in series_lookup.values()).shape[1]
     # filtered_series_lookup = {uid: ser for uid, ser in series_lookup.items() if
     #                           len(ser) < 200 * len(pids) or len(data[data.uid.isin([uid])].pid.unique()) < len(pids) // 2}
     idx_lookup, all_series = combine_user_series(series_lookup, noise)
     puz_idx_lookup = {(uid, pid): (s + idx_lookup[uid][0], e + idx_lookup[uid][0]) for (uid, pid), (s, e) in
                       puz_idx_lookup.items()}
-    np.savetxt(f"{config.datapath}/noise_values.txt", noise)
-    np.savetxt(f"{config.datapath}/all_series.txt", all_series)
-    with open(f"{config.datapath}/puz_idx_lookup.pickle", 'wb') as fp:
+    np.savetxt(f"{results_path}/noise_values.txt", noise)
+    np.savetxt(f"{results_path}/all_series.txt", all_series)
+    with open(f"{results_path}/puz_idx_lookup.pickle", 'wb') as fp:
         pickle.dump(puz_idx_lookup, fp)
-    with open(f"{config.datapath}/idx_lookup.pickle", 'wb') as fp:
+    with open(f"{results_path}/idx_lookup.pickle", 'wb') as fp:
         pickle.dump(idx_lookup, fp)
 
     if config.evolver:
@@ -81,43 +79,58 @@ if __name__ == "__main__":
                         ser = make_action_series(deltas)
                         evol_series_lookup["{}_{}_{}".format(r.uid, r.pid, idx)] = ser
         evol_idx_lookup, evol_all_series = combine_user_series(evol_series_lookup, noise)
-        np.savetxt(f"{config.datapath}/evol_all_series.txt", evol_all_series)
-        with open(f"{config.datapath}/evol_idx_lookup.pickle", 'wb') as fp:
+        np.savetxt(f"{results_path}/evol_all_series.txt", evol_all_series)
+        with open(f"{results_path}/evol_idx_lookup.pickle", 'wb') as fp:
             pickle.dump(evol_idx_lookup, fp)
 
     logging.debug("Running TICC")
-    run_TICC({"all": all_series}, config.datapath, krange)
+    run_TICC({"all": all_series}, results_path, krange)
     if config.evolver:
-        run_TICC({"all_evol": evol_all_series}, config.datapath, krange)
-
-    if config.noplot:
-        sys.exit(0)
+        run_TICC({"all_evol": evol_all_series}, results_path, krange)
 
     logging.debug("Loading TICC output")
-    cluster_lookup, mrf_lookup, model_lookup, bic_lookup = load_TICC_output(config.datapath, ["all", "all_evol"], krange)
-    uid = "all"
-    for k in mrf_lookup[uid]:
-        mrf_lookup[uid][k] = weight_mrfs_by_ubiquity(mrf_lookup[uid][k], all_series, cluster_lookup[uid][k])
-    uid = "all_evol"
-    for k in mrf_lookup[uid]:
-        mrf_lookup[uid][k] = weight_mrfs_by_ubiquity(mrf_lookup[uid][k], evol_all_series, cluster_lookup[uid][k])
+    cluster_lookup, mrf_lookup, model_lookup, bic_lookup = load_TICC_output(results_path, ["all"], krange)
 
-    logging.debug("Selecting models")
-    best_k = select_TICC_model(cluster_lookup, mrf_lookup, {"all": all_series}, noise,
-                               mean_cluster_nearest_neighbor_distance, False)
+    logging.debug("Making subseries")
+    subseries_lookup = {}
+    for k in krange:
+        patterns = get_patterns(mrf_lookup["all"][k], cluster_lookup["all"][k], puz_idx_lookup)
+        subseries_lookup[k] = make_subseries_lookup(k, patterns, mrf_lookup["all"][k], all_series, noise)
+
+    logging.debug("Running recursive TICC")
+    run_sub_TICC(subseries_lookup, results_path, "all", config.sub_krange)
+    sub_lookup = load_sub_lookup(f"{results_path}/all", subseries_lookup)
+
+    sub_clusters = sub_lookup["clusters"]
+    pattern_lookup = get_patterns_lookup(krange, sub_clusters, sub_lookup["mrfs"], subseries_lookup, cluster_lookup,
+                                         mrf_lookup["all"], puz_idx_lookup)
+    os.makedirs(f"{results_path}/eval", exist_ok=True)
+    with open(f"{results_path}/eval/cluster_lookup.pickle", "wb") as fp:
+        pickle.dump(cluster_lookup, fp)
+    with open(f"{results_path}/eval/subseries_lookup.pickle", "wb") as fp:
+        pickle.dump(subseries_lookup, fp)
+    with open(f"{results_path}/eval/sub_clusters.pickle", "wb") as fp:
+        pickle.dump(sub_clusters, fp)
+    with open(f"{results_path}/eval/pattern_lookup.pickle", "wb") as fp:
+        pickle.dump(pattern_lookup, fp)
+
+    best_k, best_subs = find_best_dispersion_model(all_series, pattern_lookup, subseries_lookup, sub_clusters)
+    with open(f"{results_path}/eval/best_model.txt", 'w') as fp:
+        fp.write(str((best_k, best_subs)) + "\n")
 
     logging.debug("Plotting")
-    k = best_k["all"]
-    all_clusters = cluster_lookup["all"][k]
+    all_clusters = cluster_lookup["all"][best_k]
     action_labels = get_action_labels()
-    pattern_labels = list(range(k))
+    pattern_labels = list(range(best_k))
     for uid in series_lookup:
+        plot_user_series(results_path, best_k, best_subs, puz_idx_lookup, all_series, pattern_lookup,
+                         subseries_lookup, action_labels)
         ser = series_lookup[uid]
         cs = all_clusters[slice(*idx_lookup[uid])]
         plot_labeled_series(np.arange(len(ser)), ser, cs, action_labels, pattern_labels,
-                            f"{config.datapath}/all/{uid}_series_all_k{k}.png")
+                            f"{results_path}/all/{uid}_series_all_k{best_k}.png")
 
-    patterns = get_patterns(data, mrf_lookup["all"][k], all_clusters, puz_idx_lookup)
+    patterns = get_patterns(mrf_lookup["all"][best_k], all_clusters, puz_idx_lookup)
 
     cluster_times = []
     for uid, ser in series_lookup.items():
@@ -199,8 +212,8 @@ if __name__ == "__main__":
     for k in krange:
         logging.debug("getting patterns for k={}".format(k))
         patterns = get_patterns(data, mrf_lookup["all"][k], cluster_lookup["all"][k], puz_idx_lookup, soln_lookup)
-        if not os.path.exists(config.datapath + "/subpatterns_k{}".format(k)):
-            os.makedirs(config.datapath + "/subpatterns_k{}".format(k))
+        if not os.path.exists(results_path + "/subpatterns_k{}".format(k)):
+            os.makedirs(results_path + "/subpatterns_k{}".format(k))
         subseries_lookup.setdefault(k, {})
         for cid in range(k):
             if is_null_cluster(mrf_lookup["all"][k][cid]) or cid in subseries_lookup[k]:
@@ -215,13 +228,13 @@ if __name__ == "__main__":
             sslu["series"] = all_subseries
             sslu["idx_lookup"] = sub_idx_lookup
             subseries_lookup[k][cid] = sslu
-            os.makedirs(config.datapath + "/subpatterns_k{}/subpatterns{}".format(k, cid))
-            with open(config.datapath + "/subpatterns_k{}/subpatterns{}/sslu.pickle".format(k, cid), 'wb') as fp:
+            os.makedirs(results_path + "/subpatterns_k{}/subpatterns{}".format(k, cid))
+            with open(results_path + "/subpatterns_k{}/subpatterns{}/sslu.pickle".format(k, cid), 'wb') as fp:
                 pickle.dump(sslu, fp)
-            run_TICC({"subpatterns{}".format(cid): all_subseries}, config.datapath + "/subpatterns_k{}".format(k), [3, 6, 9, 12])
+            run_TICC({"subpatterns{}".format(cid): all_subseries}, results_path + "/subpatterns_k{}".format(k), [3, 6, 9, 12])
 
 
-    sub_cluster_lookup, sub_mrf_lookup, sub_model_lookup, sub_bic_lookup = load_TICC_output(config.datapath, ["subpatterns_1", "subpatterns_2", "subpatterns_3", "subpatterns_4"], krange)
+    sub_cluster_lookup, sub_mrf_lookup, sub_model_lookup, sub_bic_lookup = load_TICC_output(results_path, ["subpatterns_1", "subpatterns_2", "subpatterns_3", "subpatterns_4"], krange)
 
     subpattern_lookup = {}
     labels = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"]
