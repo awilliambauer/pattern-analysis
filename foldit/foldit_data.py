@@ -21,7 +21,7 @@ import matplotlib
 
 
 def load_data(pids: List[str], evolver=False, min_time=3600) -> Tuple[pd.DataFrame, dict]:
-    datafiles = ['data/puzzle_solutions/solution_{}/{}_meta.h5'.format(pid, pid) for pid in pids]
+    datafiles = ['data/puzzle_{}/{}_meta.h5'.format(pid, pid) for pid in pids]
     df_frames, bts_frames, puz_frames = zip(*map(load_frame, datafiles))
     df = pd.concat(df_frames)
     puz_metas = {m.pid: m for m in puz_frames}

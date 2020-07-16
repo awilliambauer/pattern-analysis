@@ -2,6 +2,7 @@ import argparse
 import copy
 import sys
 from functools import reduce, partial
+from operator import itemgetter
 from typing import List, Tuple, Dict, Optional, Callable, Any
 
 from sklearn.feature_selection import RFECV
@@ -519,7 +520,6 @@ def dispersion_score(k, candidate, dispersion_lookup, pattern_lookup):
 def mode_score(k, candidate, mode_lookup):
     ms = sum((mode_lookup[(k, cid, sub_k)] for cid, sub_k in candidate), [])
     return np.mean([min([abs(x - m).sum() for x in ms if x is not m]) for m in ms])
-
 
 
 def find_best_dispersion_model(all_series, pattern_lookup, subseries_lookup, sub_clusters):
