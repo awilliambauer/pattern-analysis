@@ -4,10 +4,7 @@
 
 import sc2reader
 import math
-from sc2reader.engine.plugins import APMTracker
 import battle_detector
-
-sc2reader.engine.register_plugin(APMTracker())
 
 def buildEventDictionaries(tracker_events, game_events):
     '''Builds a list of all relevant events for scouting detection'''
@@ -276,10 +273,7 @@ def detect_scouting(replay):
         team1_num_times, team1_fraction = scouting_stats(team1_scouting_states)
         team2_num_times, team2_fraction = scouting_stats(team2_scouting_states)
 
-        team1_apm = r.players[0].avg_apm - r.players[1].avg_apm
-        team2_apm = r.players[1].avg_apm - r.players[0].avg_apm
-
-        return team1_num_times, team1_fraction, team1_apm, team2_num_times, team2_fraction, team2_apm, r.winner.number
+        return team1_num_times, team1_fraction, team2_num_times, team2_fraction, r.winner.number
 
     except:
         print(filename + "contains errors within scouting_detector")
