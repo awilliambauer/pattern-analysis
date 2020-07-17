@@ -5,6 +5,12 @@ from collections import defaultdict
 import os
 
 def buildBattleList(replay):
+    '''buildBattleList takes in a replay object previously loaded by sc2reader
+    and returns a list of battles, where each battle is a tuple containing
+    the frame that the battle began and the frame that the battle ended.
+
+    An encounter between teams/players is considered a battle if greater than 10%
+    of either team's army value is destroyed.'''
     #unable to compute battles for pre 2.0.7
     if replay.build < 25446:
         return 0
@@ -85,11 +91,19 @@ def buildBattleList(replay):
     return battles
 
 def duringBattle(frame, battles):
+    '''duringBattle returns true if a frame takes place during a battle.
+    The parameters are a frame of the game and a list of battles returned by
+    buildBattleList.'''
     for battle in battles:
         if frame >= battle[0] and frame <= battle[1]:
             return True
 
 def toTime(battles, frames, seconds):
+    '''toTime converts the frames of each battle into standard time format.
+    This is intended to aid in the verification of when battles occur when rewatching
+    a processed replay. toTime takes in a list of battles returned by buildBattleList,
+    the total frames in a replay, and the length of the game in seconds. toTime
+    returns a list of strings of nicely formatted times of battles.'''
     timeList = []
 
     for i in range(len(battles)-1):
@@ -108,19 +122,6 @@ def toTime(battles, frames, seconds):
     return timeList
 
 def printTime(timeList):
+    '''printTime neatly prints the list of strings returned by toTime'''
     for battletime in timeList:
         print(battletime)
-
-def main():
-    folder = "mini_replays"
-    files = os.listdir(folder)
-    for filename in files:
-        pathname = folder + "/" + filename
-        r = sc2reader.load_replay(pathname)
-        battles = buildBattleList(r)
-        time = toTime(battles, r.frames, r.length.seconds)
-        print("\n\n---{}---".format(filename))
-        printTime(time)
-
-
-#main()

@@ -8,12 +8,16 @@ import os
 #the main function, control_group_stats(replay) takes in a replay previously
 #loaded by sc2reader. Wherever this replay is loaded, the following plugins
 #must be registered in order for these functions to operate correctly
-from sc2reader.engine.plugins import SelectionTracker
-from selection_plugin import ActiveSelection
-sc2reader.engine.register_plugin(SelectionTracker())
-sc2reader.engine.register_plugin(ActiveSelection())
+# from sc2reader.engine.plugins import SelectionTracker
+# from selection_plugin import ActiveSelection
+# sc2reader.engine.register_plugin(SelectionTracker())
+# sc2reader.engine.register_plugin(ActiveSelection())
 
 def commandsPerSecond(game_events, seconds):
+    '''commandsPerSecond calculates the average commands per second in regards
+    to control group usage for each player in a replay. commandsPerSecond takes
+    in a list of all game events (accessed by replay.game_events) and the length
+    of the game in seconds. commandsPerSecond returns this rate for each player.'''
     length = seconds
     p1_count = 0
     p2_count = 0
@@ -27,7 +31,14 @@ def commandsPerSecond(game_events, seconds):
     p2_cps = p2_count/length
     return p1_cps, p2_cps
 
-def macroRatio(game_events, battles, frames, seconds):
+def macroRates(game_events, battles, frames, seconds):
+    '''macroRates computes the Macro (economic) control group selection rate for
+    peacetime and battletime for each player. macroRates takes in the replay's
+    game events, a list of battles returned by battle_detector.buildBattleList,
+    the total frames of the game, and the length of the game in seconds.
+    macroRates returns the peacetime and battletime macro selection rate for
+    each player'''
+    #list of units in each control group for each player
     cgrps = {1: {0:[], 1:[], 2:[], 3:[], 4:[], 5:[], 6:[], 7:[], 8:[], 9:[], 10:[]},
              2: {0:[], 1:[], 2:[], 3:[], 4:[], 5:[], 6:[], 7:[], 8:[], 9:[], 10:[]}}
     peace_ct = {1: 0, 2: 0}
@@ -78,7 +89,7 @@ def macroRatio(game_events, battles, frames, seconds):
 
     if battle_time == 0 or peace_time == 0:
         print("battle time or peace time is zero")
-        #replay is not valid to calculate a ratio
+        #replay is not valid to calculate proper rates
         raise RuntimeError()
 
     #Calculating rates
@@ -90,16 +101,24 @@ def macroRatio(game_events, battles, frames, seconds):
     return p1_peace_rate, p1_battle_rate, p2_peace_rate, p2_battle_rate
 
 def isMacro(cgrp):
+    '''isMacro returns true if all of the units in a control group
+    are economic units. Returns false if any units in a control group
+    are military units. isMacro takes in a list of units, known as
+    a control group.'''
     for unit in cgrp:
         if unit.is_army:
             return False
     return True
 
 def control_group_stats(replay):
+    '''control_group_stats is the main function for this script. It takes in
+    a pre-loaded replay using sc2reader and returns the commands per second,
+    peacetime macro selection rate, and battletime macro selection rate
+    for each player.'''
     r = replay
 
     p1_cps, p2_cps = commandsPerSecond(r.game_events, r.length.seconds)
     battles = battle_detector.buildBattleList(r)
-    p1_peace_rate, p1_battle_rate, p2_peace_rate, p2_battle_rate = macroRatio(r.game_events, battles, r.frames, r.length.seconds)
+    p1_peace_rate, p1_battle_rate, p2_peace_rate, p2_battle_rate = macroRates(r.game_events, battles, r.frames, r.length.seconds)
 
     return p1_cps, p1_peace_rate, p1_battle_rate, p2_cps, p2_peace_rate, p2_battle_rate

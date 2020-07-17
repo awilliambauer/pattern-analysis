@@ -6,8 +6,10 @@ import sc2reader
 import math
 import battle_detector
 
-def buildEventDictionaries(tracker_events, game_events):
-    '''Builds a list of all relevant events for scouting detection'''
+def buildEventLists(tracker_events, game_events):
+    '''buildEventLists is used to build up a list of events related to
+    scouting behavior. It takes in a replay's tracker events and game events.
+    It returns one list of all relevant events.'''
 
     unit_init_events = []
     camera_events = []
@@ -26,10 +28,12 @@ def buildEventDictionaries(tracker_events, game_events):
             elif (start2 == False) and (t_event.control_pid == team2):
                 unit_init_events.append(t_event)
                 start2 = True
+        #checking for the creation of new bases
         elif isinstance(t_event, sc2reader.events.tracker.UnitInitEvent) and (t_event.unit.name == "Hatchery" or t_event.unit.name == "CommandCenter" or t_event.unit.name == "Nexus"):
             unit_init_events.append(t_event)
 
     for g_event in game_events:
+        #filtering through camera events
         if isinstance(g_event, sc2reader.events.game.CameraEvent):
             camera_events.append(g_event)
             if g_event.player:
@@ -43,6 +47,8 @@ def buildEventDictionaries(tracker_events, game_events):
         elif isinstance(g_event, sc2reader.events.game.TargetUnitCommandEvent) and (g_event.ability_name == "LandCommandCenter" or g_event.ability_name == "LandOrbitalCommand"):
             unit_init_events.append(g_event)
 
+    #if either team has 0 camera events, scouting behavior cannot be detected and
+    #the replay is invalid
     if team1_count == 0 or team2_count == 0:
         raise RuntimeError()
 
@@ -50,10 +56,13 @@ def buildEventDictionaries(tracker_events, game_events):
 
 
 def buildScoutingDictionaries(events):
-    '''Builds dictionaries where the keys are the frame and the value is the state of
-       scouting. "No scouting" indicates the team/player is not looking at any bases,
-       "Scouting themself" indicates the team/player is looking at their own base, and
-       "Scouting opponent" indicates the team/player is looking at their opponent's base'''
+    '''buildScoutingDictionaries returns dictionaries for each player where the
+    keys are the frame and the value is the state of scouting. "No scouting"
+    indicates the team/player is not looking at any bases, "Scouting themself"
+    indicates the team/player is looking at their own base, and
+    "Scouting opponent" indicates the team/player is looking at their opponent's
+    base. buildScoutingDictionaries takes in a list of filtered events returned
+    by buildEventLists.'''
 
     team1 = 1
     team2 = 2
@@ -72,6 +81,7 @@ def buildScoutingDictionaries(events):
     prev_state2 = "Viewing themself"
     prev_frame2 = 0
 
+    #iterating through events in order
     for event in sorted(events, key=lambda e: e.frame):
         i = event.frame
         #accounting for new bases
@@ -93,19 +103,19 @@ def buildScoutingDictionaries(events):
             if player == team1:
                 #team1 is looking at their own base
                 if withinDistance(camera_location, team1_bases):
-                    updatePrevScoutStates(team1_scouting_states, i, prev_frame1, prev_state1)
+                    team1_scouting_states = updatePrevScoutStates(team1_scouting_states, i, prev_frame1, prev_state1)
                     team1_scouting_states[i] = "Viewing themself"
                     prev_frame1 = i
                     prev_state1 = "Viewing themself"
                 #team1 is looking at their opponent's base
                 elif withinDistance(camera_location, team2_bases):
-                    updatePrevScoutStates(team1_scouting_states, i, prev_frame1, prev_state1)
+                    team1_scouting_states = updatePrevScoutStates(team1_scouting_states, i, prev_frame1, prev_state1)
                     team1_scouting_states[i] = "Scouting opponent"
                     prev_frame1 = i
                     prev_state1 = "Scouting opponent"
                 #team1 is not looking at a base
                 else:
-                    updatePrevScoutStates(team1_scouting_states, i, prev_frame1, prev_state1)
+                    team1_scouting_states = updatePrevScoutStates(team1_scouting_states, i, prev_frame1, prev_state1)
                     team1_scouting_states[i] = "No scouting"
                     prev_frame1 = i
                     prev_state1 = "No scouting"
@@ -113,19 +123,19 @@ def buildScoutingDictionaries(events):
             elif player == team2:
                 #team2 is looking at their own base
                 if withinDistance(camera_location, team2_bases):
-                    updatePrevScoutStates(team2_scouting_states, i, prev_frame2, prev_state2)
+                    team2_scouting_states = updatePrevScoutStates(team2_scouting_states, i, prev_frame2, prev_state2)
                     team2_scouting_states[i] = "Viewing themself"
                     prev_frame2 = i
                     prev_state2 = "Viewing themself"
                 #team2 is looking at their opponent's base
                 elif withinDistance(camera_location, team1_bases):
-                    updatePrevScoutStates(team2_scouting_states, i, prev_frame2, prev_state2)
+                    team2_scouting_states = updatePrevScoutStates(team2_scouting_states, i, prev_frame2, prev_state2)
                     team2_scouting_states[i] = "Scouting opponent"
                     prev_frame2 = i
                     prev_state2 = "Scouting opponent"
                 #team2 is not looking at a base
                 else:
-                    updatePrevScoutStates(team2_scouting_states, i, prev_frame2, prev_state2)
+                    team2_scouting_states = updatePrevScoutStates(team2_scouting_states, i, prev_frame2, prev_state2)
                     team2_scouting_states[i] = "No scouting"
                     prev_frame2 = i
                     prev_state2 = "No scouting"
@@ -133,8 +143,9 @@ def buildScoutingDictionaries(events):
 
 
 def withinDistance(location, list):
-    '''Returns true if input location is within a distance of any locations in
-       base dictionary'''
+    '''withinDistance returns true if the input location is within a
+    certain range of any location in the list. The location is a tuple
+    and the list is a list of locations as tuples.'''
     loc_x, loc_y = location[0], location [1]
     keys = list.keys()
     for key in keys:
@@ -146,18 +157,23 @@ def withinDistance(location, list):
     return False
 
 def updatePrevScoutStates(scouting_dict, frame, prev_frame, prev_state):
-    '''Updates all frames after prev_frame and before current frame to the prev_state'''
+    '''updatePrevScoutStates updates the input scouting dictionary from
+    the prev_frame to frame with prev_state and returns the scouting
+    dictionary back.'''
     if(prev_frame >= frame):
-        return;
+        return scouting_dict
 
     i = prev_frame + 1
     while(i != frame):
         scouting_dict[i] = prev_state
         i += 1
+    return scouting_dict
 
 def toTime(scouting_dict, frames, seconds):
-    '''Creates a formatted dictionary of the time of game when a player's
-        scouting state changes. Most useful for verification and testing.'''
+    '''Creates and returns time-formatted dictionary of the time of game when
+    a player's scouting state changes. Takes in a scouting dictionary, the total
+    number of frames in the game, and the length of the game in seconds. Most
+    useful for verification and testing.'''
     length = len(scouting_dict.keys())
     time_dict = {}
 
@@ -181,7 +197,7 @@ def toTime(scouting_dict, frames, seconds):
     return time_dict
 
 def printTime(time_dict):
-    '''Used to neatly print a time dictionary in an easy to read way.'''
+    '''Used to neatly print a time dictionary returned by toTime.'''
     keys = time_dict.keys()
     for key in keys:
         print(key, end = "")
@@ -189,8 +205,10 @@ def printTime(time_dict):
         print(time_dict[key])
 
 def scouting_stats(scouting_dict):
-    '''Calculates the number of times a player scouts their opponent and for
-    what fraction of the total time period'''
+    '''scouting_stats calculates the fraction of gametime that a player
+    spends scouting their opponent and the frequency with which they do it.
+    It takes in a scouting dictionary returned by buildScoutingDictionaries
+    or integrateBattles and returns the frequency and the fraction of time.'''
     num_times = 0
     total_time = 0
     scouting_time = 0
@@ -206,8 +224,11 @@ def scouting_stats(scouting_dict):
     while(frame < length):
         total_time += 1
         if scouting_dict[frame] == "Scouting opponent":
+            #if the player is in a streak of scouting
             if cur_scouting == True:
                 scouting_time += 1
+            #if the player just switched states from something else
+            #to scouting their opponent
             else:
                 num_times += 1
                 scouting_time += 1
@@ -215,11 +236,20 @@ def scouting_stats(scouting_dict):
         else:
             cur_scouting = False
         frame += 1
+
+    #calculating rates based on counts
     scouting_fraction = scouting_time/total_time
     scouting_rate = num_times/total_time
+
     return scouting_rate, scouting_fraction
 
 def integrateBattles(scouting_dict, battles):
+    '''integrateBattles is used to cross-check a scouting dictionary with a
+    list of battles. More specifically, it is used to avoid false-positives
+    of "scouting" an opponent during battle. integrateBattles takes in a
+    scouting dictionary returned by buildScoutingDictionaries and a list
+    of battles returned by battle_detector.buildBattleList. It returns the
+    updated scouting dictionary.'''
     length = len(scouting_dict.keys())
     frame = 1
     while frame < length:
@@ -229,6 +259,11 @@ def integrateBattles(scouting_dict, battles):
     return scouting_dict
 
 def detect_scouting(replay):
+    '''detect_scouting is the main function of this script. detect_scouting does
+    error checking on replays and raises errors for replays with incomplete information,
+    as well as combines all other functions. It takes in a previously loaded replay
+    from sc2reader and returns the scouting frequency and fraction of time spent
+    scouting for each player, as well as the winner of the game.'''
     r = replay
 
     # # Only applied to missing ability info, which doesn't matter for scouting detection
@@ -263,7 +298,7 @@ def detect_scouting(replay):
     seconds = r.length.seconds
 
     try:
-        allEvents = buildEventDictionaries(tracker_events, game_events)
+        allEvents = buildEventLists(tracker_events, game_events)
         team1_scouting_states, team2_scouting_states = buildScoutingDictionaries(allEvents)
 
         battles = battle_detector.buildBattleList(r)
