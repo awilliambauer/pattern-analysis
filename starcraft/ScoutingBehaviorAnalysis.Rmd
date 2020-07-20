@@ -1,5 +1,5 @@
 ---
-title: "Scouting Behavior Analysis"
+title: "ScoutingBehaviorAnalysis2.Rmd"
 author: "Alison Cameron"
 date: "July 2020"
 output: html_document
@@ -9,6 +9,11 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 library(ggplot2)
 library(dplyr)
+library(car)
+library(tidyverse)
+library(broom)
+library(Hmisc)
+library(mice)
 ```
 
 ### Reading Data and Gathering Summary Statistics
@@ -18,48 +23,256 @@ summary(scouting)
 scouting$Win2 <- ifelse(scouting$Win == 1, "win", "loss")
 ```
 
-
-### Exploratory Data Analysis
+### Checking distribution and associations for each variable
 ```{r}
-ggplot(scouting, aes(y=ScoutingFrequency, group=Win)) + geom_boxplot()
-ggplot(scouting, aes(y=ScoutingTime, group=Win)) + geom_boxplot()
-ggplot(scouting, aes(x = Win, y = ScoutingTime, color = Win2, shape = Win2)) + geom_point()
-ggplot(scouting, aes(x = Win, y = ScoutingFrequency, color = Win2, shape = Win2)) + geom_point()
-ggplot(scouting, aes(x = APM, y = ScoutingFrequency, color = Win2, shape = Win2)) + geom_point()
-ggplot(scouting, aes(x = APM, y = ScoutingTime, color = Win2, shape = Win2)) + geom_point()
-ggplot(scouting, aes(x = ScoutingFrequency, y = ScoutingTime, color = Win2, shape = Win2)) + geom_point()
+hist(scouting$ScoutingFrequency)
+hist(scouting$ScoutingTime)
+hist(scouting$APM)
+hist(scouting$Rank)
+hist(scouting$RelativeRank)
+hist(scouting$CPS)
+hist(scouting$PeaceRate)
+hist(scouting$BattleRate)
 ```
 
-### Creating a Binary Logistic Regression Model
+Variables needing a log-transformation because of skewness: ScoutingFrequency, ScoutingTime, CPS, PeaceRate, BattleRate
+
 ```{r}
-scouting.glm <- glm(Win ~ (ScoutingTime + ScoutingFrequency + APM)^2, data = scouting, family = binomial)
+scouting$logSF <- log(scouting$ScoutingFrequency + 0.0001)
+scouting$logST <- log(scouting$ScoutingTime + 0.0001)
+scouting$logCPS <- log(scouting$CPS + 0.0001)
+scouting$logPeaceRate <- log(scouting$PeaceRate + 0.0001)
+scouting$logBattleRate <- log(scouting$BattleRate + 0.0001)
+
+hist(scouting$logSF)
+hist(scouting$logST)
+hist(scouting$logCPS)
+hist(scouting$logPeaceRate)
+hist(scouting$logBattleRate)
+```
+
+Much better! It is clear there are lots of values of PeaceRate and BattleRate that are 0, because log(0.0001) ~= -10. We will deal with that later. Now, reselect data and check associations between variables.
+
+```{r}
+columns = c(1, 12, 13, 4, 5, 6, 14, 15, 16, 10, 11)
+scouting2 <- select(scouting, columns)
+```
+
+Checking associations for ScoutingFrequency
+```{r}
+SFvST <- ggplot(scouting2, aes(x = logSF, y = logST, color = Win2, shape = Win2)) + geom_point() + stat_smooth(method = "lm", se = FALSE)
+SFvAPM <- ggplot(scouting2, aes(x = logSF, y = APM, color = Win2, shape = Win2)) + geom_point() + stat_smooth(method = "lm", se = FALSE)
+SFvCPS <- ggplot(scouting2, aes(x = logSF, y = logCPS, color = Win2, shape = Win2)) + geom_point() + stat_smooth(method = "lm", se = FALSE)
+SFvlogPeaceRate <- ggplot(scouting2, aes(x = logSF, y = logPeaceRate, color = Win2, shape = Win2)) + geom_point() + stat_smooth(method = "lm", se = FALSE)
+SFvlogBattleRate <- ggplot(scouting2, aes(x = logSF, y = logBattleRate, color = Win2, shape = Win2)) + geom_point() + stat_smooth(method = "lm", se = FALSE)
+
+SFvST
+SFvAPM
+SFvCPS
+SFvlogPeaceRate
+SFvlogBattleRate
+```
+Clear associations: ScoutingFrequency with ScoutingTime and ScoutingFrequency with CPS
+
+Checking associations for ScoutingTime
+```{r}
+STvAPM <- ggplot(scouting2, aes(x = logST, y = APM, color = Win2, shape = Win2)) + geom_point() + stat_smooth(method = "lm", se = FALSE)
+STvCPS <- ggplot(scouting2, aes(x = logST, y = logCPS, color = Win2, shape = Win2)) + geom_point() + stat_smooth(method = "lm", se = FALSE)
+STvlogPeaceRate <- ggplot(scouting2, aes(x = logST, y = logPeaceRate, color = Win2, shape = Win2)) + geom_point() + stat_smooth(method = "lm", se = FALSE)
+STvlogBattleRate <- ggplot(scouting2, aes(x = logST, y = logBattleRate, color = Win2, shape = Win2)) + geom_point() + stat_smooth(method = "lm", se = FALSE)
+
+STvAPM
+STvCPS
+STvlogPeaceRate
+STvlogBattleRate
+```
+No super clear associations
+
+Checking associations for APM
+```{r}
+APMvCPS <- ggplot(scouting2, aes(x = APM, y = logCPS, color = Win2, shape = Win2)) + geom_point() + stat_smooth(method = "lm", se = FALSE)
+APMvlogPeaceRate <- ggplot(scouting2, aes(x = APM, y = logPeaceRate, color = Win2, shape = Win2)) + geom_point() + stat_smooth(method = "lm", se = FALSE)
+APMvlogBattleRate <- ggplot(scouting2, aes(x = APM, y = logBattleRate, color = Win2, shape = Win2)) + geom_point() + stat_smooth(method = "lm", se = FALSE)
+
+APMvCPS
+APMvlogPeaceRate
+APMvlogBattleRate
+```
+No clear associations
+
+Checking associations for CPS
+```{r}
+CPSvlogPeaceRate <- ggplot(scouting2, aes(x = logCPS, y = logPeaceRate, color = Win2, shape = Win2)) + geom_point() + stat_smooth(method = "lm", se = FALSE)
+CPSvlogBattleRate <- ggplot(scouting2, aes(x = logCPS, y = logBattleRate, color = Win2, shape = Win2)) + geom_point() + stat_smooth(method = "lm", se = FALSE)
+
+CPSvlogPeaceRate
+CPSvlogBattleRate
+```
+Both seems to be associated: CPS with PeaceRate and CPS with BattleRate
+
+Checking association for PeaceRate and BattleRate
+```{r}
+PeaceRatevBattleRate <- ggplot(scouting2, aes(x = logPeaceRate, y = logBattleRate, color = Win2, shape = Win2)) + geom_point() + stat_smooth(method = "lm", se = FALSE)
+
+PeaceRatevBattleRate
+```
+Yes, there is a clear association between PeaceRate and BattleRate
+
+
+All associations-
+logSF:logST, logSF:logCPS, logCPS:logPeaceRate, logCPS:logBattleRate, logPeaceRate:logBattleRate
+
+
+### Initial Binary Logistic Regression
+```{r}
+scouting.glm <- glm(Win ~ logSF + logST + APM + logCPS + logPeaceRate + logBattleRate + logSF:logST + logSF:logCPS + logCPS:logPeaceRate + logCPS:logBattleRate + logPeaceRate:logBattleRate, data = scouting2, family = binomial)
 summary(scouting.glm)
-anova(scouting.glm, test = "Chisq")
+anova(scouting.glm)
 ```
 
-Removing ScoutingFrequency and its interaction terms since they contribute the least to 
-the residual deviance
+Checking diagnostics
 ```{r}
-scouting.glm2 <- update(scouting.glm, . ~ . -ScoutingFrequency - ScoutingFrequency:APM - ScoutingTime:ScoutingFrequency)
-summary(scouting.glm2)
-anova(scouting.glm2, scouting.glm, test = "Chisq")
+vif(scouting.glm)
+influencePlot(scouting.glm)
+plot(scouting.glm, which=1)
+plot(scouting.glm, which=2)
+plot(scouting.glm, which=4)
 ```
 
-ANOVA table indicates that the larger model is preferred, so we accept the original model (If an interaction term is included, the individual variables must also be included)
 
-### Interpretation
+Lots of large VIFs, I will try centering and scaling the variables and see if it helps. It does not appear that there are any crazy outliers so far, but there is worrying curvature in the residuals plot. I will check the residuals plot again after centering variables
+
+
+Centering variables - logST, logCPS, logPeaceRate, logBattleRate
 ```{r}
-timeOdds <- exp(9.172*log(1.1))
-frequencyOdds <- exp(71.24*log(1.1))
-APModds <- exp(0.001157*log(1.1))
-timeOdds
-frequencyOdds
-APModds
+scouting2$cenLogST <- (scouting2$logST - mean(scouting2$logST))/sd(scouting2$logST)
+scouting2$cenLogCPS <- (scouting2$logCPS - mean(scouting2$logCPS))/sd(scouting2$logCPS)
+scouting2$cenLogPeaceRate <- (scouting2$logPeaceRate -  mean(scouting2$logPeaceRate))/sd(scouting2$logPeaceRate)
+scouting2$cenLogBattleRate <- (scouting2$logBattleRate - mean(scouting2$logBattleRate))/sd(scouting2$logBattleRate)
+
+hist(scouting2$cenLogST)
+hist(scouting2$cenLogCPS)
+hist(scouting2$cenLogPeaceRate)
+hist(scouting2$cenLogBattleRate)
 ```
 
-For a 10% increase in the time spent scouting an opponent, the odds that a player will win
-increases by a factor of 2.396
+New dataframe
+```{r}
+columns2 <- c(1, 2, 12, 4, 5, 6, 13, 14, 15, 10, 11)
+scouting3 <- select(scouting2, columns2)
+```
 
+### Re-run model
+```{r}
+scouting.glm3 <- glm(Win ~ logSF + cenLogST + APM + cenLogCPS + cenLogPeaceRate + cenLogBattleRate + logSF:cenLogST + logSF:cenLogCPS + cenLogCPS:cenLogPeaceRate + cenLogCPS:cenLogBattleRate + cenLogPeaceRate:cenLogBattleRate, data = scouting3, family = binomial)
+summary(scouting.glm3)
+anova(scouting.glm3)
+```
+
+Checking Diagnostics
+```{r}
+vif(scouting.glm3)
+influencePlot(scouting.glm3)
+plot(scouting.glm3, which=1)
+plot(scouting.glm3, which=2)
+plot(scouting.glm3, which=4)
+```
+
+VIFs are better, but not perfect.Let's try to remove some outliers based on the influencePlot
+```{r}
+out <- which(hatvalues(scouting.glm3) > 0.003)
+out2 <- which(rstudent(scouting.glm3) > 3)
+out3 <- which(rstudent(scouting.glm3) < -3)
+outliers <- c(out, out2, out3)
+```
+
+
+Re-run the model again
+```{r}
+scouting.glm4 <- update(scouting.glm3, subset = -outliers)
+summary(scouting.glm4)
+anova(scouting.glm4)
+```
+
+Check diagnostics
+```{r}
+influencePlot(scouting.glm4)
+plot(scouting.glm4, which=1)
+plot(scouting.glm4, which=2)
+plot(scouting.glm4, which=4)
+```
+
+Looks good except for the curvature in the residuals plot. Since the model already contains all variables as well as interaction terms, I will try adding some quadratic terms and see if it helps
+
+
+### Adding Quadratic Terms
+```{r}
+scouting.glm5 <- glm(Win ~ logSF + cenLogST + APM + cenLogCPS + cenLogPeaceRate + cenLogBattleRate + logSF:cenLogST + logSF:cenLogCPS + cenLogCPS:cenLogPeaceRate + cenLogCPS:cenLogBattleRate + cenLogPeaceRate:cenLogBattleRate + I(logSF^2) + I(cenLogST^2) + I(APM^2) + I(cenLogCPS^2) + I(cenLogPeaceRate^2) + I(cenLogBattleRate^2), data = scouting3, family = binomial, subset = -outliers)
+
+summary(scouting.glm5)
+anova(scouting.glm5)
+```
+
+
+Checking Diagnostics
+```{r}
+vif(scouting.glm5)
+influencePlot(scouting.glm5)
+plot(scouting.glm5, which=1)
+plot(scouting.glm5, which=2)
+plot(scouting.glm5, which=4)
+```
+
+Didn't fix curvature, but I will start to narrow down variables
+```{r}
+scouting.glm6 <- update(scouting.glm5, .~. -cenLogCPS:cenLogBattleRate -cenLogPeaceRate:cenLogBattleRate)
+anova(scouting.glm6, scouting.glm5, test = "Chisq")
+```
+
+The smaller model is preferred
+```{r}
+summary(scouting.glm6)
+anova(scouting.glm6, test = "Chisq")
+```
+
+Removing variables with smaller significance from the anova table
+```{r}
+scouting.glm7 <- update(scouting.glm6, .~. -I(APM^2))
+anova(scouting.glm7, scouting.glm6, test = "Chisq")
+```
+Larger model is preferred(scouting.glm6). CPS appears to be insignificant, so we will try removing it as well as all of its interaction terms
+
+
+```{r}
+scouting.glm8 <- update(scouting.glm6, .~. -cenLogCPS -I(cenLogCPS^2) -logSF:cenLogCPS -cenLogCPS:cenLogPeaceRate)
+anova(scouting.glm8, scouting.glm6, test="Chisq")
+```
+Larger model is preferred. There are no other candidates to remove, so we accept scouting.glm6 as our final model.
+
+Check diagnostics
+```{r}
+vif(scouting.glm6)
+influencePlot(scouting.glm6)
+plot(scouting.glm6, which=1)
+plot(scouting.glm6, which=2)
+plot(scouting.glm6, which=4)
+```
+
+Diagnostics are not very promising, I definitely need help with some of this stuff. The good news is that the coefficients in the regression seem to make more sense (in terms of sign and magnitude). For now, I want to test out some graphs
+
+### Creating graphs
+```{r}
+scouting3$Ratio <- scouting$PeaceRate/scouting$BattleRate
+outliers <- which(scouting3$Ratio > 7)
+scouting4 <- scouting3[-outliers,]
+ratioPlot <- ggplot(scouting4, aes(y = Ratio, group = Rank)) + geom_boxplot() + xlab("Rank") +ylab("Peacetime vs. Battletime Macro Selection Rate")
+scoutingFPlot <- ggplot(scouting, aes(y = ScoutingFrequency, group = Rank)) + geom_boxplot() + xlab("Rank") + ylab("Scouting Frequency")
+scoutingTPlot <- ggplot(scouting, aes(y = ScoutingTime, group = Rank)) + geom_boxplot() + xlab("Rank") + ylab("Scouting Time")
+
+ratioPlot
+scoutingFPlot
+scoutingTPlot
+```
 
 
 
