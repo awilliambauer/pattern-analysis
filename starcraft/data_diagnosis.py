@@ -43,7 +43,6 @@ def data_summary():
         for row in reader:
             total_rows += 1
             ScoutingFrequency, ScoutingTime, APM, Rank, CPS, PeaceRate, BattleRate, Win = row["ScoutingFrequency"], row["ScoutingTime"], row["APM"], row["Rank"], row["CPS"], row["PeaceRate"], row["BattleRate"], row["Win"]
-
             #checking if Rank is valid and setting a flag if it is not
             if Rank == "nan":
                 Rank_inv += 1
@@ -74,15 +73,15 @@ def data_summary():
             elif valid_rank == True:
                 APM_bxplt_data[intRank-1].append(float(APM))
 
-            if float(APM) > 0:
-                if Win:
+            if int(Win) == 1:
+                if float(APM) > 0:
                     pos_APM_wins += 1
-                else:
-                    pos_APM_loss += 1
-            elif float(APM) < 0:
-                if Win:
+                elif float(APM) < 0:
                     neg_APM_wins += 1
-                else:
+            elif int(Win) == 0:
+                if float(APM) > 0:
+                    pos_APM_loss += 1
+                elif float(APM) < 0:
                     neg_APM_loss += 1
 
             #Checking CPS
