@@ -35,7 +35,7 @@ def plot_labeled_series(x: np.ndarray, y: np.ndarray, pattern_masks: Dict[str, n
     plt.close()
 
 
-def plot_model(model_dir, k, subs, all_series, pattern_lookup, subseries_lookup, action_labels):
+def plot_model(model_dir: str, k: int, subs, all_series, pattern_lookup, subseries_lookup, action_labels):
     for cid, sub_k in subs:
         print("plotting", cid, sub_k)
         os.makedirs("{}/eval/viz/".format(model_dir), exist_ok=True)

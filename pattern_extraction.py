@@ -3,7 +3,8 @@ import copy
 import sys
 from functools import reduce, partial
 from operator import itemgetter
-from typing import List, Tuple, Dict, Optional, Callable, Any
+from typing import List, Tuple, Dict, Optional, Callable, Any, Iterable
+import typing
 
 from sklearn.feature_selection import RFECV
 from sklearn.model_selection import cross_val_score
@@ -217,14 +218,17 @@ def load_TICC_output(datapath: str, uids: List[str], krange: range) -> Tuple[
 
 
 def load_sub_lookup(datapath: str, subseries_lookup: dict, sub_krange=[5, 10]) -> Dict[str, Dict[int, dict]]:
-    sub_lookup = {"clusters": {}, "mrfs": {}, "models": {}, "bics": {}}
+    sub_lookup = {"clusters": {}, # Dict[int, Dict[int, Dict[int, ndarray]]] (k to cid to sub_k to cluster labels)
+                  "mrfs": {},     # Dict[
+                  "models": {},
+                  "bics": {}}
     for k in subseries_lookup:
         dp = "{}/subpatterns/k{}".format(datapath, k)
         cs, mrfs, ms, bs = load_TICC_output(dp, ["cid{}".format(cid) for cid in subseries_lookup[k]], sub_krange)
-        sub_lookup["clusters"][k] = {int(k.replace("cid", "")): v for k, v in cs.items()}
-        sub_lookup["mrfs"][k] = {int(k.replace("cid", "")): v for k, v in mrfs.items()}
-        sub_lookup["models"][k] = {int(k.replace("cid", "")): v for k, v in ms.items()}
-        sub_lookup["bics"][k] = {int(k.replace("cid", "")): v for k, v in bs.items()}
+        sub_lookup["clusters"][k] = {int(k.replace("cid", "")): v for _, v in cs.items()}
+        sub_lookup["mrfs"][k] = {int(k.replace("cid", "")): v for _, v in mrfs.items()}
+        sub_lookup["models"][k] = {int(k.replace("cid", "")): v for _, v in ms.items()}
+        sub_lookup["bics"][k] = {int(k.replace("cid", "")): v for _, v in bs.items()}
     return sub_lookup
 
 
@@ -293,7 +297,9 @@ def select_TICC_model(cluster_lookup: Dict[str, Dict[int, np.ndarray]],
     return best_k
 
 
-def get_pattern_masks(uid, pid, idx, target_pts, sub_ks, pattern_lookup, subseries_lookup):
+def get_pattern_masks(uid: str, pid: str, idx: Tuple[int, int], target_pts: Iterable[str], sub_ks: Dict[int, int],
+                      pattern_lookup: Dict[int, PatternInstance],
+                      subseries_lookup: Dict[int, Dict[str, Any]]) -> typing.OrderedDict[str, np.ndarray]:
     """
     idx: tuple of the start and end index for (uid, pid) segment in all_series (i.e., puz_idx_lookup entry)
     target_pts: list of pattern type labels (e.g., {'1A', '1C', '2A', '3'})
@@ -348,7 +354,11 @@ def get_patterns(mrfs: Dict[int, np.ndarray], clusters: np.ndarray, puz_idx_look
     return patterns
 
 
-def get_patterns_lookup(krange, sub_clusters, sub_mrfs, subseries_lookup, cluster_lookup, mrf_lookup, puz_idx_lookup):
+def get_patterns_lookup(krange: Iterable[int], sub_clusters: Dict[str, Dict[int, np.ndarray]],
+                        sub_mrfs: Dict[int, Dict[int, Dict[int, Dict[int, np.ndarray]]]],
+                        subseries_lookup: Dict[int, Dict[str, Any]],
+                        cluster_lookup: Dict[int, np.ndarray], mrf_lookup: Dict[int, Dict[int, np.ndarray]],
+                        puz_idx_lookup: dict) -> Dict[int, Dict[str, List[PatternInstance]]]:
     """
     sub_clusters = sub_lookup["clusters"]
     mrf_lookup and cluster_lookup need to be label-indexed (i.e., mrf_lookup = mrf_lookup["all"])
@@ -453,7 +463,9 @@ def compute_subpattern_times(k: int, subs: tuple, data: pd.DataFrame, cluster_lo
     return data.merge(pd.DataFrame(data=subcluster_times), on=['pid', 'uid'])
 
 
-def get_predicted_lookups(all_series, krange, model_lookup, sub_models, mrf_lookup, puz_idx_lookup, noise):
+def get_predicted_lookups(all_series: np.ndarray, krange: Iterable[int], model_lookup: Dict[int, dict],
+                          sub_models: Dict[int, Dict[int, Dict[int, dict]]],
+                          mrf_lookup: Dict[int, Dict[int, np.ndarray]], puz_idx_lookup: dict, noise: np.ndarray):
     cluster_lookup = {}
     sub_clusters = {}
     subseries_lookup = {}
@@ -475,7 +487,9 @@ def get_predicted_lookups(all_series, krange, model_lookup, sub_models, mrf_look
     return cluster_lookup, subseries_lookup, sub_clusters
 
 
-def make_selection_lookups(all_series, pattern_lookup, subseries_lookup, sub_clusters, sub_mrfs):
+def make_selection_lookups(all_series: np.ndarray, pattern_lookup: Dict[int, Dict[str, Iterable[PatternInstance]]],
+                           subseries_lookup: Dict[int, Dict[int, Dict[str, Any]]],
+                           sub_clusters, sub_mrfs):
     dispersions = {}
     modes = {}
     print("computing selection criteria")
@@ -522,7 +536,7 @@ def mode_score(k, candidate, mode_lookup):
     return np.mean([min([abs(x - m).sum() for x in ms if x is not m]) for m in ms])
 
 
-def find_best_dispersion_model(all_series, pattern_lookup, subseries_lookup, sub_clusters):
+def find_best_dispersion_model(all_series: np.ndarray, pattern_lookup, subseries_lookup, sub_clusters):
     """
     for each pattern p
         compute signal ubiquity for each instance of p (for each signal i, compute fraction of instance's duration where i is active)

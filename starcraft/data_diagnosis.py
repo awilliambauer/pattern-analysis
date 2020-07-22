@@ -1,7 +1,13 @@
 #A script to gather summary statistics of StarCraft 2 data
 
 import csv
+import matplotlib.pyplot as plt
+from itertools import groupby
+import sys
+sys.path.append("../") # to enable importing from plot_util.py
+
 from plot_util import make_boxplot
+
 
 def data_summary():
     total_rows = 0
@@ -114,6 +120,26 @@ def data_summary():
     make_boxplot(CPS_bxplt_data, categories, "Commands per Second", "CPSBoxplot.png")
     make_boxplot(PR_bxplt_data, categories, "Macro Selection Rate during Peace Time", "PeaceRateBoxplot.png")
     make_boxplot(BR_bxplt_data, categories, "Macro Selection Rate during Battle Time", "BattleRateBoxplot.png")
+
+    with open("scouting_stats.csv", 'r') as my_csv:
+        reader = csv.DictReader(my_csv)
+        rows = [r for r in reader]
+
+    
+    make_boxplot([[float(r["APM"]) for r in rows if r["Win"] == "1"], [float(r["APM"]) for r in rows if r["Win"] == "0"]], 
+                 ["Win", "Loss"], "Relative APM", "Rel_APM_WL.png", (-1000, 1000))
+    
+    binned_pos_apms = [a for a in sorted({int(float(r["APM"])) for r in rows}) if a > 0]
+    apm_to_rows = {apm: list(rs) for apm, rs in groupby(sorted(rows, key=lambda r: int(float(r["APM"]))), lambda r: int(float(r["APM"])))}
+    
+    fig, ax = plt.subplots(figsize=(10,5))
+    # plot those apm values where we have at least 10 data points to reduce noise
+    ax.plot([apm for apm in binned_pos_apms if len(apm_to_rows[apm]) > 10], 
+            [len([r for r in apm_to_rows[apm] if r["Win"] == "1"]) / len(apm_to_rows[apm]) * 100 for apm in binned_pos_apms if len(apm_to_rows[apm]) > 10])
+    plt.xlabel("Relative APM")
+    plt.ylabel("Win Percentage")
+    fig.tight_layout()
+    fig.savefig("Rel_APM_vs_Win_Rate.png")
 
     SF_perc = int((SF_inv/total_rows)*100)
     ST_perc = int((ST_inv/total_rows)*100)

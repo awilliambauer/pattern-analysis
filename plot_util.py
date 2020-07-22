@@ -28,10 +28,6 @@ def make_boxplot(series, categories, ylabel, filename, ylims=None, yscale="linea
         "Each series must have a category label (provided {} series and {} categories)".format(len(series), len(categories))
     plt.clf()
     fig, ax = plt.subplots(figsize=(2 * len(series), 4))
-    bp = plt.boxplot(series, sym='b+')
-    # bp['boxes'][0].set_facecolor(colors[0])
-    # bp['boxes'][1].set_facecolor(colors[1])
-    plt.setp(bp['medians'], color='black', linewidth='2.5')
 
     for i, s in enumerate(series, 1):
         x = np.random.normal(i, 0.04, size=len(s))
@@ -40,6 +36,11 @@ def make_boxplot(series, categories, ylabel, filename, ylims=None, yscale="linea
                 plt.plot(np.array(x)[mask], np.array(s)[mask], mark, alpha=0.2)
         else:
             plt.plot(x, s, 'r.', alpha=0.2)
+    
+    bp = plt.boxplot(series, sym='b+')
+    # bp['boxes'][0].set_facecolor(colors[0])
+    # bp['boxes'][1].set_facecolor(colors[1])
+    plt.setp(bp['medians'], color='black', linewidth='2.5')
 
     ax.set_yscale(yscale)
     ax.yaxis.grid(True, linestyle='-', which='major', color='lightgrey', alpha=0.5)
