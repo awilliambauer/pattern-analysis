@@ -9,7 +9,7 @@ sys.path.append("../") # to enable importing from plot_util.py
 from plot_util import make_boxplot
 
 
-def data_summary():
+def read_scouting_stats():
     total_rows = 0
 
     SF_inv = 0
@@ -125,16 +125,16 @@ def data_summary():
         reader = csv.DictReader(my_csv)
         rows = [r for r in reader]
 
-    
-    make_boxplot([[float(r["APM"]) for r in rows if r["Win"] == "1"], [float(r["APM"]) for r in rows if r["Win"] == "0"]], 
+
+    make_boxplot([[float(r["APM"]) for r in rows if r["Win"] == "1"], [float(r["APM"]) for r in rows if r["Win"] == "0"]],
                  ["Win", "Loss"], "Relative APM", "Rel_APM_WL.png", (-1000, 1000))
-    
+
     binned_pos_apms = [a for a in sorted({int(float(r["APM"])) for r in rows}) if a > 0]
     apm_to_rows = {apm: list(rs) for apm, rs in groupby(sorted(rows, key=lambda r: int(float(r["APM"]))), lambda r: int(float(r["APM"])))}
-    
+
     fig, ax = plt.subplots(figsize=(10,5))
     # plot those apm values where we have at least 10 data points to reduce noise
-    ax.plot([apm for apm in binned_pos_apms if len(apm_to_rows[apm]) > 10], 
+    ax.plot([apm for apm in binned_pos_apms if len(apm_to_rows[apm]) > 10],
             [len([r for r in apm_to_rows[apm] if r["Win"] == "1"]) / len(apm_to_rows[apm]) * 100 for apm in binned_pos_apms if len(apm_to_rows[apm]) > 10])
     plt.xlabel("Relative APM")
     plt.ylabel("Win Percentage")
@@ -167,4 +167,6 @@ def data_summary():
     print("Positive APM wins:", pos_APM_wins, ", and losses:", pos_APM_loss)
     print("Negative APM wins:", neg_APM_wins, ", and losses:", neg_APM_loss)
 
-data_summary()
+
+def main():
+    read_scouting_stats()

@@ -34,6 +34,7 @@ def generateFields(filename):
         if filename[-9:] != "SC2Replay":
             raise RuntimeError()
 
+        #pathname = "practice_replays/" + filename
         pathname = "/Accounts/awb/pattern-analysis/starcraft/replays/" + filename
         r = sc2reader.load_replay(pathname)
 
@@ -43,8 +44,8 @@ def generateFields(filename):
         elif filename.startswith("spawningtool"):
             game_id = "st-" + game_id
 
-        team1_uid = r.players[0].uid
-        team2_uid = r.players[1].uid
+        team1_uid = r.players[0].detail_data['bnet']['uid']
+        team2_uid = r.players[1].detail_data['bnet']['uid']
 
         team1_rank = r.players[0].highest_league
         team2_rank = r.players[1].highest_league
