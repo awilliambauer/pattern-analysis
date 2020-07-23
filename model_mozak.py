@@ -77,7 +77,7 @@ sub_lookup = load_sub_lookup("mozak/all", subseries_lookup)
 sub_clusters = sub_lookup["clusters"]
 
 print("finding patterns")
-pattern_lookup = get_patterns_lookup(krange, sub_clusters, sub_lookup["mrfs"], subseries_lookup, cluster_lookup["all"], mrf_lookup["all"], puz_idx_lookup)
+pattern_lookup = get_pattern_lookups(krange, sub_clusters, sub_lookup["mrfs"], subseries_lookup, cluster_lookup["all"], mrf_lookup["all"], puz_idx_lookup)
 best_k, best_subs = find_best_dispersion_model(all_series, pattern_lookup, subseries_lookup, sub_clusters, sub_lookup["mrfs"])
 
 ps = sum([[(get_pattern_label(p, cid, sub_k), p) for p in pattern_lookup[best_k][cid][sub_k]] for cid, sub_k in best_subs], [])

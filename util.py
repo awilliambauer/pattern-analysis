@@ -2,7 +2,7 @@
 
 import os, pickle, csv
 import subprocess
-from typing import NamedTuple, List, TextIO, Tuple, Dict, Optional
+from typing import NamedTuple, List, TextIO, Tuple, Dict, Optional, TypedDict, Union, Iterable
 import numpy as np
 import pandas as pd
 from scipy import stats
@@ -192,6 +192,24 @@ class SubPatternInstance(NamedTuple):
     start_idx: int
     end_idx: int
 
+
+class SubLookup(TypedDict):
+    clusters: Dict[int, Dict[int, Dict[int, np.ndarray]]] # (k to cid to sub_k to cluster labels)
+    mrfs: Dict[int, Dict[int, Dict[int, Dict[int, np.ndarray]]]] # (k to cid to sub_k to mrf dictionary (cluster label to mrf))
+    models: Dict[int, Dict[int, Dict[int, Dict]]] # (k to cid to sub_k to dict of ticc model parameters)
+    bics: Dict[int, Dict[int, Dict[int, float]]] # (k to cid to sub_k to bic)
+
+
+class SubSeriesLookup(TypedDict):
+    patterns: Dict[Tuple[str, str, int], np.ndarray] # (uid, pid, start index) -> series for that pattern
+    series: np.ndarray
+    idx_lookup: Dict[Tuple[str, str, int], Tuple[int, int]]
+
+
+# type aliases
+SubClusters = Dict[int, Dict[int, Dict[int, np.ndarray]]]
+SubMRFs = Dict[int, Dict[int, Dict[int, Dict[int, np.ndarray]]]]
+PatternLookup = Union[Dict[str, Iterable[PatternInstance]], Dict[int, Dict[int, Iterable[PatternInstance]]]]
 
 @pd.api.extensions.register_series_accessor("foldit")
 class FolditSeriesAccessor:

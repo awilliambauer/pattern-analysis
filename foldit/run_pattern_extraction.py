@@ -3,17 +3,21 @@ import logging
 import os
 import sys
 import json
+from itertools import groupby
+from typing import Dict, Any
+
 import numpy as np
 import pickle
 import pandas as pd
 from types import SimpleNamespace
+sys.path.append("../")
 
 from pattern_viz import plot_labeled_series, plot_user_series
-from util import time_played, get_action_labels
+from util import time_played, get_action_labels, SubSeriesLookup, get_pattern_label
 from .foldit_data import load_extend_data, make_series, get_deltas, make_action_series
-from pattern_extraction import combine_user_series, run_TICC, load_TICC_output, weight_mrfs_by_ubiquity, \
-    select_TICC_model, mean_cluster_nearest_neighbor_distance, get_patterns, make_subseries_lookup, run_sub_TICC, \
-    load_sub_lookup, get_patterns_lookup, find_best_dispersion_model
+from pattern_extraction import combine_user_series, run_TICC, load_TICC_output, \
+    select_TICC_model, get_patterns, make_subseries_lookup, run_sub_TICC, \
+    load_sub_lookup, get_pattern_lookups, find_best_dispersion_model, get_pattern_masks
 
 if __name__ == "__main__":
     # pids = ['2003433', '2003465', '2003490', '2003195', '2003240', '2003206', '2003483',
@@ -59,7 +63,9 @@ if __name__ == "__main__":
     idx_lookup, all_series = combine_user_series(series_lookup, noise)
     puz_idx_lookup = {(uid, pid): (s + idx_lookup[uid][0], e + idx_lookup[uid][0]) for (uid, pid), (s, e) in
                       puz_idx_lookup.items()}
+    # noinspection PyTypeChecker
     np.savetxt(f"{results_path}/noise_values.txt", noise)
+    # noinspection PyTypeChecker
     np.savetxt(f"{results_path}/all_series.txt", all_series)
     with open(f"{results_path}/puz_idx_lookup.pickle", 'wb') as fp:
         pickle.dump(puz_idx_lookup, fp)
@@ -79,6 +85,7 @@ if __name__ == "__main__":
                         ser = make_action_series(deltas)
                         evol_series_lookup["{}_{}_{}".format(r.uid, r.pid, idx)] = ser
         evol_idx_lookup, evol_all_series = combine_user_series(evol_series_lookup, noise)
+        # noinspection PyTypeChecker
         np.savetxt(f"{results_path}/evol_all_series.txt", evol_all_series)
         with open(f"{results_path}/evol_idx_lookup.pickle", 'wb') as fp:
             pickle.dump(evol_idx_lookup, fp)
@@ -92,42 +99,49 @@ if __name__ == "__main__":
     cluster_lookup, mrf_lookup, model_lookup, bic_lookup = load_TICC_output(results_path, ["all"], krange)
 
     logging.debug("Making subseries")
-    subseries_lookup = {}
+    subseries_lookups: Dict[int, Dict[int, SubSeriesLookup]] = {}
     for k in krange:
         patterns = get_patterns(mrf_lookup["all"][k], cluster_lookup["all"][k], puz_idx_lookup)
-        subseries_lookup[k] = make_subseries_lookup(k, patterns, mrf_lookup["all"][k], all_series, noise)
+        subseries_lookups[k] = make_subseries_lookup(k, patterns, mrf_lookup["all"][k], all_series, noise)
 
     logging.debug("Running recursive TICC")
-    run_sub_TICC(subseries_lookup, results_path, "all", config.sub_krange)
-    sub_lookup = load_sub_lookup(f"{results_path}/all", subseries_lookup)
+    run_sub_TICC(subseries_lookups, results_path, "all", config.sub_krange)
+    sub_lookup = load_sub_lookup(f"{results_path}/all", subseries_lookups, config.sub_krange)
 
     sub_clusters = sub_lookup["clusters"]
-    pattern_lookup = get_patterns_lookup(krange, sub_clusters, sub_lookup["mrfs"], subseries_lookup, cluster_lookup,
-                                         mrf_lookup["all"], puz_idx_lookup)
+    pattern_lookup = get_pattern_lookups(krange, sub_clusters, sub_lookup["mrfs"], subseries_lookups,
+                                         cluster_lookup["all"], mrf_lookup["all"], puz_idx_lookup)
     os.makedirs(f"{results_path}/eval", exist_ok=True)
     with open(f"{results_path}/eval/cluster_lookup.pickle", "wb") as fp:
         pickle.dump(cluster_lookup, fp)
     with open(f"{results_path}/eval/subseries_lookup.pickle", "wb") as fp:
-        pickle.dump(subseries_lookup, fp)
+        pickle.dump(subseries_lookups, fp)
     with open(f"{results_path}/eval/sub_clusters.pickle", "wb") as fp:
         pickle.dump(sub_clusters, fp)
     with open(f"{results_path}/eval/pattern_lookup.pickle", "wb") as fp:
         pickle.dump(pattern_lookup, fp)
 
-    best_k, best_subs = find_best_dispersion_model(all_series, pattern_lookup, subseries_lookup, sub_clusters)
+    best_k, best_subs = find_best_dispersion_model(all_series, pattern_lookup, subseries_lookups, sub_clusters)
     with open(f"{results_path}/eval/best_model.txt", 'w') as fp:
         fp.write(str((best_k, best_subs)) + "\n")
 
     logging.debug("Plotting")
     all_clusters = cluster_lookup["all"][best_k]
     action_labels = get_action_labels()
-    pattern_labels = list(range(best_k))
+
+    ps = sum([[(get_pattern_label(p, cid, sub_k), p) for p in pattern_lookup[best_k][cid][sub_k]]
+              for cid, sub_k in best_subs], [])
+    ps_uid_pid = {tag: sorted(xs) for tag, xs in
+                  groupby(sorted(ps, key=lambda p: (p[1].uid, p[1].pid)), lambda p: (p[1].uid, p[1].pid))}
+    pattern_use_lookup = {tag: {pt for pt, _ in xs} for tag, xs in ps_uid_pid.items()}
+    pts = {pt for pt, p in ps}
+
     for uid in series_lookup:
-        plot_user_series(results_path, best_k, best_subs, puz_idx_lookup, all_series, pattern_lookup,
-                         subseries_lookup, action_labels)
+        plot_user_series(results_path, best_k, best_subs, puz_idx_lookup, all_series, pattern_lookup, pts,
+                         subseries_lookups, action_labels)
         ser = series_lookup[uid]
         cs = all_clusters[slice(*idx_lookup[uid])]
-        plot_labeled_series(np.arange(len(ser)), ser, cs, action_labels, pattern_labels,
+        plot_labeled_series(np.arange(len(ser)), ser, {}, action_labels,
                             f"{results_path}/all/{uid}_series_all_k{best_k}.png")
 
     patterns = get_patterns(mrf_lookup["all"][best_k], all_clusters, puz_idx_lookup)

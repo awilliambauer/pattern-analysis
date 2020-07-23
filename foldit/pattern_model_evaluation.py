@@ -156,7 +156,7 @@ if __name__ == "__main__":
             cluster_lookup, subseries_lookup, sub_clusters = get_predicted_lookups(all_series, krange, model_lookup["all"],
                                                                                    sub_lookup["models"], mrf_lookup["all"],
                                                                                    puz_idx_lookup, noise)
-            pattern_lookup = get_patterns_lookup(krange, sub_clusters, sub_lookup["mrfs"], subseries_lookup, cluster_lookup,
+            pattern_lookup = get_pattern_lookups(krange, sub_clusters, sub_lookup["mrfs"], subseries_lookup, cluster_lookup,
                                                  mrf_lookup["all"], puz_idx_lookup)
             os.makedirs(model_dir + "/eval", exist_ok=True)
             with open(model_dir + "/eval/cluster_lookup.pickle", "wb") as fp:

@@ -1,9 +1,12 @@
+"""
+common functions for pattern extraction
+"""
 import argparse
 import copy
 import sys
 from functools import reduce, partial
 from operator import itemgetter
-from typing import List, Tuple, Dict, Optional, Callable, Any, Iterable
+from typing import List, Tuple, Dict, Optional, Callable, Any, Iterable, Union, Set, Hashable
 import typing
 
 from sklearn.feature_selection import RFECV
@@ -29,8 +32,8 @@ import matplotlib
 matplotlib.use("Agg")
 
 
-def combine_user_series(series_lookup: Dict[str, np.ndarray], noise: np.ndarray,
-                        default_noise_duration=1000) -> Tuple[Dict[str, Tuple[int, int]], np.ndarray]:
+def combine_user_series(series_lookup: Dict[Hashable, np.ndarray], noise: np.ndarray,
+                        default_noise_duration=1000) -> Tuple[Dict[Hashable, Tuple[int, int]], np.ndarray]:
     """
     concatenate all the series in series lookup together
     :param series_lookup: dictionary mapping uid to time series
@@ -55,6 +58,15 @@ def combine_user_series(series_lookup: Dict[str, np.ndarray], noise: np.ndarray,
 
 def fit_TICC(series: np.ndarray, k: int, window_size=1, num_proc=4,
              ticc_instance=None) -> Tuple[np.ndarray, Dict[int, np.ndarray], float]:
+    """
+
+    :param series:
+    :param k:
+    :param window_size:
+    :param num_proc:
+    :param ticc_instance:
+    :return:
+    """
     if ticc_instance is None:
         ticc = TICC(window_size=window_size, number_of_clusters=k, compute_BIC=True, num_proc=num_proc)
     else:
@@ -67,6 +79,17 @@ def fit_TICC(series: np.ndarray, k: int, window_size=1, num_proc=4,
 
 def run_TICC(series_lookup: Dict[str, np.ndarray], datapath: str, krange: list,
              save_model=True, skip_series_fn=None, window_size=1, num_proc=4) -> None:
+    """
+
+    :param series_lookup: uid -> series
+    :param datapath:
+    :param krange:
+    :param save_model:
+    :param skip_series_fn: predicate of a series and k indicating whether to skip it
+    :param window_size:
+    :param num_proc:
+    :return:
+    """
     if not os.path.exists(datapath):
         raise ValueError("datapath {} does not exist".format(datapath))
     for k in krange:
@@ -85,6 +108,7 @@ def run_TICC(series_lookup: Dict[str, np.ndarray], datapath: str, krange: list,
                 # cluster_remapping = {k: inverse[v.tostring()] for k, v in mrfs.items()}
                 # clusters_remapped = np.array([cluster_remapping[x] for x in clusters])
                 os.makedirs(f"{datapath}/{uid}", exist_ok=True)
+                # noinspection PyTypeChecker
                 np.savetxt(f"{datapath}/{uid}/clusters_k{k}.txt", clusters)
                 with open(f"{datapath}/{uid}/mrfs_k{k}.pickle", 'wb') as pkl:
                     pickle.dump(mrfs, pkl)
@@ -105,7 +129,7 @@ def run_TICC(series_lookup: Dict[str, np.ndarray], datapath: str, krange: list,
 
 
 def make_subseries_lookup(k: int, patterns: List[PatternInstance], mrfs: Dict[int, np.ndarray],
-                          all_series: np.ndarray, noise: np.ndarray) -> Dict[int, Dict[str, Any]]:
+                          all_series: np.ndarray, noise: np.ndarray) -> Dict[int, SubSeriesLookup]:
     """
     returns a dictionary from k (clusters in top-level TICC model) to dictionaries from cluster id (cid) to dictionaries
     with entries for
@@ -113,29 +137,40 @@ def make_subseries_lookup(k: int, patterns: List[PatternInstance], mrfs: Dict[in
     series: the series constructed by concatenating the action time series for all patterns with this cid (with separating noise)
     idx_lookup: (uid, pid, start_index) -> index in series where this pattern begins
     """
-    lookup = {}
+    lookup: Dict[int, SubSeriesLookup] = {}
     for cid in range(k):
         if is_null_cluster(mrfs[cid]):
             continue
         logging.debug(f"assembling series for pattern {cid}")
-        sslu = {}
-        sslu["patterns"] = {(p.uid, p.pid, p.start_idx): all_series[p.start_idx:p.end_idx] for p in patterns if
-                            p.cid == cid}
-        if len(sslu["patterns"]) == 0:
+        subpatterns = {(p.uid, p.pid, p.start_idx): all_series[p.start_idx:p.end_idx] for p in patterns if
+                        p.cid == cid}
+        if len(subpatterns) == 0:
             logging.debug(f"skipping pattern {cid} because there are no instances of it")
             continue
-        sub_idx_lookup, all_subseries = combine_user_series(sslu['patterns'], noise, default_noise_duration=100)
+        sub_idx_lookup, all_subseries = combine_user_series(subpatterns, noise, default_noise_duration=100)
         # if len(all_subseries) - 100 * (len(sslu["patterns"]) - 1) < 20:
         #     logging.debug("skipping pattern {} because it only appears for {} timesteps".format(cid, len(all_subseries) - 100 * (len(sslu["patterns"]) - 1)))
         #     continue
-        sslu["series"] = all_subseries
-        sslu["idx_lookup"] = sub_idx_lookup
-        lookup[cid] = sslu
+        lookup[cid] = {"patterns": subpatterns,
+                       "series": all_subseries,
+                       "idx_lookup": sub_idx_lookup}
     return lookup
 
 
 def run_sub_TICC(subseries_lookup: dict, datapath: str, uid: str, sub_krange: list, save_model=True,
                  skip_series_fn=None, window_size=1, num_proc=4):
+    """
+
+    :param subseries_lookup:
+    :param datapath:
+    :param uid:
+    :param sub_krange:
+    :param save_model:
+    :param skip_series_fn:
+    :param window_size:
+    :param num_proc:
+    :return:
+    """
     results_dir = f"{datapath}/{uid}/subpatterns"
     os.makedirs(results_dir, exist_ok=True)
     with open(f"{results_dir}/subseries_lookup.pickle", 'wb') as fp:
@@ -147,29 +182,16 @@ def run_sub_TICC(subseries_lookup: dict, datapath: str, uid: str, sub_krange: li
                  f"{results_dir}/k{k}", sub_krange, save_model, skip_series_fn, window_size, num_proc)
 
 
-def mrf_diff(a: np.ndarray, b: np.ndarray) -> float:
-    ac = a[np.triu_indices(a.shape[1])]
-    bc = b[np.triu_indices(b.shape[1])]
-
-    return ((ac - bc) ** 2).sum()
-
-
-def weight_mrfs_by_ubiquity(mrfs: Dict[int, np.ndarray], series: np.ndarray,
-                            clusters: np.ndarray, scalar=10) -> Dict[int, np.ndarray]:
-    mrfs = copy.deepcopy(mrfs)
-    for ci, m in mrfs.items():
-        weights = [len([x for x in series[clusters == ci][:, i] if x > 0]) / len(series[clusters == ci]) for i in
-                   range(len(m))]
-        for i in range(len(m)):
-            m[i, i] = weights[i] * scalar
-    return mrfs
-
-
 def is_null_cluster(mrf: np.ndarray) -> bool:
+    """
+    predicate for whether a cluster is null/invalid based on the mrf
+    :param mrf:
+    :return:
+    """
     return np.triu(mrf, 1).sum() == 0
 
 
-def load_TICC_output(datapath: str, uids: List[str], krange: range) -> Tuple[
+def load_TICC_output(datapath: str, uids: List[str], krange: Iterable[int]) -> Tuple[
     Dict[str, Dict[int, np.ndarray]],
     Dict[str, Dict[int, Dict[int, np.ndarray]]],
     Dict[str, Dict[int, Dict]],
@@ -217,42 +239,26 @@ def load_TICC_output(datapath: str, uids: List[str], krange: range) -> Tuple[
     return cluster_lookup, mrf_lookup, model_lookup, bic_lookup
 
 
-def load_sub_lookup(datapath: str, subseries_lookup: dict, sub_krange=[5, 10]) -> Dict[str, Dict[int, dict]]:
-    sub_lookup = {"clusters": {}, # Dict[int, Dict[int, Dict[int, ndarray]]] (k to cid to sub_k to cluster labels)
-                  "mrfs": {},     # Dict[
-                  "models": {},
-                  "bics": {}}
+def load_sub_lookup(datapath: str, subseries_lookup: dict, sub_krange: Iterable[int]) -> SubLookup:
+    """
+    loads the output of run_sub_TICC
+    :param datapath:
+    :param subseries_lookup:
+    :param sub_krange:
+    :return:
+    """
+    sub_lookup = {"clusters": {}, # Dict[int, Dict[int, Dict[int, np.ndarray]]] (k to cid to sub_k to cluster labels)
+                  "mrfs": {},     # Dict[int, Dict[int, Dict[int, Dict[int, np.ndarray]]]] (k to cid to sub_k to mrf dictionary (cluster label to mrf))
+                  "models": {},   # Dict[int, Dict[int, Dict[int, Dict]]] (k to cid to sub_k to dict of ticc model parameters)
+                  "bics": {}}     # Dict[int, Dict[int, Dict[int, float]]] (k to cid to sub_k to bic)
     for k in subseries_lookup:
         dp = "{}/subpatterns/k{}".format(datapath, k)
         cs, mrfs, ms, bs = load_TICC_output(dp, ["cid{}".format(cid) for cid in subseries_lookup[k]], sub_krange)
-        sub_lookup["clusters"][k] = {int(k.replace("cid", "")): v for _, v in cs.items()}
-        sub_lookup["mrfs"][k] = {int(k.replace("cid", "")): v for _, v in mrfs.items()}
-        sub_lookup["models"][k] = {int(k.replace("cid", "")): v for _, v in ms.items()}
-        sub_lookup["bics"][k] = {int(k.replace("cid", "")): v for _, v in bs.items()}
+        sub_lookup["clusters"][k] = {int(k.replace("cid", "")): v for k, v in cs.items()}
+        sub_lookup["mrfs"][k] = {int(k.replace("cid", "")): v for k, v in mrfs.items()}
+        sub_lookup["models"][k] = {int(k.replace("cid", "")): v for k, v in ms.items()}
+        sub_lookup["bics"][k] = {int(k.replace("cid", "")): v for k, v in bs.items()}
     return sub_lookup
-
-
-# noinspection PyTypeChecker
-def mean_cluster_nearest_neighbor_distance(mrfs: Dict[int, np.ndarray]) -> float:
-    return np.mean([min([mrf_diff(mrfs[ci], mrfs[cj]) for cj in mrfs if ci != cj]) for ci in mrfs])
-
-
-def mean_pattern_cohesion(mrfs, patterns, series):
-    cluster_instance_lookup = {cid: list(g) for cid, g in
-                               groupby(sorted(patterns, key=lambda p: p.cid), lambda p: p.cid)}
-    diffs = []
-    for cid, ps in cluster_instance_lookup.items():
-
-        instance_mrfs = [mrfs[cid].copy() for p in ps]
-        for p, mrf in zip(ps, instance_mrfs):
-
-            ser = series[p.start_idx:p.end_idx]
-            weights = [len([x for x in ser[:, i] if x > 0]) / len(ser) for i in range(len(mrf))]
-            for i in range(len(mrf)):
-                mrf[i, i] = weights[i] * 10
-        centroid = np.mean(instance_mrfs, 0)
-        diffs.append(np.max([mrf_diff(mrf, centroid) for mrf in instance_mrfs]))
-    return np.mean(diffs)
 
 
 def select_TICC_model(cluster_lookup: Dict[str, Dict[int, np.ndarray]],
@@ -298,8 +304,8 @@ def select_TICC_model(cluster_lookup: Dict[str, Dict[int, np.ndarray]],
 
 
 def get_pattern_masks(uid: str, pid: str, idx: Tuple[int, int], target_pts: Iterable[str], sub_ks: Dict[int, int],
-                      pattern_lookup: Dict[int, PatternInstance],
-                      subseries_lookup: Dict[int, Dict[str, Any]]) -> typing.OrderedDict[str, np.ndarray]:
+                      pattern_lookup: PatternLookup,
+                      subseries_lookup: Dict[int, SubSeriesLookup]) -> typing.OrderedDict[str, np.ndarray]:
     """
     idx: tuple of the start and end index for (uid, pid) segment in all_series (i.e., puz_idx_lookup entry)
     target_pts: list of pattern type labels (e.g., {'1A', '1C', '2A', '3'})
@@ -336,6 +342,13 @@ def get_pattern_masks(uid: str, pid: str, idx: Tuple[int, int], target_pts: Iter
 
 
 def get_patterns(mrfs: Dict[int, np.ndarray], clusters: np.ndarray, puz_idx_lookup: dict) -> List[PatternInstance]:
+    """
+
+    :param mrfs:
+    :param clusters:
+    :param puz_idx_lookup:
+    :return:
+    """
     patterns = []
     for cid in mrfs:
         if is_null_cluster(mrfs[cid]):
@@ -354,25 +367,25 @@ def get_patterns(mrfs: Dict[int, np.ndarray], clusters: np.ndarray, puz_idx_look
     return patterns
 
 
-def get_patterns_lookup(krange: Iterable[int], sub_clusters: Dict[str, Dict[int, np.ndarray]],
-                        sub_mrfs: Dict[int, Dict[int, Dict[int, Dict[int, np.ndarray]]]],
-                        subseries_lookup: Dict[int, Dict[str, Any]],
+def get_pattern_lookups(krange: Iterable[int], sub_clusters: SubClusters,
+                        sub_mrfs: SubMRFs, subseries_lookups: Dict[int, Dict[int, SubSeriesLookup]],
                         cluster_lookup: Dict[int, np.ndarray], mrf_lookup: Dict[int, Dict[int, np.ndarray]],
-                        puz_idx_lookup: dict) -> Dict[int, Dict[str, List[PatternInstance]]]:
+                        puz_idx_lookup: dict) -> Dict[int, PatternLookup]:
     """
     sub_clusters = sub_lookup["clusters"]
     mrf_lookup and cluster_lookup need to be label-indexed (i.e., mrf_lookup = mrf_lookup["all"])
     """
-    patterns = {}
+    # maps k to either "base" -> list of first-order patterns or cluster id -> sub_k -> list of patterns
+    patterns: Dict[int, Dict[Union[int, str], Union[List[PatternInstance], Dict[int, List[PatternInstance]]]]] = {}
     for k in krange:
         patterns[k] = {"base": get_patterns(mrf_lookup[k], cluster_lookup[k], puz_idx_lookup)}
-        cids = {p.cid for p in patterns[k]["base"]}
+        cids: Set[int] = {p.cid for p in patterns[k]["base"]}
         for cid in cids:
             patterns[k][cid] = {0: [p for p in patterns[k]["base"] if p.cid == cid]}
             if cid not in sub_clusters[k]:
                 continue
             ps = [p for p in patterns[k]["base"] if p.cid == cid]
-            sub_idx_lookup = subseries_lookup[k][cid]["idx_lookup"]
+            sub_idx_lookup = subseries_lookups[k][cid]["idx_lookup"]
             for sub_k in sub_clusters[k][cid]:
                 if not any(is_null_cluster(mrf) for mrf in sub_mrfs[k][cid][sub_k].values()) or \
                         len(sub_idx_lookup) <= sub_k:
@@ -383,6 +396,12 @@ def get_patterns_lookup(krange: Iterable[int], sub_clusters: Dict[str, Dict[int,
 
 
 def predict_from_saved_model(test_data: np.ndarray, saved_model: dict) -> np.ndarray:
+    """
+
+    :param test_data:
+    :param saved_model:
+    :return:
+    """
     test_ticc = TICC(window_size=saved_model["window_size"], number_of_clusters=saved_model["number_of_clusters"], num_proc=1)
     test_ticc.num_blocks = saved_model["num_blocks"]
     test_ticc.switch_penalty = saved_model["switch_penalty"]
@@ -394,6 +413,16 @@ def predict_from_saved_model(test_data: np.ndarray, saved_model: dict) -> np.nda
 
 def compute_pattern_times(k: int, subs: tuple, data: pd.DataFrame, cluster_lookup: Dict[int, np.ndarray],
                           mrf_lookup: Dict[int, Dict[int, np.ndarray]], puz_idx_lookup: dict) -> pd.DataFrame:
+    """
+
+    :param k:
+    :param subs:
+    :param data:
+    :param cluster_lookup:
+    :param mrf_lookup:
+    :param puz_idx_lookup:
+    :return:
+    """
     cluster_times = []
     print("computing pattern times")
     for _, r in data.iterrows():
@@ -423,8 +452,20 @@ def compute_pattern_times(k: int, subs: tuple, data: pd.DataFrame, cluster_looku
     return data.merge(pd.DataFrame(data=cluster_times), on=['pid', 'uid'])
 
 
-def compute_subpattern_times(k: int, subs: tuple, data: pd.DataFrame, cluster_lookup: dict, subclusters: dict,
-                             subseries_lookup: dict, puz_idx_lookup: dict) -> pd.DataFrame:
+def compute_subpattern_times(k: int, subs: Tuple[int, int], data: pd.DataFrame, cluster_lookup: Dict[int, np.ndarray],
+                             sub_clusters: SubClusters, subseries_lookups: Dict[int, Dict[int, SubSeriesLookup]],
+                             puz_idx_lookup: dict) -> pd.DataFrame:
+    """
+
+    :param k:
+    :param subs:
+    :param data:
+    :param cluster_lookup:
+    :param sub_clusters:
+    :param subseries_lookups:
+    :param puz_idx_lookup:
+    :return:
+    """
     results = {}
     print("generating timestamps")
     for _, r in data.iterrows():
@@ -444,8 +485,8 @@ def compute_subpattern_times(k: int, subs: tuple, data: pd.DataFrame, cluster_lo
             continue
         all_subclusters = all_clusters.astype(np.str)
         labels = ["{}{}".format(cid, string.ascii_uppercase[x]) for x in range(sub_k)]
-        cs = subclusters[k][cid][sub_k]
-        for (_, _, start_idx), (s, e) in subseries_lookup[k][cid]['idx_lookup'].items():
+        cs = sub_clusters[k][cid][sub_k]
+        for (_, _, start_idx), (s, e) in subseries_lookups[k][cid]['idx_lookup'].items():
             all_subclusters[start_idx: start_idx + (min(e, len(cs)) - s)] = [labels[c] for c in cs[s:e]]
         for uid, pid in results:
             puz_cs = all_subclusters[slice(*puz_idx_lookup[(uid, pid)])]
@@ -459,13 +500,24 @@ def compute_subpattern_times(k: int, subs: tuple, data: pd.DataFrame, cluster_lo
                 #results[(uid, pid)]["times"]["subpattern_{}_ratio".format(scid)] = results[(uid, pid)]["times"]["subpattern_{}_time".format(scid)] / r.relevant_time
                 results[(uid, pid)]["times"]["pattern_{}_action".format(scid)] = sum(actions[puz_cs == scid])
                 #results[(uid, pid)]["times"]["subpattern_{}_action_ratio".format(scid)] = results[(uid, pid)]["times"]["subpattern_{}_action".format(scid)] / actions.sum()
-    subcluster_times = [v["times"] for v in results.values() if v["valid"]]
-    return data.merge(pd.DataFrame(data=subcluster_times), on=['pid', 'uid'])
+    sub_cluster_times = [v["times"] for v in results.values() if v["valid"]]
+    return data.merge(pd.DataFrame(data=sub_cluster_times), on=['pid', 'uid'])
 
 
 def get_predicted_lookups(all_series: np.ndarray, krange: Iterable[int], model_lookup: Dict[int, dict],
                           sub_models: Dict[int, Dict[int, Dict[int, dict]]],
                           mrf_lookup: Dict[int, Dict[int, np.ndarray]], puz_idx_lookup: dict, noise: np.ndarray):
+    """
+
+    :param all_series:
+    :param krange:
+    :param model_lookup:
+    :param sub_models:
+    :param mrf_lookup:
+    :param puz_idx_lookup:
+    :param noise:
+    :return:
+    """
     cluster_lookup = {}
     sub_clusters = {}
     subseries_lookup = {}
@@ -487,17 +539,26 @@ def get_predicted_lookups(all_series: np.ndarray, krange: Iterable[int], model_l
     return cluster_lookup, subseries_lookup, sub_clusters
 
 
-def make_selection_lookups(all_series: np.ndarray, pattern_lookup: Dict[int, Dict[str, Iterable[PatternInstance]]],
-                           subseries_lookup: Dict[int, Dict[int, Dict[str, Any]]],
-                           sub_clusters, sub_mrfs):
-    dispersions = {}
-    modes = {}
+def make_selection_lookups(all_series: np.ndarray, pattern_lookups: Dict[int, PatternLookup],
+                           subseries_lookups: Dict[int, Dict[int, SubSeriesLookup]], sub_clusters: SubClusters,
+                           sub_mrfs: SubMRFs) -> Tuple[Dict[Tuple, np.ndarray], Dict[Tuple, np.ndarray]]:
+    """
+
+    :param all_series:
+    :param pattern_lookups:
+    :param subseries_lookups:
+    :param sub_clusters:
+    :param sub_mrfs:
+    :return:
+    """
+    dispersions: Dict[Tuple, np.ndarray] = {}
+    modes: Dict[Tuple, np.ndarray] = {}
     print("computing selection criteria")
-    for k in pattern_lookup:
+    for k in pattern_lookups:
         print("k =", k)
-        for cid in {p.cid for p in pattern_lookup[k]["base"]}:
+        for cid in {p.cid for p in pattern_lookups[k]["base"]}:
             print("    cid", cid)
-            ss = [all_series[p.start_idx:p.end_idx] for p in pattern_lookup[k]["base"] if p.cid == cid]
+            ss = [all_series[p.start_idx:p.end_idx] for p in pattern_lookups[k]["base"] if p.cid == cid]
             ubiqs = np.array([[len([x for x in s[:, i] if x > 0]) / len(s) for i in range(s.shape[1])] for s in ss])
 
             dispersions[(k, cid, 0)] = np.mean(robust.mad(ubiqs, axis=0))
@@ -506,12 +567,12 @@ def make_selection_lookups(all_series: np.ndarray, pattern_lookup: Dict[int, Dic
             if cid not in sub_clusters[k]:
                 continue
 
-            idx_lookup = subseries_lookup[k][cid]["idx_lookup"]
-            ser = subseries_lookup[k][cid]["series"]
+            idx_lookup = subseries_lookups[k][cid]["idx_lookup"]
+            ser = subseries_lookups[k][cid]["series"]
             for sub_k in sub_clusters[k][cid]:
                 if not any(is_null_cluster(mrf) for mrf in sub_mrfs[k][cid][sub_k].values()) or len(idx_lookup) <= sub_k:
                     continue
-                ps = pattern_lookup[k][cid][sub_k]
+                ps = pattern_lookups[k][cid][sub_k]
                 for sub_cid in {p.cid for p in ps}:
                     ss = [ser[p.start_idx:p.end_idx] for p in ps if p.cid == sub_cid]
                     ubiqs = np.array([[len([x for x in s[:, i] if x > 0]) / len(s) for i in range(s.shape[1])] for s in ss])
@@ -524,19 +585,37 @@ def make_selection_lookups(all_series: np.ndarray, pattern_lookup: Dict[int, Dic
     return dispersion_lookup, mode_lookup
 
 
-def dispersion_score(k, candidate, dispersion_lookup, pattern_lookup):
-    sub_weights = [[len([p for p in pattern_lookup[k][cid][sub_k] if p.cid == sub_cid]) for sub_cid in
-                    sorted({p.cid for p in pattern_lookup[k][cid][sub_k]})] for cid, sub_k in candidate]
+def dispersion_score(k: int, candidate: Iterable[Tuple[int, int]], dispersion_lookup: Dict[Tuple, np.ndarray],
+                     pattern_lookups: Dict[int, PatternLookup]) -> float:
+    """
+
+    :param k:
+    :param candidate:
+    :param dispersion_lookup:
+    :param pattern_lookups:
+    :return:
+    """
+    sub_weights = [[len([p for p in pattern_lookups[k][cid][sub_k] if p.cid == sub_cid]) for sub_cid in
+                    sorted({p.cid for p in pattern_lookups[k][cid][sub_k]})] for cid, sub_k in candidate]
     return np.average([np.average(dispersion_lookup[(k, cid, sub_k)], weights=ws) for ws, (cid, sub_k) in zip(sub_weights, candidate)],
-                      weights=[len(pattern_lookup[k][cid][sub_k]) for cid, sub_k in candidate])
+                      weights=[len(pattern_lookups[k][cid][sub_k]) for cid, sub_k in candidate])
 
 
-def mode_score(k, candidate, mode_lookup):
+def mode_score(k: int, candidate: Iterable[Tuple[int, int]], mode_lookup: Dict[Tuple, np.ndarray]):
+    """
+
+    :param k:
+    :param candidate:
+    :param mode_lookup:
+    :return:
+    """
     ms = sum((mode_lookup[(k, cid, sub_k)] for cid, sub_k in candidate), [])
     return np.mean([min([abs(x - m).sum() for x in ms if x is not m]) for m in ms])
 
 
-def find_best_dispersion_model(all_series: np.ndarray, pattern_lookup, subseries_lookup, sub_clusters):
+def find_best_dispersion_model(all_series: np.ndarray, pattern_lookups: Dict[int, PatternLookup],
+                               subseries_lookups: Dict[int, Dict[int, SubSeriesLookup]],
+                               sub_clusters: SubClusters) -> Tuple[int, Tuple[Tuple[int, int], ...]]:
     """
     for each pattern p
         compute signal ubiquity for each instance of p (for each signal i, compute fraction of instance's duration where i is active)
@@ -557,24 +636,25 @@ def find_best_dispersion_model(all_series: np.ndarray, pattern_lookup, subseries
     we rank candidate models by dispersion (smaller is better) and nearest-neighbor distance (larger is better)
     we sum the two ranks for each candidate and the best candidate is that which has the smallest sum
     """
-    dispersion_lookup, mode_lookup = make_selection_lookups(all_series, pattern_lookup, subseries_lookup, sub_clusters)
+    dispersion_lookup, mode_lookup = make_selection_lookups(all_series, pattern_lookups, subseries_lookups, sub_clusters)
     disp_scores = {}
-    for k in pattern_lookup:
+    for k in pattern_lookups:
         print("k =", k)
         candidate = []
-        for cid in {p.cid for p in pattern_lookup[k]["base"]}:
+        cids: Set[int] = {p.cid for p in pattern_lookups[k]["base"]}
+        for cid in cids:
             xs = [(cid, 0)]
             if cid not in sub_clusters[k]:
                 candidate.append(xs[0])
                 continue
-            idx_lookup = subseries_lookup[k][cid]["idx_lookup"]
+            idx_lookup = subseries_lookups[k][cid]["idx_lookup"]
             for sub_k in sub_clusters[k][cid]:
                 if (k, cid, sub_k) not in dispersion_lookup:
                     print("SKIPPING", k, cid, sub_k)
                     continue
                 xs.append((cid, sub_k))
             candidate.append(min(xs, key=lambda x: np.mean(dispersion_lookup[(k, x[0], x[1])])))
-        disp_scores[(k, tuple(candidate))] = dispersion_score(k, candidate, dispersion_lookup, pattern_lookup)
+        disp_scores[(k, tuple(candidate))] = dispersion_score(k, candidate, dispersion_lookup, pattern_lookups)
     disp_ranks = {kc: i for i, (kc, s) in enumerate(sorted(disp_scores.items(), key=itemgetter(1)))}
     mode_scores = {(k, c): mode_score(k, c, mode_lookup) for k, c in disp_scores}
     mode_ranks = {kc: i for i, (kc, s) in enumerate(sorted(mode_scores.items(), key=itemgetter(1), reverse=True))}
