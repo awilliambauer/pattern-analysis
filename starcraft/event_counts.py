@@ -2,6 +2,7 @@
 
 import sc2reader
 import csv
+import math
 from multiprocessing import Pool
 
 def event_counts(replay):
@@ -49,6 +50,12 @@ def generateFields(filename):
 
         team1_rank = r.players[0].highest_league
         team2_rank = r.players[1].highest_league
+
+        #checking if rank exists for each player
+        if (team1_rank == 0) or (team1_rank == 8):
+            team1_rank = math.nan
+        if (team2_rank == 0) or (team2_rank == 8):
+            team2_rank = math.nan
 
         team1_set, team1_add, team1_get, team1_all, team2_set, team2_add, team2_get, team2_all = event_counts(r)
 

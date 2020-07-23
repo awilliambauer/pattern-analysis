@@ -1,6 +1,7 @@
 #A script to gather summary statistics of StarCraft 2 data
 
 import csv
+import time
 import matplotlib.pyplot as plt
 from itertools import groupby
 import sys
@@ -14,7 +15,7 @@ def read_scouting_stats():
 
     SF_inv = 0
     ST_inv = 0
-    APM_inv = 0
+    APS_inv = 0
     Rank_inv = 0
     CPS_inv = 0
     PR_inv = 0
@@ -22,25 +23,31 @@ def read_scouting_stats():
 
     SF_set = {0}
     ST_set = {0}
-    APM_set = {0}
+    APS_set = {0}
     Rank_set = {0}
     CPS_set = {0}
     PR_set = {0}
     BR_set = {0}
 
-    SF_bxplt_data = [[], [], [], [], [], [], []]
-    ST_bxplt_data = [[], [], [], [], [], [], []]
-    APM_bxplt_data = [[], [], [], [], [], [], []]
-    CPS_bxplt_data = [[], [], [], [], [], [], []]
-    PR_bxplt_data = [[], [], [], [], [], [], []]
-    BR_bxplt_data = [[], [], [], [], [], [], []]
+    SF_rank_data = [[], [], [], [], [], [], []]
+    APS_rank_data = [[], [], [], [], [], [], []]
+    CPS_rank_data = [[], [], [], [], [], [], []]
+    PR_rank_data = [[], [], [], [], [], [], []]
+    BR_rank_data = [[], [], [], [], [], [], []]
 
-    categories = ["Bronze", "Silver", "Gold", "Platinum", "Diamond", "Master", "Grandmaster"]
+    rank_categories = ["Bronze", "Silver", "Gold", "Platinum", "Diamond", "Master", "Grandmaster"]
 
-    pos_APM_wins = 0
-    pos_APM_loss = 0
-    neg_APM_wins = 0
-    neg_APM_loss = 0
+    SF_win_data = [[], []]
+    APS_win_data = [[], []]
+    CPS_win_data = [[], []]
+    PR_win_data = [[], []]
+    BR_win_data = [[], []]
+    win_categories = ["Loss", "Win"]
+
+    pos_APS_wins = 0
+    pos_APS_loss = 0
+    neg_APS_wins = 0
+    neg_APS_loss = 0
 
     with open("scouting_stats.csv", 'r') as my_csv:
         reader = csv.DictReader(my_csv)
@@ -48,7 +55,7 @@ def read_scouting_stats():
         valid_rank = True
         for row in reader:
             total_rows += 1
-            ScoutingFrequency, ScoutingTime, APM, Rank, CPS, PeaceRate, BattleRate, Win = row["ScoutingFrequency"], row["ScoutingTime"], row["APM"], row["Rank"], row["CPS"], row["PeaceRate"], row["BattleRate"], row["Win"]
+            ScoutingFrequency, APS, Rank, CPS, PeaceRate, BattleRate, Win = row["ScoutingFrequency"], row["APS"], row["Rank"], row["CPS"], row["PeaceRate"], row["BattleRate"], row["Win"]
             #checking if Rank is valid and setting a flag if it is not
             if Rank == "nan":
                 Rank_inv += 1
@@ -57,106 +64,110 @@ def read_scouting_stats():
             else:
                 valid_rank = True
                 intRank = int(Rank)
+                intWin = int(Win)
 
             #Checking scouting frequency
             if float(ScoutingFrequency) == 0:
                 SF_inv += 1
                 SF_set.add(i)
             elif valid_rank == True:
-                SF_bxplt_data[intRank-1].append(float(ScoutingFrequency))
+                SF_rank_data[intRank-1].append(float(ScoutingFrequency))
+                SF_win_data[intWin].append(float(ScoutingFrequency))
 
-            #Checking scouting time
-            if float(ScoutingTime) == 0:
-                ST_inv += 1
-                ST_set.add(i)
+            #Checking APS
+            if float(APS) == 0:
+                APS_inv += 1
+                APS_set.add(i)
             elif valid_rank == True:
-                ST_bxplt_data[intRank-1].append(float(ScoutingTime))
-
-            #Checking APM
-            if float(APM) == 0:
-                APM_inv += 1
-                APM_set.add(i)
-            elif valid_rank == True:
-                APM_bxplt_data[intRank-1].append(float(APM))
+                APS_rank_data[intRank-1].append(float(APS))
+                APS_win_data[intWin].append(float(APS))
 
             if int(Win) == 1:
-                if float(APM) > 0:
-                    pos_APM_wins += 1
-                elif float(APM) < 0:
-                    neg_APM_wins += 1
+                if float(APS) > 0:
+                    pos_APS_wins += 1
+                elif float(APS) < 0:
+                    neg_APS_wins += 1
             elif int(Win) == 0:
-                if float(APM) > 0:
-                    pos_APM_loss += 1
-                elif float(APM) < 0:
-                    neg_APM_loss += 1
+                if float(APS) > 0:
+                    pos_APS_loss += 1
+                elif float(APS) < 0:
+                    neg_APS_loss += 1
 
             #Checking CPS
             if float(CPS) == 0:
                 CPS_inv += 1
                 CPS_set.add(i)
             elif valid_rank == True:
-                CPS_bxplt_data[intRank-1].append(float(CPS))
+                CPS_rank_data[intRank-1].append(float(CPS))
+                CPS_win_data[intWin].append(float(CPS))
 
             #Checking peace rate
             if float(PeaceRate) == 0:
                 PR_inv += 1
                 PR_set.add(i)
             elif valid_rank == True:
-                PR_bxplt_data[intRank-1].append(float(PeaceRate))
+                PR_rank_data[intRank-1].append(float(PeaceRate))
+                PR_win_data[intWin].append(float(PeaceRate))
 
             #Checking battle rate
             if float(BattleRate) == 0:
                 BR_inv += 1
                 BR_set.add(i)
             elif valid_rank == True:
-                BR_bxplt_data[intRank-1].append(float(BattleRate))
+                BR_rank_data[intRank-1].append(float(BattleRate))
+                BR_win_data[intWin].append(float(BattleRate))
 
             i += 1
 
 
-    make_boxplot(SF_bxplt_data, categories, "Scouting Frequency", "ScoutingFrequencyBoxplot.png")
-    make_boxplot(ST_bxplt_data, categories, "Scouting Time", "ScoutingTimeBoxplot.png")
-    make_boxplot(APM_bxplt_data, categories, "Relative Actions per Minute", "APMBoxplot.png")
-    make_boxplot(CPS_bxplt_data, categories, "Commands per Second", "CPSBoxplot.png")
-    make_boxplot(PR_bxplt_data, categories, "Macro Selection Rate during Peace Time", "PeaceRateBoxplot.png")
-    make_boxplot(BR_bxplt_data, categories, "Macro Selection Rate during Battle Time", "BattleRateBoxplot.png")
+    make_boxplot(SF_rank_data, rank_categories, "Scouting Frequency", "ScoutingFrequencyByRank.png")
+    make_boxplot(APS_rank_data, rank_categories, "Actions per Second", "APSByRank.png")
+    make_boxplot(CPS_rank_data, rank_categories, "Commands per Second", "CPSByRank.png")
+    make_boxplot(PR_rank_data, rank_categories, "Macro Selection Rate during Peace Time", "PeaceRateByRank.png")
+    make_boxplot(BR_rank_data, rank_categories, "Macro Selection Rate during Battle Time", "BattleRateByRank.png")
+
+    make_boxplot(SF_win_data, win_categories, "Scouting Frequency", "ScoutingFrequencyByWin.png")
+    make_boxplot(APS_win_data, win_categories, "Actions per Second", "APSByWin.png")
+    make_boxplot(CPS_win_data, win_categories, "Commands per Second", "CPSByWin.png")
+    make_boxplot(PR_win_data, win_categories, "Macro Selection Rate during Peace Time", "PeaceRateByWin.png")
+    make_boxplot(BR_win_data, win_categories, "Macro Selection Rate during Battle Time", "BattleRateByWin.png")
 
     with open("scouting_stats.csv", 'r') as my_csv:
         reader = csv.DictReader(my_csv)
         rows = [r for r in reader]
 
 
-    make_boxplot([[float(r["APM"]) for r in rows if r["Win"] == "1"], [float(r["APM"]) for r in rows if r["Win"] == "0"]],
-                 ["Win", "Loss"], "Relative APM", "Rel_APM_WL.png", (-1000, 1000))
+    make_boxplot([[float(r["APS"]) for r in rows if r["Win"] == "1"], [float(r["APS"]) for r in rows if r["Win"] == "0"]],
+                 ["Win", "Loss"], "Relative APS", "Rel_APS_WL.png", (-1000, 1000))
 
-    binned_pos_apms = [a for a in sorted({int(float(r["APM"])) for r in rows}) if a > 0]
-    apm_to_rows = {apm: list(rs) for apm, rs in groupby(sorted(rows, key=lambda r: int(float(r["APM"]))), lambda r: int(float(r["APM"])))}
+    binned_pos_apms = [a for a in sorted({int(float(r["APS"])) for r in rows}) if a > 0]
+    apm_to_rows = {apm: list(rs) for apm, rs in groupby(sorted(rows, key=lambda r: int(float(r["APS"]))), lambda r: int(float(r["APS"])))}
 
     fig, ax = plt.subplots(figsize=(10,5))
     # plot those apm values where we have at least 10 data points to reduce noise
     ax.plot([apm for apm in binned_pos_apms if len(apm_to_rows[apm]) > 10],
             [len([r for r in apm_to_rows[apm] if r["Win"] == "1"]) / len(apm_to_rows[apm]) * 100 for apm in binned_pos_apms if len(apm_to_rows[apm]) > 10])
-    plt.xlabel("Relative APM")
+    plt.xlabel("Relative APS")
     plt.ylabel("Win Percentage")
     fig.tight_layout()
-    fig.savefig("Rel_APM_vs_Win_Rate.png")
+    fig.savefig("Rel_APS_vs_Win_Rate.png")
 
     SF_perc = int((SF_inv/total_rows)*100)
     ST_perc = int((ST_inv/total_rows)*100)
-    APM_perc = int((APM_inv/total_rows)*100)
+    APS_perc = int((APS_inv/total_rows)*100)
     Rank_perc = int((Rank_inv/total_rows)*100)
     CPS_perc = int((CPS_inv/total_rows)*100)
     PR_perc = int((PR_inv/total_rows)*100)
     BR_perc = int((BR_inv/total_rows)*100)
 
-    all_inv_idx = SF_set.union(ST_set, APM_set, Rank_set, CPS_set, PR_set, BR_set)
+    all_inv_idx = SF_set.union(ST_set, APS_set, Rank_set, CPS_set, PR_set, BR_set)
     all_perc = int((len(all_inv_idx)-1/total_rows)*100)
 
     print("Total rows/datapoints: ", total_rows)
 
     print("Number of invalid Scouting Frequencies:", SF_inv, ", or {:2d}% of the data".format(SF_perc))
     print("Number of invalid Scouting Times:", ST_inv, ", or {:2d}% of the data".format(ST_perc))
-    print("Number of invalid APMs:", APM_inv, ", or {:2d}% of the data".format(APM_perc))
+    print("Number of invalid APSs:", APS_inv, ", or {:2d}% of the data".format(APS_perc))
     print("Number of invalid Ranks:", Rank_inv, ", or {:2d}% of the data".format(Rank_perc))
     print("Number of invalid CPS's:", CPS_inv, ", or {:2d}% of the data".format(CPS_perc))
     print("Number of invalid Peace Rates:", PR_inv, ", or {:2d}% of the data".format(PR_perc))
@@ -164,9 +175,55 @@ def read_scouting_stats():
 
     print("Total number of invalid datapoints:", len(all_inv_idx)-1, ", or {:2d}% of the data".format(all_perc))
 
-    print("Positive APM wins:", pos_APM_wins, ", and losses:", pos_APM_loss)
-    print("Negative APM wins:", neg_APM_wins, ", and losses:", neg_APM_loss)
+    print("Positive APS wins:", pos_APS_wins, ", and losses:", pos_APS_loss)
+    print("Negative APS wins:", neg_APS_wins, ", and losses:", neg_APS_loss)
+
+def read_event_counts():
+    total_rows = 0
+
+    gold_bxplt_data = [[], []]
+    gmaster_bxplt_data = [[], []]
+    rank_cg_categories = ["Set and Add CG Rate", "Get CG Rate"]
+
+    ratio_bxplt_data = [[], [], [], [], [], [], []]
+    rank_categories = ["Bronze", "Silver", "Gold", "Platinum", "Diamond", "Master", "Grandmaster"]
+
+    with open("event_counts.csv", 'r') as my_csv:
+        reader = csv.DictReader(my_csv)
+        for row in reader:
+            rank, set_ct, add_ct, get_ct, total_ct, win = row["Rank"], float(row["SetCGCount"]), float(row["AddCGCount"]), float(row["GetCGCount"]), float(row["TotalCount"]), row["Win"]
+            if total_ct == 0 or get_ct == 0:
+                continue
+
+            ratio = (set_ct + add_ct)/get_ct
+
+            if rank == "nan":
+                valid_rank = False
+            else:
+                valid_rank = True
+                intRank = int(rank)
+
+            if valid_rank:
+                ratio_bxplt_data[intRank-1].append(ratio)
+
+            if valid_rank and intRank == 3:
+                gold_bxplt_data[0].append(((set_ct + add_ct)/total_ct))
+                gold_bxplt_data[1].append((get_ct/total_ct))
+
+            elif valid_rank and intRank == 7:
+                gmaster_bxplt_data[0].append(((set_ct + add_ct)/total_ct))
+                gmaster_bxplt_data[1].append((get_ct/total_ct))
+
+    make_boxplot(gold_bxplt_data, rank_cg_categories, "Gold League Control Group Selection", "GoldCGSelection.png")
+    make_boxplot(gmaster_bxplt_data, rank_cg_categories, "Grandmaster League Control Group Selection", "GrandmasterCGSelection.png")
+    make_boxplot(ratio_bxplt_data, rank_categories, "Ratio of Set and Add Counts to Get Counts", "CGRatioByRank.png")
 
 
 def main():
+    t1 = time.time()
     read_scouting_stats()
+    read_event_counts()
+    deltatime = time.time()-t1
+    print("Run time: ", "{:2d}".format(int(deltatime//60)), "minutes and", "{:05.2f}".format(deltatime%60), "seconds")
+
+main()

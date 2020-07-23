@@ -262,8 +262,8 @@ def detect_scouting(replay):
     '''detect_scouting is the main function of this script. detect_scouting does
     error checking on replays and raises errors for replays with incomplete information,
     as well as combines all other functions. It takes in a previously loaded replay
-    from sc2reader and returns the scouting frequency and fraction of time spent
-    scouting for each player, as well as the winner of the game.'''
+    from sc2reader and returns the scouting frequency for each player, as well as
+    the winner of the game.'''
     r = replay
 
     # # Only applied to missing ability info, which doesn't matter for scouting detection
@@ -291,7 +291,6 @@ def detect_scouting(replay):
     if len(r.players) != 2:
         print(r.filename, "is not a 1v1 game")
         raise RuntimeError()
-
     tracker_events = r.tracker_events
     game_events = r.game_events
     frames = r.frames
@@ -308,7 +307,7 @@ def detect_scouting(replay):
         team1_num_times, team1_fraction = scouting_stats(team1_scouting_states)
         team2_num_times, team2_fraction = scouting_stats(team2_scouting_states)
 
-        return team1_num_times, team1_fraction, team2_num_times, team2_fraction, r.winner.number
+        return team1_num_times, team2_num_times, r.winner.number
 
     except:
         print(filename + "contains errors within scouting_detector")
