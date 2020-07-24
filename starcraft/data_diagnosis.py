@@ -52,13 +52,15 @@ def read_scouting_stats():
     neg_APS_wins = 0
     neg_APS_loss = 0
 
-    with open("scouting_stats.csv", 'r') as my_csv:
+    with open("scouting_stats_new.csv", 'r') as my_csv:
         reader = csv.DictReader(my_csv)
         i = 2
         valid_rank = True
         for row in reader:
             total_rows += 1
-            uid, ScoutingFrequency, APS, Rank, CPS, PeaceRate, BattleRate, Win = row["UID"], row["ScoutingFrequency"], row["APS"], row["Rank"], row["CPS"], row["PeaceRate"], row["BattleRate"], row["Win"]
+
+            uid, ScoutingFrequency, APS, Rank, CPS, PeaceRate, BattleRate, Win = row["UID"], row["ScoutingFrequency"], row["RelAPS"], row["Rank"], row["CPS"], row["PeaceRate"], row["BattleRate"], row["Win"]
+
             #checking if Rank is valid and setting a flag if it is not
             if Rank == "nan":
                 Rank_inv += 1
@@ -136,7 +138,7 @@ def read_scouting_stats():
     make_boxplot(PR_win_data, win_categories, "Macro Selection Rate during Peace Time", "PeaceRateByWin.png")
     make_boxplot(BR_win_data, win_categories, "Macro Selection Rate during Battle Time", "BattleRateByWin.png")
 
-    with open("scouting_stats.csv", 'r') as my_csv:
+    with open("scouting_stats_new.csv", 'r') as my_csv:
         reader = csv.DictReader(my_csv)
         rows = [r for r in reader]
 
@@ -156,28 +158,28 @@ def read_scouting_stats():
     fig.tight_layout()
     fig.savefig("Rel_APS_vs_Win_Rate.png")
 
-    SF_perc = int((SF_inv/total_rows)*100)
-    ST_perc = int((ST_inv/total_rows)*100)
-    APS_perc = int((APS_inv/total_rows)*100)
-    Rank_perc = int((Rank_inv/total_rows)*100)
-    CPS_perc = int((CPS_inv/total_rows)*100)
-    PR_perc = int((PR_inv/total_rows)*100)
-    BR_perc = int((BR_inv/total_rows)*100)
+    SF_perc = (SF_inv/total_rows)
+    ST_perc = (ST_inv/total_rows)
+    APS_perc = (APS_inv/total_rows)
+    Rank_perc = (Rank_inv/total_rows)
+    CPS_perc = (CPS_inv/total_rows)
+    PR_perc = (PR_inv/total_rows)
+    BR_perc = (BR_inv/total_rows)
 
     all_inv_idx = SF_set.union(ST_set, APS_set, Rank_set, CPS_set, PR_set, BR_set)
-    all_perc = int((len(all_inv_idx)-1/total_rows)*100)
+    all_perc = (len(all_inv_idx)-1)/total_rows
 
     print("Total rows/datapoints: ", total_rows)
 
-    print("Number of invalid Scouting Frequencies:", SF_inv, ", or {:2d}% of the data".format(SF_perc))
-    print("Number of invalid Scouting Times:", ST_inv, ", or {:2d}% of the data".format(ST_perc))
-    print("Number of invalid APSs:", APS_inv, ", or {:2d}% of the data".format(APS_perc))
-    print("Number of invalid Ranks:", Rank_inv, ", or {:2d}% of the data".format(Rank_perc))
-    print("Number of invalid CPS's:", CPS_inv, ", or {:2d}% of the data".format(CPS_perc))
-    print("Number of invalid Peace Rates:", PR_inv, ", or {:2d}% of the data".format(PR_perc))
-    print("Number of invalid Battle Rates:", BR_inv, ", or {:2d}% of the data".format(BR_perc))
+    print(f"Number of invalid Scouting Frequencies: {SF_inv}, or {SF_perc:.2%} of the data")
+    print(f"Number of invalid Scouting Times: {ST_inv}, or {ST_perc:.2%} of the data")
+    print(f"Number of invalid APSs: {APS_inv}, or {APS_perc:.2%} of the data")
+    print(f"Number of invalid Ranks: {Rank_inv}, or {Rank_perc:.2%} of the data")
+    print(f"Number of invalid CPS's: {CPS_inv}, or {CPS_perc:.2%} of the data")
+    print(f"Number of invalid Peace Rates: {PR_inv}, or {PR_perc:.2%} of the data")
+    print(f"Number of invalid Battle Rates: {BR_inv}, or {BR_perc:.2%} of the data")
 
-    print("Total number of invalid datapoints:", len(all_inv_idx)-1, ", or {:2d}% of the data".format(all_perc))
+    print("Total number of invalid datapoints:", len(all_inv_idx)-1, ", or {:.2%} of the data".format(all_perc))
 
     print("Positive APS wins:", pos_APS_wins, ", and losses:", pos_APS_loss)
     print("Negative APS wins:", neg_APS_wins, ", and losses:", neg_APS_loss)
