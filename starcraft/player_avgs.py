@@ -45,7 +45,7 @@ def writeToCsv(uid_dict):
             for list in stats_lists:
                 total = 0
                 num = len(list)
-                for i in range(num-1):
+                for i in range(num):
                     total += list[i]
                 avg = total/num
                 avgs.append(avg)
