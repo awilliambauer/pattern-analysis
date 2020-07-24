@@ -93,7 +93,7 @@ if __name__ == "__main__":
     logging.debug("Running TICC")
     run_TICC({"all": all_series}, results_path, krange)
     if config.evolver:
-        run_TICC({"all_evol": evol_all_series}, results_path, krange)
+        run_TICC({"all_evol": evol_all_series}, results_path, krange, num_proc=8)
 
     logging.debug("Loading TICC output")
     cluster_lookup, mrf_lookup, model_lookup, bic_lookup = load_TICC_output(results_path, ["all"], krange)

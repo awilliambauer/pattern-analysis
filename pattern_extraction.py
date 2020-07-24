@@ -157,7 +157,7 @@ def make_subseries_lookup(k: int, patterns: List[PatternInstance], mrfs: Dict[in
     return lookup
 
 
-def run_sub_TICC(subseries_lookup: dict, datapath: str, uid: str, sub_krange: list, save_model=True,
+def run_sub_TICC(subseries_lookups: dict, datapath: str, uid: str, sub_krange: list, save_model=True,
                  skip_series_fn=None, window_size=1, num_proc=4):
     """
 
@@ -175,11 +175,17 @@ def run_sub_TICC(subseries_lookup: dict, datapath: str, uid: str, sub_krange: li
     os.makedirs(results_dir, exist_ok=True)
     with open(f"{results_dir}/subseries_lookup.pickle", 'wb') as fp:
         pickle.dump(subseries_lookup, fp)
-    for k in subseries_lookup:
-        logging.debug(f"running TICC to get subpatterns for k={k}")
+
+    for k in subseries_lookups:
         os.makedirs(results_dir + "/k{}".format(k), exist_ok=True)
-        run_TICC({f"cid{cid}": lookup["series"] for cid, lookup in subseries_lookup[k].items()},
-                 f"{results_dir}/k{k}", sub_krange, save_model, skip_series_fn, window_size, num_proc)
+
+    with Pool(len(subseries_lookup)) as pool:
+        pool.map(partial(run_TICC, datapath=f"{results_dir}/k{k}", sub_krange=sub_krange, save_model=save_model, skip_series_fn=skip_series_fn, window_size=window_size, num_proc=num_proc), [{f"cid{cid}": lookup["series"] for cid, lookup in subseries_lookups[k].items()} for k in subseries_lookups])
+    # for k in subseries_lookups:
+    #     logging.debug(f"running TICC to get subpatterns for k={k}")
+    #     os.makedirs(results_dir + "/k{}".format(k), exist_ok=True)
+    #     run_TICC({f"cid{cid}": lookup["series"] for cid, lookup in subseries_lookups[k].items()},
+    #              f"{results_dir}/k{k}", sub_krange, save_model, skip_series_fn, window_size, num_proc)
 
 
 def is_null_cluster(mrf: np.ndarray) -> bool:
