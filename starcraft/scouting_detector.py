@@ -205,43 +205,43 @@ def printTime(time_dict):
         print(time_dict[key])
 
 def scouting_stats(scouting_dict):
-    '''scouting_stats calculates the fraction of gametime that a player
-    spends scouting their opponent and the frequency with which they do it.
+    '''scouting_stats calculates the number of frames that a player
+    spends scouting their opponent and the number of times they initiate scouting.
     It takes in a scouting dictionary returned by buildScoutingDictionaries
-    or integrateBattles and returns the frequency and the fraction of time.'''
+    or integrateBattles and returns the number of times and the number of frames.'''
     num_times = 0
-    total_time = 0
-    scouting_time = 0
+    total_frames = 0
+    scouting_frames = 0
     cur_scouting = False
 
     length = len(scouting_dict.keys())
     if scouting_dict[1] == "Scouting opponent":
         num_times += 1
-        scouting_time += 1
+        scouting_frames += 1
         cur_scouting = True
-    total_time += 1
+    total_frames += 1
     frame = 2
     while(frame < length):
-        total_time += 1
+        total_frames += 1
         if scouting_dict[frame] == "Scouting opponent":
             #if the player is in a streak of scouting
             if cur_scouting == True:
-                scouting_time += 1
+                scouting_frames += 1
             #if the player just switched states from something else
             #to scouting their opponent
             else:
                 num_times += 1
-                scouting_time += 1
+                scouting_frames += 1
                 cur_scouting = True
         else:
             cur_scouting = False
         frame += 1
 
     #calculating rates based on counts
-    scouting_fraction = scouting_time/total_time
-    scouting_rate = num_times/total_time
+    scouting_fraction = scouting_frames/total_frames
+    scouting_rate = num_times/total_frames
 
-    return scouting_rate, scouting_fraction
+    return num_times, scouting_frames
 
 def integrateBattles(scouting_dict, battles):
     '''integrateBattles is used to cross-check a scouting dictionary with a
@@ -254,7 +254,7 @@ def integrateBattles(scouting_dict, battles):
     frame = 1
     while frame < length:
         if scouting_dict[frame] == "Scouting opponent" and battle_detector.duringBattle(frame, battles):
-            scouting_dict[frame] == "No scouting"
+            scouting_dict[frame] = "No scouting"
         frame += 1
     return scouting_dict
 
@@ -304,11 +304,11 @@ def detect_scouting(replay):
         team1_scouting_states = integrateBattles(team1_scouting_states, battles)
         team2_scouting_states = integrateBattles(team2_scouting_states, battles)
 
-        team1_num_times, team1_fraction = scouting_stats(team1_scouting_states)
-        team2_num_times, team2_fraction = scouting_stats(team2_scouting_states)
+        team1_num_times, team1_time = scouting_stats(team1_scouting_states)
+        team2_num_times, team2_time = scouting_stats(team2_scouting_states)
 
-        return team1_num_times, team2_num_times, r.winner.number
+        return team1_num_times / r.real_length.total_seconds(), team2_num_times / r.real_length.total_seconds(), r.winner.number
 
     except:
-        print(filename + "contains errors within scouting_detector")
+        print(replay.filename + "contains errors within scouting_detector")
         raise

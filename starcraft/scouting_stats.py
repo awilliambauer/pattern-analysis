@@ -49,11 +49,11 @@ def generateFields(filename):
             raise RuntimeError()
 
         #collecting stats and values
-        team1_nums, team2_nums, winner = scouting_detector.detect_scouting(r)
+        team1_freq, team2_freq, winner = scouting_detector.detect_scouting(r)
         team1_rank, team1_rel_rank, team2_rank, team2_rel_rank = ranking_stats(r)
         team1_cps, team1_peace_rate, team1_battle_rate, team2_cps, team2_peace_rate, team2_battle_rate = control_groups.control_group_stats(r)
-        team1_rel_nums = team1_nums - team2_nums
-        team2_rel_nums = team2_nums - team1_nums
+        team1_rel_freq = team1_freq - team2_freq
+        team2_rel_freq = team2_freq - team1_freq
 
         team1_rel_cps = team1_cps - team2_cps
         team2_rel_cps = team2_cps - team1_cps
@@ -63,30 +63,30 @@ def generateFields(filename):
         team2_rel_br = team2_battle_rate - team1_battle_rate
 
         #changing actions per minute to actions per second to match other data
-        team1_aps = (r.players[0].avg_apm)/60
-        team2_aps = (r.players[1].avg_apm)/60
-        team1_rel_aps = r.players[0].avg_apm - r.players[1].avg_apm
-        team2_rel_aps = r.players[1].avg_apm - r.players[0].avg_apm
+        team1_aps = (r.players[0].avg_apm) / 60
+        team2_aps = (r.players[1].avg_apm) / 60
+        team1_rel_aps = (r.players[0].avg_apm - r.players[1].avg_apm) / 60
+        team2_rel_aps = (r.players[1].avg_apm - r.players[0].avg_apm) / 60
         team1_uid = r.players[0].detail_data['bnet']['uid']
         team2_uid = r.players[1].detail_data['bnet']['uid']
         #creating the fields based on who won
         if winner == 1:
             fields = (game_id, team1_uid, team1_rank, team1_rel_rank,
-                        team1_nums, team1_rel_nums, team1_aps, team1_rel_aps,
+                        team1_freq, team1_rel_freq, team1_aps, team1_rel_aps,
                         team1_cps, team1_rel_cps, team1_peace_rate, team1_rel_pr,
                         team1_battle_rate, team1_rel_br, 1,
                       game_id, team2_uid, team2_rank, team2_rel_rank,
-                        team2_nums, team2_rel_nums, team2_aps, team2_rel_aps,
+                        team2_freq, team2_rel_freq, team2_aps, team2_rel_aps,
                         team2_cps, team2_rel_cps, team2_peace_rate, team2_rel_pr,
                         team2_battle_rate, team2_rel_br, 0,
                       r.map_name)
         elif winner == 2:
             fields = (game_id, team1_uid, team1_rank, team1_rel_rank,
-                        team1_nums, team1_rel_nums, team1_aps, team1_rel_aps,
+                        team1_freq, team1_rel_freq, team1_aps, team1_rel_aps,
                         team1_cps, team1_rel_cps, team1_peace_rate, team1_rel_pr,
                         team1_battle_rate, team1_rel_br, 0,
                       game_id, team2_uid, team2_rank, team2_rel_rank,
-                        team2_nums, team2_rel_nums, team2_aps, team2_rel_aps,
+                        team2_freq, team2_rel_freq, team2_aps, team2_rel_aps,
                         team2_cps, team2_rel_cps, team2_peace_rate, team2_rel_pr,
                         team2_battle_rate, team2_rel_br, 1,
                       r.map_name)

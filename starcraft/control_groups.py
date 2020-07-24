@@ -117,8 +117,8 @@ def control_group_stats(replay):
     for each player.'''
     r = replay
 
-    p1_cps, p2_cps = commandsPerSecond(r.game_events, r.length.seconds)
+    p1_cps, p2_cps = commandsPerSecond(r.game_events, r.real_length.total_seconds())
     battles = battle_detector.buildBattleList(r)
-    p1_peace_rate, p1_battle_rate, p2_peace_rate, p2_battle_rate = macroRates(r.game_events, battles, r.frames, r.length.seconds)
+    p1_peace_rate, p1_battle_rate, p2_peace_rate, p2_battle_rate = macroRates(r.game_events, battles, r.frames, r.real_length.total_seconds())
 
     return p1_cps, p1_peace_rate, p1_battle_rate, p2_cps, p2_peace_rate, p2_battle_rate
