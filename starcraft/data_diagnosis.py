@@ -2,6 +2,7 @@
 
 import csv
 import time
+from collections import Counter
 import matplotlib.pyplot as plt
 from itertools import groupby
 import sys
@@ -11,6 +12,8 @@ from plot_util import make_boxplot
 
 
 def read_scouting_stats():
+    rank_uid_counter = {1: Counter(), 2: Counter(), 3: Counter(), 4: Counter(),
+                        5: Counter(), 6: Counter(), 7: Counter()}
     total_rows = 0
 
     SF_inv = 0
@@ -55,7 +58,7 @@ def read_scouting_stats():
         valid_rank = True
         for row in reader:
             total_rows += 1
-            ScoutingFrequency, APS, Rank, CPS, PeaceRate, BattleRate, Win = row["ScoutingFrequency"], row["APS"], row["Rank"], row["CPS"], row["PeaceRate"], row["BattleRate"], row["Win"]
+            uid, ScoutingFrequency, APS, Rank, CPS, PeaceRate, BattleRate, Win = row["UID"], row["ScoutingFrequency"], row["APS"], row["Rank"], row["CPS"], row["PeaceRate"], row["BattleRate"], row["Win"]
             #checking if Rank is valid and setting a flag if it is not
             if Rank == "nan":
                 Rank_inv += 1
@@ -65,6 +68,7 @@ def read_scouting_stats():
                 valid_rank = True
                 intRank = int(Rank)
                 intWin = int(Win)
+                rank_uid_counter[intRank][uid] += 1
 
             #Checking scouting frequency
             if float(ScoutingFrequency) == 0:
@@ -178,6 +182,8 @@ def read_scouting_stats():
     print("Positive APS wins:", pos_APS_wins, ", and losses:", pos_APS_loss)
     print("Negative APS wins:", neg_APS_wins, ", and losses:", neg_APS_loss)
 
+    return rank_uid_counter
+
 def read_event_counts():
     total_rows = 0
 
@@ -218,11 +224,49 @@ def read_event_counts():
     make_boxplot(gmaster_bxplt_data, rank_cg_categories, "Grandmaster League Control Group Selection", "GrandmasterCGSelection.png")
     make_boxplot(ratio_bxplt_data, rank_categories, "Ratio of Set and Add Counts to Get Counts", "CGRatioByRank.png")
 
+def uid_stats(counter):
+    num_unique = len(counter)
+    keys = counter.keys()
+    total_games = 0
+    one_game = 0
+    mult_games = 0
+
+    for uid in keys:
+        games = counter[uid]
+        total_games += games
+        if games == 1:
+            one_game += 1
+        elif games > 1:
+            mult_games += 1
+
+    avg_games = total_games/num_unique
+    one_perc = int((one_game/num_unique)*100)
+    mult_perc = int((mult_games/num_unique)*100)
+
+    print("Number of unique uid's:", num_unique)
+    print("Average number of games per player:", avg_games)
+    print("Number of players with only one game:", one_game, "or {:2d}% of players".format(one_perc))
+    print("Number of players with multiple games:", mult_games, "or {:2d}% of players".format(mult_perc))
+
 
 def main():
     t1 = time.time()
-    read_scouting_stats()
+    uid_counter = read_scouting_stats()
     read_event_counts()
+    print("---Bronze---")
+    uid_stats(uid_counter[1])
+    print("---Silver---")
+    uid_stats(uid_counter[2])
+    print("---Gold---")
+    uid_stats(uid_counter[3])
+    print("---Platinum---")
+    uid_stats(uid_counter[4])
+    print("--Diamond---")
+    uid_stats(uid_counter[5])
+    print("---Master---")
+    uid_stats(uid_counter[6])
+    print("---Grandmaster---")
+    uid_stats(uid_counter[7])
     deltatime = time.time()-t1
     print("Run time: ", "{:2d}".format(int(deltatime//60)), "minutes and", "{:05.2f}".format(deltatime%60), "seconds")
 
