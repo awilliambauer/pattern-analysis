@@ -52,7 +52,7 @@ def read_scouting_stats():
     neg_APS_wins = 0
     neg_APS_loss = 0
 
-    with open("scouting_stats_new.csv", 'r') as my_csv:
+    with open("scouting_stats.csv", 'r') as my_csv:
         reader = csv.DictReader(my_csv)
         i = 2
         valid_rank = True
@@ -138,7 +138,7 @@ def read_scouting_stats():
     make_boxplot(PR_win_data, win_categories, "Macro Selection Rate during Peace Time", "PeaceRateByWin.png")
     make_boxplot(BR_win_data, win_categories, "Macro Selection Rate during Battle Time", "BattleRateByWin.png")
 
-    with open("scouting_stats_new.csv", 'r') as my_csv:
+    with open("scouting_stats.csv", 'r') as my_csv:
         reader = csv.DictReader(my_csv)
         rows = [r for r in reader]
 

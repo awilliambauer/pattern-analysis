@@ -4,6 +4,7 @@
 
 import sc2reader
 import math
+import statistics
 import battle_detector
 
 def buildEventLists(tracker_events, game_events):
@@ -258,6 +259,46 @@ def integrateBattles(scouting_dict, battles):
         frame += 1
     return scouting_dict
 
+def categorize_player(scouting_dict, frames):
+    no_scouting = True
+    beginning_scouting = True
+    intervals = []
+
+    keys = scouting_dict.keys()
+    interval = 0
+    after_first = False
+    for key in keys:
+        state = scouting_dict[key]
+        if state == "Scouting opponent":
+            after_first = True
+            no_scouting = False
+            if interval:
+                intervals.append(interval)
+            if key/frames > 0.25:
+                beginning_scouting = False
+            interval = 0
+
+        else:
+            if after_first:
+                interval += 1
+    if no_scouting:
+        category = "Doesn't scout"
+        return category
+
+    if beginning_scouting:
+        category = "Only scouts in the beginning"
+        return category
+
+    mean_interval = statistics.mean(intervals)
+    stdev = statistics.pstdev(intervals)
+
+    if stdev/mean_interval >= 0.5:
+        category = "Sporatic scouting throughout game"
+    elif stdev/mean_interval < 0.5:
+        category = "Consistent scouting throughout game"
+
+    return category
+
 def detect_scouting(replay):
     '''detect_scouting is the main function of this script. detect_scouting does
     error checking on replays and raises errors for replays with incomplete information,
@@ -312,3 +353,46 @@ def detect_scouting(replay):
     except:
         print(replay.filename + "contains errors within scouting_detector")
         raise
+
+
+def test_categories():
+    #no scouting
+    p1_dict = {1: "Viewing themselves", 2: "Viewing themselves", 3: "No scouting",
+                4: "No scouting", 5: "No scouting", 6: "Viewing themselves",
+                7: "No scouting", 8: "Viewing themselves"}
+    p1_frames = 8
+
+    #only scouts in the beginning
+    p2_dict = {1: "Viewing themselves", 2: "Scouting opponent", 3: "No scouting",
+                4: "No scouting", 5: "No scouting", 6: "Viewing themselves",
+                7: "No scouting", 8: "Viewing themselves"}
+    p2_frames = 8
+
+    #Sporatic scouting
+    p3_dict = {1: "Viewing themselves", 2: "Viewing themselves", 3: "No scouting",
+                4: "Scouting opponent", 5: "Scouting opponent", 6: "No scouting",
+                7: "No scouting", 8: "Scouting opponent", 9: "Viewing themselves",
+                10: "Viewing themselves", 11: "No scouting", 12: "Viewing themselves",
+                13: "Viewing themselves", 14: "Viewing themselves", 15: "Scouting opponent",
+                16: "No scouting", 17: "Scouting opponent", 18: "No scouting",
+                19: "Viewing themselves"}
+    p3_frames = 19
+
+    #Systematic scouting
+    p4_dict = {1: "Viewing themselves", 2: "Viewing themselves", 3: "No scouting",
+                4: "No scouting", 5: "Scouting opponent", 6: "Scouting opponent",
+                7: "Viewing themselves", 8: "No scouting", 9: "No scouting",
+                10: "Viewing themselves", 11: "Scouting opponent", 12: "No scouting",
+                13: "No scouting", 14: "No scouting", 14: "Scouting opponent",
+                15: "Viewing themselves", 16: "Viewing themselves", 17: "Viewing themselves",
+                18: "Viewing themselves", 19: "Viewing themselves", 20: "Scouting opponent",
+                21: "No scouting", 22: "Viewing themselves", 23: "No scouting",
+                24: "Scouting opponent", 25: "Scouting opponent", 26: "No scouting",
+                27: "Viewing themselves", 28: "Viewing themselves", 29: "Viewing themselves",
+                30: "Scouting opponent"}
+    p4_frames = 30
+
+    print(categorize_player(p1_dict, p1_frames))
+    print(categorize_player(p2_dict, p2_frames))
+    print(categorize_player(p3_dict, p3_frames))
+    print(categorize_player(p4_dict, p4_frames))
