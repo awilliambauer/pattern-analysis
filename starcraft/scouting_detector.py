@@ -12,8 +12,8 @@ def buildEventLists(tracker_events, game_events):
     scouting behavior. It takes in a replay's tracker events and game events.
     It returns one list of all relevant events.'''
 
-    unit_init_events = []
-    camera_events = []
+    events = []
+    ability_names = ["LandCommandCenter", "LandOrbitalCommand", "RightClick", "Attack"]
     team1 = 1
     team2 = 2
     start1 = False
@@ -22,21 +22,30 @@ def buildEventLists(tracker_events, game_events):
     team2_count = 0
     for t_event in tracker_events:
         #checking for starting bases
-        if isinstance(t_event, sc2reader.events.tracker.UnitBornEvent):
+        if isinstance(t_event, sc2reader.events.tracker.UnitInitEvent):
             if (start1 == False) and (t_event.control_pid == team1):
-                unit_init_events.append(t_event)
+                events.append(t_event)
                 start1 = True
             elif (start2 == False) and (t_event.control_pid == team2):
-                unit_init_events.append(t_event)
+                events.append(t_event)
                 start2 = True
         #checking for the creation of new bases
         elif isinstance(t_event, sc2reader.events.tracker.UnitInitEvent) and (t_event.unit.name == "Hatchery" or t_event.unit.name == "CommandCenter" or t_event.unit.name == "Nexus"):
-            unit_init_events.append(t_event)
+            events.append(t_event)
+        #Adding information about units
+        elif isinstance(t_event, sc2reader.events.tracker.UnitBornEvent) and (t_event.unit.is_army or t_event.unit.is_worker):
+            events.append(t_event)
+        #More information about unit positions
+        elif isinstance(t_event, sc2reader.events.tracker.UnitPositionsEvent):
+            events.append(t_event)
+        #removing dead units
+        elif isinstance(t_event, sc2reader.events.tracker.UnitDiedEvent) and (t_event.unit.is_army or t_event.unit.is_worker):
+            events.append(t_event)
 
     for g_event in game_events:
         #filtering through camera events
         if isinstance(g_event, sc2reader.events.game.CameraEvent):
-            camera_events.append(g_event)
+            events.append(g_event)
             if g_event.player:
                 if g_event.player.pid == 1:
                     team1_count += 1
@@ -44,16 +53,19 @@ def buildEventLists(tracker_events, game_events):
                     team2_count += 1
             else:
                 raise RuntimeError()
-        #account for moving terran bases
-        elif isinstance(g_event, sc2reader.events.game.TargetUnitCommandEvent) and (g_event.ability_name == "LandCommandCenter" or g_event.ability_name == "LandOrbitalCommand"):
-            unit_init_events.append(g_event)
+        #account for moving terran bases and moving units
+        elif isinstance(g_event, sc2reader.events.game.TargetUnitCommandEvent) and (g_event.ability_name in ability_names):
+            events.append(g_event)
+        elif isinstance(g_event, sc2reader.events.game.UpdateTargetUnitCommandEvent) and (g_event.ability_name in ability_names):
+            events.append(g_event)
 
     #if either team has 0 camera events, scouting behavior cannot be detected and
     #the replay is invalid
     if team1_count == 0 or team2_count == 0:
         raise RuntimeError()
 
-    return unit_init_events + camera_events
+    sorted_events = sorted(events, key=lambda e: e.frame)
+    return sorted_events
 
 
 def buildScoutingDictionaries(events):
@@ -68,79 +80,94 @@ def buildScoutingDictionaries(events):
     team1 = 1
     team2 = 2
 
-    team1_scouting_states = {}
-    team2_scouting_states = {}
+    scouting_states = {1: {}, 2: {}}
 
-    # Dictionaries of the locations of bases where the keys are unit ids
+    # Dictionaries for each team of the locations of bases where the keys are unit ids
     # and the values are locations (as tuples of (x, y) coordinates)
-    team1_bases = {}
-    team2_bases = {}
+    bases = {1: {}, 2: {}}
+
+    # Dictionaries for each team of the active units where the keys are the unit ids
+    # and the values are locations (as tuples of (x, y) coordinates)
+    active_units = {1: {}, 2: {}}
 
     #Used for updating the scouting dictionaries
-    prev_state1 = "Viewing themself"
-    prev_frame1 = 0
-    prev_state2 = "Viewing themself"
-    prev_frame2 = 0
+    prev_states = {1: "Viewing themself", 2: "Viewing themself"}
+    prev_frames = {1: 0, 2: 0}
 
     #iterating through events in order
-    for event in sorted(events, key=lambda e: e.frame):
+    for event in events:
         i = event.frame
         #accounting for new bases
-        if isinstance(event, sc2reader.events.tracker.TrackerEvent):
-            if (event.control_pid == team1) and not(event.unit_id in team1_bases):
-                team1_bases[event.unit_id] = event.location
-            elif(event.control_pid == team2) and not(event.unit_id in team2_bases):
-                team2_bases[event.unit_id] = event.location
-        #accounting for Terran bases moving
-        elif isinstance(event, sc2reader.events.game.TargetUnitCommandEvent):
-            if(event.player.pid == team1):
-                team1_bases[event.target_unit_id] = event.location
-            elif(event.player.pid == team2):
-                team2_bases[event.target_unit_id] = event.location
-        #checking camera events
-        else:
-            player = event.player.pid
-            camera_location = event.location
-            if player == team1:
-                #team1 is looking at their own base
-                if withinDistance(camera_location, team1_bases):
-                    team1_scouting_states = updatePrevScoutStates(team1_scouting_states, i, prev_frame1, prev_state1)
-                    team1_scouting_states[i] = "Viewing themself"
-                    prev_frame1 = i
-                    prev_state1 = "Viewing themself"
-                #team1 is looking at their opponent's base
-                elif withinDistance(camera_location, team2_bases):
-                    team1_scouting_states = updatePrevScoutStates(team1_scouting_states, i, prev_frame1, prev_state1)
-                    team1_scouting_states[i] = "Scouting opponent"
-                    prev_frame1 = i
-                    prev_state1 = "Scouting opponent"
-                #team1 is not looking at a base
-                else:
-                    team1_scouting_states = updatePrevScoutStates(team1_scouting_states, i, prev_frame1, prev_state1)
-                    team1_scouting_states[i] = "No scouting"
-                    prev_frame1 = i
-                    prev_state1 = "No scouting"
+        if isinstance(event, sc2reader.events.tracker.UnitInitEvent):
+            cur_team = event.control_pid
+            if not(event.unit_id in bases[cur_team]):
+                bases[cur_team][event.unit_id] = event.location
 
-            elif player == team2:
-                #team2 is looking at their own base
-                if withinDistance(camera_location, team2_bases):
-                    team2_scouting_states = updatePrevScoutStates(team2_scouting_states, i, prev_frame2, prev_state2)
-                    team2_scouting_states[i] = "Viewing themself"
-                    prev_frame2 = i
-                    prev_state2 = "Viewing themself"
-                #team2 is looking at their opponent's base
-                elif withinDistance(camera_location, team1_bases):
-                    team2_scouting_states = updatePrevScoutStates(team2_scouting_states, i, prev_frame2, prev_state2)
-                    team2_scouting_states[i] = "Scouting opponent"
-                    prev_frame2 = i
-                    prev_state2 = "Scouting opponent"
-                #team2 is not looking at a base
-                else:
-                    team2_scouting_states = updatePrevScoutStates(team2_scouting_states, i, prev_frame2, prev_state2)
-                    team2_scouting_states[i] = "No scouting"
-                    prev_frame2 = i
-                    prev_state2 = "No scouting"
-    return team1_scouting_states, team2_scouting_states
+        #accounting for Terran bases moving and updating unit positions
+        elif isinstance(event, sc2reader.events.game.TargetUnitCommandEvent):
+            cur_team = event.player.pid
+            #moving Terran bases
+            if event.ability_name in ["LandCommandCenter", "LandOrbitalCommand"]:
+                bases[cur_team][event.target_unit_id] = event.location
+            #updating unit positions
+            elif event.ability_name in ["RightClick", "Attack"]:
+                active_units[cur_team][event.target_unit_id] = event.location
+
+        #accounting for Terran bases moving and updating unit positions
+        elif isinstance(event, sc2reader.events.game.UpdateTargetUnitCommandEvent):
+            cur_team = event.player.pid
+            #moving Terran bases
+            if event.ability_name in ["LandCommandCenter", "LandOrbitalCommand"]:
+                bases[cur_team][event.target_unit_id] = event.location
+            #updating unit positions
+            elif event.ability_name in ["RightClick", "Attack"]:
+                active_units[cur_team][event.target_unit_id] = event.location
+
+        #adding new units to the list of active units
+        elif isinstance(event, sc2reader.events.tracker.UnitBornEvent):
+            cur_team = event.control_pid
+            active_units[cur_team][event.unit_id] = event.location
+
+        #updating unit positions
+        elif isinstance(event, sc2reader.events.tracker.UnitPositionsEvent):
+            for unit in event.units.keys():
+                cur_team = unit.owner.pid
+                location = event.units[unit]
+                active_units[cur_team][unit.id] = location
+
+        #removing dead units
+        elif isinstance(event, sc2reader.events.tracker.UnitDiedEvent):
+            cur_team = event.unit.owner.pid
+            active_units[cur_team].pop(event.unit_id)
+
+        #checking camera events
+        elif isinstance(event, sc2reader.events.game.CameraEvent):
+            cur_team = event.player.pid
+            if cur_team == 1:
+                opp_team = 2
+            elif cur_team == 2:
+                opp_team = 1
+            camera_location = event.location
+            #looking at their own base
+            if withinDistance(camera_location, bases[cur_team]):
+                scouting_states[cur_team] = updatePrevScoutStates(scouting_states[cur_team], i, prev_frames[cur_team], prev_states[cur_team])
+                scouting_states[cur_team][i] = "Viewing themself"
+                prev_frames[cur_team] = i
+                prev_states[cur_team] = "Viewing themself"
+            #looking at their opponent's base and has a unit with them
+            elif withinDistance(camera_location, bases[opp_team]) and withinDistance(camera_location, active_units[cur_team]):
+                scouting_states[cur_team] = updatePrevScoutStates(scouting_states[cur_team], i, prev_frames[cur_team], prev_states[cur_team])
+                scouting_states[cur_team][i] = "Scouting opponent"
+                prev_frames[cur_team] = i
+                prev_states[cur_team] = "Scouting opponent"
+            #not looking at a base
+            else:
+                scouting_states[cur_team] = updatePrevScoutStates(scouting_states[cur_team], i, prev_frames[cur_team], prev_states[cur_team])
+                scouting_states[cur_team][i] = "No scouting"
+                prev_frames[cur_team] = i
+                prev_states[cur_team] = "No scouting"
+
+    return scouting_states[1], scouting_states[2]
 
 
 def withinDistance(location, list):
@@ -348,51 +375,19 @@ def detect_scouting(replay):
         team1_num_times, team1_time = scouting_stats(team1_scouting_states)
         team2_num_times, team2_time = scouting_stats(team2_scouting_states)
 
+        print(categorize_player(team1_scouting_states, frames))
+        print(categorize_player(team2_scouting_states, frames))
+
+        team1_time_dict = toTime(team1_scouting_states, frames, seconds)
+        team2_time_dict = toTime(team2_scouting_states, frames, seconds)
+
+        print("---Team 1---")
+        printTime(team1_time_dict)
+        print("\n\n---Team 2---")
+        printTime(team2_time_dict)
+
         return team1_num_times / r.real_length.total_seconds(), team2_num_times / r.real_length.total_seconds(), r.winner.number
 
     except:
         print(replay.filename + "contains errors within scouting_detector")
         raise
-
-
-def test_categories():
-    #no scouting
-    p1_dict = {1: "Viewing themselves", 2: "Viewing themselves", 3: "No scouting",
-                4: "No scouting", 5: "No scouting", 6: "Viewing themselves",
-                7: "No scouting", 8: "Viewing themselves"}
-    p1_frames = 8
-
-    #only scouts in the beginning
-    p2_dict = {1: "Viewing themselves", 2: "Scouting opponent", 3: "No scouting",
-                4: "No scouting", 5: "No scouting", 6: "Viewing themselves",
-                7: "No scouting", 8: "Viewing themselves"}
-    p2_frames = 8
-
-    #Sporatic scouting
-    p3_dict = {1: "Viewing themselves", 2: "Viewing themselves", 3: "No scouting",
-                4: "Scouting opponent", 5: "Scouting opponent", 6: "No scouting",
-                7: "No scouting", 8: "Scouting opponent", 9: "Viewing themselves",
-                10: "Viewing themselves", 11: "No scouting", 12: "Viewing themselves",
-                13: "Viewing themselves", 14: "Viewing themselves", 15: "Scouting opponent",
-                16: "No scouting", 17: "Scouting opponent", 18: "No scouting",
-                19: "Viewing themselves"}
-    p3_frames = 19
-
-    #Systematic scouting
-    p4_dict = {1: "Viewing themselves", 2: "Viewing themselves", 3: "No scouting",
-                4: "No scouting", 5: "Scouting opponent", 6: "Scouting opponent",
-                7: "Viewing themselves", 8: "No scouting", 9: "No scouting",
-                10: "Viewing themselves", 11: "Scouting opponent", 12: "No scouting",
-                13: "No scouting", 14: "No scouting", 14: "Scouting opponent",
-                15: "Viewing themselves", 16: "Viewing themselves", 17: "Viewing themselves",
-                18: "Viewing themselves", 19: "Viewing themselves", 20: "Scouting opponent",
-                21: "No scouting", 22: "Viewing themselves", 23: "No scouting",
-                24: "Scouting opponent", 25: "Scouting opponent", 26: "No scouting",
-                27: "Viewing themselves", 28: "Viewing themselves", 29: "Viewing themselves",
-                30: "Scouting opponent"}
-    p4_frames = 30
-
-    print(categorize_player(p1_dict, p1_frames))
-    print(categorize_player(p2_dict, p2_frames))
-    print(categorize_player(p3_dict, p3_frames))
-    print(categorize_player(p4_dict, p4_frames))
