@@ -52,13 +52,13 @@
       "minerals": 0,
       "vespene": 0,
       "supply": 0,
-      "is_building": true
+      "is_building": false
     },
     "creeptumorburrowed": {
       "minerals": 0,
       "vespene": 0,
       "supply": 0,
-      "is_building": true
+      "is_building": false
     },
     "drone": {
       "minerals": 50,

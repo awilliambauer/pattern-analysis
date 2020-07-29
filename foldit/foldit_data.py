@@ -208,6 +208,11 @@ def display_action_report(data: pd.DataFrame) -> None:
 
 
 def make_action_series(deltas: List[SnapshotDelta]) -> np.ndarray:
+    """
+
+    :param deltas:
+    :return:
+    """
     s = []
     for d in deltas:
         ad = d.action_diff
