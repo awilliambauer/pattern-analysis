@@ -25,7 +25,7 @@
       "is_building": true
     },
     "broodling": {
-      "is_army": true,
+      "is_army": false,
       "minerals": 0,
       "vespene": 0,
       "supply": 0
@@ -127,13 +127,13 @@
       "is_building": true
     },
     "infestedterran": {
-      "is_army": true,
+      "is_army": false,
       "minerals": 0,
       "vespene": 0,
       "supply": 0
     },
     "infestedterranburrowed": {
-      "is_army": true,
+      "is_army": false,
       "minerals": 0,
       "vespene": 0,
       "supply": 0
@@ -417,7 +417,7 @@
       "supply": 4
     },
     "interceptor": {
-      "is_army": true,
+      "is_army": false,
       "minerals": 10,
       "vespene": 0,
       "supply": 0
@@ -569,7 +569,7 @@
       "is_building": true
     },
     "autoturret": {
-      "is_army": true,
+      "is_army": false,
       "minerals": 0,
       "vespene": 0,
       "supply": 0

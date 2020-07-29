@@ -312,7 +312,7 @@ def select_TICC_model(cluster_lookup: Dict[str, Dict[int, np.ndarray]],
 
 def get_pattern_masks(uid: str, pid: str, idx: Tuple[int, int], target_pts: Iterable[str], sub_ks: Dict[int, int],
                       pattern_lookup: PatternLookup,
-                      subseries_lookup: Dict[int, SubSeriesLookup]) -> typing.OrderedDict[str, np.ndarray]:
+                      subseries_lookup: Dict[int, SubSeriesLookup]) -> 'OrderedDict[str, np.ndarray]':
     """
     idx: tuple of the start and end index for (uid, pid) segment in all_series (i.e., puz_idx_lookup entry)
     target_pts: list of pattern type labels (e.g., {'1A', '1C', '2A', '3'})
