@@ -27,6 +27,7 @@ from collections import Counter, OrderedDict
 from itertools import groupby
 from util import *
 from multiprocessing import Pool
+from concurrent.futures import ProcessPoolExecutor
 import matplotlib
 
 matplotlib.use("Agg")
@@ -173,14 +174,16 @@ def run_sub_TICC(subseries_lookups: dict, datapath: str, uid: str, sub_krange: l
     """
     results_dir = f"{datapath}/{uid}/subpatterns"
     os.makedirs(results_dir, exist_ok=True)
-    with open(f"{results_dir}/subseries_lookup.pickle", 'wb') as fp:
-        pickle.dump(subseries_lookup, fp)
+    with open(f"{results_dir}/subseries_lookups.pickle", 'wb') as fp:
+        pickle.dump(subseries_lookups, fp)
 
     for k in subseries_lookups:
         os.makedirs(results_dir + "/k{}".format(k), exist_ok=True)
 
-    with Pool(len(subseries_lookup)) as pool:
-        pool.map(partial(run_TICC, datapath=f"{results_dir}/k{k}", sub_krange=sub_krange, save_model=save_model, skip_series_fn=skip_series_fn, window_size=window_size, num_proc=num_proc), [{f"cid{cid}": lookup["series"] for cid, lookup in subseries_lookups[k].items()} for k in subseries_lookups])
+    with ProcessPoolExecutor(len(subseries_lookups)) as pool:
+        pool.map(partial(run_TICC, krange=sub_krange, save_model=save_model, skip_series_fn=skip_series_fn, window_size=window_size, num_proc=num_proc),
+                 [{f"cid{cid}": lookup["series"] for cid, lookup in subseries_lookups[k].items()} for k in subseries_lookups],
+                 [f"{results_dir}/k{k}" for k in subseries_lookups])
     # for k in subseries_lookups:
     #     logging.debug(f"running TICC to get subpatterns for k={k}")
     #     os.makedirs(results_dir + "/k{}".format(k), exist_ok=True)

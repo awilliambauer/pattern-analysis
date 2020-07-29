@@ -20,7 +20,7 @@ from multiprocessing import Pool
 import matplotlib
 
 
-def load_data(pids: List[str], evolver=False, min_time=3600, data_dir="../data") -> Tuple[pd.DataFrame, dict]:
+def load_data(pids: List[str], evolver=False, min_time=3600, data_dir="../data/foldit") -> Tuple[pd.DataFrame, dict]:
     datafiles = [f"{data_dir}/puzzle_{pid}/{pid}_meta.h5" for pid in pids]
     df_frames, bts_frames, puz_frames = zip(*map(load_frame, datafiles))
     df = pd.concat(df_frames)

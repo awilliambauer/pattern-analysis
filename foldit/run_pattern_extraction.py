@@ -14,7 +14,7 @@ sys.path.append("../")
 
 from pattern_viz import plot_labeled_series, plot_user_series
 from util import time_played, get_action_labels, SubSeriesLookup, get_pattern_label
-from .foldit_data import load_extend_data, make_series, get_deltas, make_action_series
+from foldit_data import load_extend_data, make_series, get_deltas, make_action_series
 from pattern_extraction import combine_user_series, run_TICC, load_TICC_output, \
     select_TICC_model, get_patterns, make_subseries_lookup, run_sub_TICC, \
     load_sub_lookup, get_pattern_lookups, find_best_dispersion_model, get_pattern_masks
@@ -39,15 +39,9 @@ if __name__ == "__main__":
         logging.getLogger().setLevel(logging.DEBUG)
 
     results_path = f"{config.results_dir}/{config.name}"
-    if os.path.exists(results_path) and not config.overwrite:
-        logging.error(f"{results_path} exists and no overwrite flag given")
-        sys.exit(1)
-
-    if not os.path.exists(results_path):
-        os.makedirs(results_path)
+    os.makedirs(results_path, exist_ok=True)
 
     pids = config.pids
-
     krange = config.krange
 
     soln_lookup = {}
@@ -55,45 +49,60 @@ if __name__ == "__main__":
     child_lookup = {}
     data, puz_metas = load_extend_data(pids, soln_lookup, parent_lookup, child_lookup, config.evolver, 600)
 
-    logging.debug("Constructing time series")
-    puz_idx_lookup, series_lookup, noise = make_series(data)
-    # num_features = next(x for x in series_lookup.values()).shape[1]
-    # filtered_series_lookup = {uid: ser for uid, ser in series_lookup.items() if
-    #                           len(ser) < 200 * len(pids) or len(data[data.uid.isin([uid])].pid.unique()) < len(pids) // 2}
-    idx_lookup, all_series = combine_user_series(series_lookup, noise)
-    puz_idx_lookup = {(uid, pid): (s + idx_lookup[uid][0], e + idx_lookup[uid][0]) for (uid, pid), (s, e) in
-                      puz_idx_lookup.items()}
-    # noinspection PyTypeChecker
-    np.savetxt(f"{results_path}/noise_values.txt", noise)
-    # noinspection PyTypeChecker
-    np.savetxt(f"{results_path}/all_series.txt", all_series)
-    with open(f"{results_path}/puz_idx_lookup.pickle", 'wb') as fp:
-        pickle.dump(puz_idx_lookup, fp)
-    with open(f"{results_path}/idx_lookup.pickle", 'wb') as fp:
-        pickle.dump(idx_lookup, fp)
+    if os.path.exists(results_path) and not config.overwrite:
+        logging.debug(f"{results_path} already exists and overwrite not set, attempting to load existing series")
+        noise = np.loadtxt(f"{results_path}/noise_values.txt")
+        all_series = np.loadtxt(f"{results_path}/all_series.txt")
+        # TODO pickle series_lookup
+        _, series_lookup, _ = make_series(data, noise=noise)
 
-    if config.evolver:
-        evol_series_lookup = {}
-        for _, r in data.iterrows():
-            if r.evol_lines:
-                for idx, line in enumerate(r.evol_lines):
-                    if len(line.pdb_infos) <= 1 or line.pdb_infos[0].parent_sid not in soln_lookup:
-                        continue
-                    deltas = sorted(get_deltas(sorted(line.pdb_infos, key=lambda p: p.timestamp), soln_lookup),
-                                    key=lambda x: x.timestamp)
-                    if len(deltas) > 0 and time_played([d.timestamp for d in deltas]) > 600:
-                        ser = make_action_series(deltas)
-                        evol_series_lookup["{}_{}_{}".format(r.uid, r.pid, idx)] = ser
-        evol_idx_lookup, evol_all_series = combine_user_series(evol_series_lookup, noise)
+        with open(f"{results_path}/idx_lookup.pickle", 'rb') as fp:
+            idx_lookup = pickle.load(fp)
+        with open(f"{results_path}/puz_idx_lookup.pickle", 'rb') as fp:
+            puz_idx_lookup = pickle.load(fp)
+    else:
+        logging.debug("Constructing time series")
+        puz_idx_lookup, series_lookup, noise = make_series(data)
+        # num_features = next(x for x in series_lookup.values()).shape[1]
+        # filtered_series_lookup = {uid: ser for uid, ser in series_lookup.items() if
+        #                           len(ser) < 200 * len(pids) or len(data[data.uid.isin([uid])].pid.unique()) < len(pids) // 2}
+        idx_lookup, all_series = combine_user_series(series_lookup, noise)
+        puz_idx_lookup = {(uid, pid): (s + idx_lookup[uid][0], e + idx_lookup[uid][0]) for (uid, pid), (s, e) in
+                          puz_idx_lookup.items()}
         # noinspection PyTypeChecker
-        np.savetxt(f"{results_path}/evol_all_series.txt", evol_all_series)
-        with open(f"{results_path}/evol_idx_lookup.pickle", 'wb') as fp:
-            pickle.dump(evol_idx_lookup, fp)
+        np.savetxt(f"{results_path}/noise_values.txt", noise)
+        # noinspection PyTypeChecker
+        np.savetxt(f"{results_path}/all_series.txt", all_series)
+        with open(f"{results_path}/puz_idx_lookup.pickle", 'wb') as fp:
+            pickle.dump(puz_idx_lookup, fp)
+        with open(f"{results_path}/idx_lookup.pickle", 'wb') as fp:
+            pickle.dump(idx_lookup, fp)
 
-    logging.debug("Running TICC")
-    run_TICC({"all": all_series}, results_path, krange)
-    if config.evolver:
-        run_TICC({"all_evol": evol_all_series}, results_path, krange, num_proc=8)
+    # if config.evolver:
+    #     evol_series_lookup = {}
+    #     for _, r in data.iterrows():
+    #         if r.evol_lines:
+    #             for idx, line in enumerate(r.evol_lines):
+    #                 if len(line.pdb_infos) <= 1 or line.pdb_infos[0].parent_sid not in soln_lookup:
+    #                     continue
+    #                 deltas = sorted(get_deltas(sorted(line.pdb_infos, key=lambda p: p.timestamp), soln_lookup),
+    #                                 key=lambda x: x.timestamp)
+    #                 if len(deltas) > 0 and time_played([d.timestamp for d in deltas]) > 600:
+    #                     ser = make_action_series(deltas)
+    #                     evol_series_lookup["{}_{}_{}".format(r.uid, r.pid, idx)] = ser
+    #     evol_idx_lookup, evol_all_series = combine_user_series(evol_series_lookup, noise)
+    #     # noinspection PyTypeChecker
+    #     np.savetxt(f"{results_path}/evol_all_series.txt", evol_all_series)
+    #     with open(f"{results_path}/evol_idx_lookup.pickle", 'wb') as fp:
+    #         pickle.dump(evol_idx_lookup, fp)
+
+    if all(os.path.exists(f"{results_path}/all/clusters_k{k}.txt") for k in krange) and not config.overwrite:
+        logging.warning(f"results found at {results_path}/all and overwrite not set, skipping first-pass TICC")
+    else:
+        logging.debug("Running TICC")
+        run_TICC({"all": all_series}, results_path, krange)
+        if config.evolver:
+            run_TICC({"all_evol": evol_all_series}, results_path, krange, num_proc=8)
 
     logging.debug("Loading TICC output")
     cluster_lookup, mrf_lookup, model_lookup, bic_lookup = load_TICC_output(results_path, ["all"], krange)
@@ -104,8 +113,13 @@ if __name__ == "__main__":
         patterns = get_patterns(mrf_lookup["all"][k], cluster_lookup["all"][k], puz_idx_lookup)
         subseries_lookups[k] = make_subseries_lookup(k, patterns, mrf_lookup["all"][k], all_series, noise)
 
-    logging.debug("Running recursive TICC")
-    run_sub_TICC(subseries_lookups, results_path, "all", config.sub_krange)
+    if all(os.path.exists(f"{results_path}/all/subpatterns/k{k}") for k in config.sub_krange) and not config.overwrite:
+        logging.warning(f"results found at {results_path}/all/subpatterns and overwrite not set, skipping recursive TICC")
+    else:
+        logging.debug("Running recursive TICC")
+        run_sub_TICC(subseries_lookups, results_path, "all", config.sub_krange)
+
+    logging.debug("Loading recursive TICC output")
     sub_lookup = load_sub_lookup(f"{results_path}/all", subseries_lookups, config.sub_krange)
 
     sub_clusters = sub_lookup["clusters"]
@@ -114,7 +128,7 @@ if __name__ == "__main__":
     os.makedirs(f"{results_path}/eval", exist_ok=True)
     with open(f"{results_path}/eval/cluster_lookup.pickle", "wb") as fp:
         pickle.dump(cluster_lookup, fp)
-    with open(f"{results_path}/eval/subseries_lookup.pickle", "wb") as fp:
+    with open(f"{results_path}/eval/subseries_lookups.pickle", "wb") as fp:
         pickle.dump(subseries_lookups, fp)
     with open(f"{results_path}/eval/sub_clusters.pickle", "wb") as fp:
         pickle.dump(sub_clusters, fp)
