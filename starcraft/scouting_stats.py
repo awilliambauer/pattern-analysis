@@ -49,7 +49,7 @@ def generateFields(filename):
             raise RuntimeError()
 
         #collecting stats and values
-        team1_freq, team2_freq, winner = scouting_detector.detect_scouting(r)
+        team1_freq, team1_cat, team2_freq, team2_cat, winner = scouting_detector.detect_scouting(r)
         team1_rank, team1_rel_rank, team2_rank, team2_rel_rank = ranking_stats(r)
         team1_cps, team1_peace_rate, team1_battle_rate, team2_cps, team2_peace_rate, team2_battle_rate = control_groups.control_group_stats(r)
         team1_rel_freq = team1_freq - team2_freq
@@ -71,21 +71,21 @@ def generateFields(filename):
         team2_uid = r.players[1].detail_data['bnet']['uid']
         #creating the fields based on who won
         if winner == 1:
-            fields = (game_id, team1_uid, team1_rank, team1_rel_rank,
+            fields = (game_id, team1_uid, team1_cat, team1_rank, team1_rel_rank,
                         team1_freq, team1_rel_freq, team1_aps, team1_rel_aps,
                         team1_cps, team1_rel_cps, team1_peace_rate, team1_rel_pr,
                         team1_battle_rate, team1_rel_br, 1,
-                      game_id, team2_uid, team2_rank, team2_rel_rank,
+                      game_id, team2_uid, team2_cat, team2_rank, team2_rel_rank,
                         team2_freq, team2_rel_freq, team2_aps, team2_rel_aps,
                         team2_cps, team2_rel_cps, team2_peace_rate, team2_rel_pr,
                         team2_battle_rate, team2_rel_br, 0,
                       r.map_name)
         elif winner == 2:
-            fields = (game_id, team1_uid, team1_rank, team1_rel_rank,
+            fields = (game_id, team1_uid, team1_cat, team1_rank, team1_rel_rank,
                         team1_freq, team1_rel_freq, team1_aps, team1_rel_aps,
                         team1_cps, team1_rel_cps, team1_peace_rate, team1_rel_pr,
                         team1_battle_rate, team1_rel_br, 0,
-                      game_id, team2_uid, team2_rank, team2_rel_rank,
+                      game_id, team2_uid, team1_cat, team2_rank, team2_rel_rank,
                         team2_freq, team2_rel_freq, team2_aps, team2_rel_aps,
                         team2_cps, team2_rel_cps, team2_peace_rate, team2_rel_pr,
                         team2_battle_rate, team2_rel_br, 1,
@@ -156,8 +156,8 @@ def writeToCsv(write, debug, start, end):
 
     #open the csv and begin to write to it
     with open("scouting_stats.csv", 'w', newline = '') as fp:
-        events_out = csv.DictWriter(fp, fieldnames=["GameID", "UID", "Rank",
-                                    "RelRank", "ScoutingFrequency",
+        events_out = csv.DictWriter(fp, fieldnames=["GameID", "UID", "ScoutingCategory",
+                                    "Rank", "RelRank", "ScoutingFrequency",
                                     "RelScoutingFrequency", "APS", "RelAPS",
                                     "CPS", "RelCPS", "PeaceRate", "RelPeaceRate",
                                     "BattleRate", "RelBattleRate", "Win"])
@@ -180,22 +180,24 @@ def writeToCsv(write, debug, start, end):
                             filename = "spawningtool_{}.SC2Replay".format(fields[0][3:])
                         valid_games.append(filename)
                     #updating the map counter
-                    map_counter[fields[30]] += 1
+                    map_counter[fields[32]] += 1
                     #writing 1 line to the csv for each player and their respective stats
-                    events_out.writerow({"GameID":fields[0], "UID":fields[1], "Rank":fields[2],
-                                        "RelRank":fields[3], "ScoutingFrequency":fields[4],
-                                        "RelScoutingFrequency":fields[5], "APS":fields[6],
-                                        "RelAPS":fields[7], "CPS":fields[8], "RelCPS":fields[9],
-                                        "PeaceRate":fields[10], "RelPeaceRate":fields[11],
-                                        "BattleRate":fields[12], "RelBattleRate":fields[13],
-                                        "Win":fields[14]})
-                    events_out.writerow({"GameID":fields[15], "UID":fields[16], "Rank":fields[17],
-                                        "RelRank":fields[18], "ScoutingFrequency":fields[19],
-                                        "RelScoutingFrequency":fields[20], "APS":fields[21],
-                                        "RelAPS":fields[22], "CPS":fields[23], "RelCPS":fields[24],
-                                        "PeaceRate":fields[25], "RelPeaceRate":fields[26],
-                                        "BattleRate":fields[27], "RelBattleRate":fields[28],
-                                        "Win":fields[29]})
+                    events_out.writerow({"GameID":fields[0], "UID":fields[1],
+                                        "ScoutingCategory":fields[2], "Rank":fields[3],
+                                        "RelRank":fields[4], "ScoutingFrequency":fields[5],
+                                        "RelScoutingFrequency":fields[6], "APS":fields[7],
+                                        "RelAPS":fields[8], "CPS":fields[9], "RelCPS":fields[10],
+                                        "PeaceRate":fields[11], "RelPeaceRate":fields[12],
+                                        "BattleRate":fields[13], "RelBattleRate":fields[14],
+                                        "Win":fields[15]})
+                    events_out.writerow({"GameID":fields[16], "UID":fields[17],
+                                        "ScoutingCategory":fields[18], "Rank":fields[19],
+                                        "RelRank":fields[20], "ScoutingFrequency":fields[21],
+                                        "RelScoutingFrequency":fields[22], "APS":fields[23],
+                                        "RelAPS":fields[24], "CPS":fields[25], "RelCPS":fields[26],
+                                        "PeaceRate":fields[27], "RelPeaceRate":fields[28],
+                                        "BattleRate":fields[29], "RelBattleRate":fields[30],
+                                        "Win":fields[31]})
         #running with multiprocessing
         else:
             pool = Pool(40)
@@ -212,22 +214,24 @@ def writeToCsv(write, debug, start, end):
                             filename = "spawningtool_{}.SC2Replay".format(fields[0][3:])
                         valid_games.append(filename)
                     #updating the map counter
-                    map_counter[fields[30]] += 1
+                    map_counter[fields[32]] += 1
                     #writing 1 line to the csv for each player and their respective stats
-                    events_out.writerow({"GameID":fields[0], "UID":fields[1], "Rank":fields[2],
-                                        "RelRank":fields[3], "ScoutingFrequency":fields[4],
-                                        "RelScoutingFrequency":fields[5], "APS":fields[6],
-                                        "RelAPS":fields[7], "CPS":fields[8], "RelCPS":fields[9],
-                                        "PeaceRate":fields[10], "RelPeaceRate":fields[11],
-                                        "BattleRate":fields[12], "RelBattleRate":fields[13],
-                                        "Win":fields[14]})
-                    events_out.writerow({"GameID":fields[15], "UID":fields[16], "Rank":fields[17],
-                                        "RelRank":fields[18], "ScoutingFrequency":fields[19],
-                                        "RelScoutingFrequency":fields[20], "APS":fields[21],
-                                        "RelAPS":fields[22], "CPS":fields[23], "RelCPS":fields[24],
-                                        "PeaceRate":fields[25], "RelPeaceRate":fields[26],
-                                        "BattleRate":fields[27], "RelBattleRate":fields[28],
-                                        "Win":fields[29]})
+                    events_out.writerow({"GameID":fields[0], "UID":fields[1],
+                                        "ScoutingCategory":fields[2], "Rank":fields[3],
+                                        "RelRank":fields[4], "ScoutingFrequency":fields[5],
+                                        "RelScoutingFrequency":fields[6], "APS":fields[7],
+                                        "RelAPS":fields[8], "CPS":fields[9], "RelCPS":fields[10],
+                                        "PeaceRate":fields[11], "RelPeaceRate":fields[12],
+                                        "BattleRate":fields[13], "RelBattleRate":fields[14],
+                                        "Win":fields[15]})
+                    events_out.writerow({"GameID":fields[16], "UID":fields[17],
+                                        "ScoutingCategory":fields[18], "Rank":fields[19],
+                                        "RelRank":fields[20], "ScoutingFrequency":fields[21],
+                                        "RelScoutingFrequency":fields[22], "APS":fields[23],
+                                        "RelAPS":fields[24], "CPS":fields[25], "RelCPS":fields[26],
+                                        "PeaceRate":fields[27], "RelPeaceRate":fields[28],
+                                        "BattleRate":fields[29], "RelBattleRate":fields[30],
+                                        "Win":fields[31]})
     #writing to a new text file if the command line arguments indicate to do so
     if write:
         with open("valid_game_ids.txt", 'w') as file:

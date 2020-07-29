@@ -14,6 +14,8 @@ def buildEventLists(tracker_events, game_events):
 
     events = []
     ability_names = ["LandCommandCenter", "LandOrbitalCommand", "RightClick", "Attack"]
+    base_names = ["Hatchery", "Lair", "Hive", "Nexus", "CommandCenter", "CommandCenterFlying",
+                        "OrbitalCommand", "OrbitalCommandFlying","PlanetaryFortress"]
     team1 = 1
     team2 = 2
     start1 = False
@@ -21,16 +23,8 @@ def buildEventLists(tracker_events, game_events):
     team1_count = 0
     team2_count = 0
     for t_event in tracker_events:
-        #checking for starting bases
-        if isinstance(t_event, sc2reader.events.tracker.UnitInitEvent):
-            if (start1 == False) and (t_event.control_pid == team1):
-                events.append(t_event)
-                start1 = True
-            elif (start2 == False) and (t_event.control_pid == team2):
-                events.append(t_event)
-                start2 = True
         #checking for the creation of new bases
-        elif isinstance(t_event, sc2reader.events.tracker.UnitInitEvent) and (t_event.unit.name == "Hatchery" or t_event.unit.name == "CommandCenter" or t_event.unit.name == "Nexus"):
+        if isinstance(t_event, sc2reader.events.tracker.UnitInitEvent) and (t_event.unit.name in base_names):
             events.append(t_event)
         #Adding information about units
         elif isinstance(t_event, sc2reader.events.tracker.UnitBornEvent) and (t_event.unit.is_army or t_event.unit.is_worker):
@@ -68,7 +62,7 @@ def buildEventLists(tracker_events, game_events):
     return sorted_events
 
 
-def buildScoutingDictionaries(events):
+def buildScoutingDictionaries(events, objects):
     '''buildScoutingDictionaries returns dictionaries for each player where the
     keys are the frame and the value is the state of scouting. "No scouting"
     indicates the team/player is not looking at any bases, "Scouting themself"
@@ -85,6 +79,12 @@ def buildScoutingDictionaries(events):
     # Dictionaries for each team of the locations of bases where the keys are unit ids
     # and the values are locations (as tuples of (x, y) coordinates)
     bases = {1: {}, 2: {}}
+    #Add starting bases
+    base_names = set(["Hatchery", "Lair", "Hive", "Nexus", "CommandCenter", "CommandCenterFlying",
+                        "OrbitalCommand", "OrbitalCommandFlying","PlanetaryFortress"])
+    for i in range(1, 3):
+        start_base = [u for u in objects if u.name in base_names and u.owner.pid == i and u.finished_at == 0][0]
+        bases[i][start_base.id] = start_base.location
 
     # Dictionaries for each team of the active units where the keys are the unit ids
     # and the values are locations (as tuples of (x, y) coordinates)
@@ -100,8 +100,7 @@ def buildScoutingDictionaries(events):
         #accounting for new bases
         if isinstance(event, sc2reader.events.tracker.UnitInitEvent):
             cur_team = event.control_pid
-            if not(event.unit_id in bases[cur_team]):
-                bases[cur_team][event.unit_id] = event.location
+            bases[cur_team][event.unit_id] = event.location
 
         #accounting for Terran bases moving and updating unit positions
         elif isinstance(event, sc2reader.events.game.TargetUnitCommandEvent):
@@ -138,10 +137,14 @@ def buildScoutingDictionaries(events):
         #removing dead units
         elif isinstance(event, sc2reader.events.tracker.UnitDiedEvent):
             cur_team = event.unit.owner.pid
-            active_units[cur_team].pop(event.unit_id)
+            if event.unit_id in active_units[cur_team]:
+                active_units[cur_team].pop(event.unit_id)
 
         #checking camera events
         elif isinstance(event, sc2reader.events.game.CameraEvent):
+            if event.player.is_observer or event.player.is_referee:
+                continue
+
             cur_team = event.player.pid
             if cur_team == 1:
                 opp_team = 2
@@ -287,6 +290,25 @@ def integrateBattles(scouting_dict, battles):
     return scouting_dict
 
 def categorize_player(scouting_dict, frames):
+    '''categorize_player is used to sort players based on their scouting
+    behavior. The categories are numerical (1-4) and are returned by this
+    function. The following is a summary of each category.
+
+    1. No scouting - there are no scouting tags in a player's dictionary
+
+    2. Only scouts in the beginning - the only existing scouting tags happen
+    within the first 25% of the game
+
+    3. Sporadic scouters - a player scouts past the first 25% of the game,
+    but the time intervals between instances of scouting are inconsistent.
+    Intervals are considered inconsistent if the standard deviation is
+    greater than or equal to half of the mean of all intervals.
+
+    4. Consistent scouters - a player scouts past the first 25% of the game,
+    and the time intervals between instances of scouting are consistent.
+    Intervals are considered consistent if the standard deviation is less
+    than half of the mean.'''
+
     no_scouting = True
     beginning_scouting = True
     intervals = []
@@ -308,21 +330,29 @@ def categorize_player(scouting_dict, frames):
         else:
             if after_first:
                 interval += 1
+    #a non-scouter
     if no_scouting:
-        category = "Doesn't scout"
+        category = 1
         return category
 
+    #only scouts in the beginning
     if beginning_scouting:
-        category = "Only scouts in the beginning"
+        category = 2
+        return category
+
+    if len(intervals) == 0:
+        category = 3
         return category
 
     mean_interval = statistics.mean(intervals)
     stdev = statistics.pstdev(intervals)
 
+    #Sporadic scouter
     if stdev/mean_interval >= 0.5:
-        category = "Sporatic scouting throughout game"
+        category = 3
+    #Consistent scouter
     elif stdev/mean_interval < 0.5:
-        category = "Consistent scouting throughout game"
+        category = 4
 
     return category
 
@@ -366,7 +396,8 @@ def detect_scouting(replay):
 
     try:
         allEvents = buildEventLists(tracker_events, game_events)
-        team1_scouting_states, team2_scouting_states = buildScoutingDictionaries(allEvents)
+        objects = r.objects.values()
+        team1_scouting_states, team2_scouting_states = buildScoutingDictionaries(allEvents, objects)
 
         battles = battle_detector.buildBattleList(r)
         team1_scouting_states = integrateBattles(team1_scouting_states, battles)
@@ -375,18 +406,24 @@ def detect_scouting(replay):
         team1_num_times, team1_time = scouting_stats(team1_scouting_states)
         team2_num_times, team2_time = scouting_stats(team2_scouting_states)
 
-        print(categorize_player(team1_scouting_states, frames))
-        print(categorize_player(team2_scouting_states, frames))
+        team1_freq = team1_num_times / r.real_length.total_seconds()
+        team2_freq = team2_num_times / r.real_length.total_seconds()
 
-        team1_time_dict = toTime(team1_scouting_states, frames, seconds)
-        team2_time_dict = toTime(team2_scouting_states, frames, seconds)
+        team1_cat = categorize_player(team1_scouting_states, frames)
+        team2_cat = categorize_player(team2_scouting_states, frames)
 
-        print("---Team 1---")
-        printTime(team1_time_dict)
-        print("\n\n---Team 2---")
-        printTime(team2_time_dict)
+        # team1_time_dict = toTime(team1_scouting_states, frames, seconds)
+        # team2_time_dict = toTime(team2_scouting_states, frames, seconds)
 
-        return team1_num_times / r.real_length.total_seconds(), team2_num_times / r.real_length.total_seconds(), r.winner.number
+        # timelist = battle_detector.toTime(battles, frames, seconds)
+        # print("---Battles---")
+        # battle_detector.printTime(timelist)
+        # print("---Team 1---")
+        # printTime(team1_time_dict)
+        # print("\n\n---Team 2---")
+        # printTime(team2_time_dict)
+
+        return team1_freq, team1_cat, team2_freq, team2_cat, r.winner.number
 
     except:
         print(replay.filename + "contains errors within scouting_detector")
