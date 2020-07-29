@@ -152,9 +152,7 @@ def make_subseries_lookup(k: int, patterns: List[PatternInstance], mrfs: Dict[in
         # if len(all_subseries) - 100 * (len(sslu["patterns"]) - 1) < 20:
         #     logging.debug("skipping pattern {} because it only appears for {} timesteps".format(cid, len(all_subseries) - 100 * (len(sslu["patterns"]) - 1)))
         #     continue
-        lookup[cid] = {"patterns": subpatterns,
-                       "series": all_subseries,
-                       "idx_lookup": sub_idx_lookup}
+        lookup[cid] = SubSeriesLookup(subpatterns, all_subseries, sub_idx_lookup)
     return lookup
 
 
@@ -162,7 +160,7 @@ def run_sub_TICC(subseries_lookups: dict, datapath: str, uid: str, sub_krange: l
                  skip_series_fn=None, window_size=1, num_proc=4):
     """
 
-    :param subseries_lookup:
+    :param subseries_lookups:
     :param datapath:
     :param uid:
     :param sub_krange:
@@ -256,18 +254,18 @@ def load_sub_lookup(datapath: str, subseries_lookup: dict, sub_krange: Iterable[
     :param sub_krange:
     :return:
     """
-    sub_lookup = {"clusters": {}, # Dict[int, Dict[int, Dict[int, np.ndarray]]] (k to cid to sub_k to cluster labels)
-                  "mrfs": {},     # Dict[int, Dict[int, Dict[int, Dict[int, np.ndarray]]]] (k to cid to sub_k to mrf dictionary (cluster label to mrf))
-                  "models": {},   # Dict[int, Dict[int, Dict[int, Dict]]] (k to cid to sub_k to dict of ticc model parameters)
-                  "bics": {}}     # Dict[int, Dict[int, Dict[int, float]]] (k to cid to sub_k to bic)
+    clusters = {} # Dict[int, Dict[int, Dict[int, np.ndarray]]] (k to cid to sub_k to cluster labels)
+    mrfs = {}     # Dict[int, Dict[int, Dict[int, Dict[int, np.ndarray]]]] (k to cid to sub_k to mrf dictionary (cluster label to mrf))
+    models = {}   # Dict[int, Dict[int, Dict[int, Dict]]] (k to cid to sub_k to dict of ticc model parameters)
+    bics = {}     # Dict[int, Dict[int, Dict[int, float]]] (k to cid to sub_k to bic)
     for k in subseries_lookup:
         dp = "{}/subpatterns/k{}".format(datapath, k)
         cs, mrfs, ms, bs = load_TICC_output(dp, ["cid{}".format(cid) for cid in subseries_lookup[k]], sub_krange)
-        sub_lookup["clusters"][k] = {int(k.replace("cid", "")): v for k, v in cs.items()}
-        sub_lookup["mrfs"][k] = {int(k.replace("cid", "")): v for k, v in mrfs.items()}
-        sub_lookup["models"][k] = {int(k.replace("cid", "")): v for k, v in ms.items()}
-        sub_lookup["bics"][k] = {int(k.replace("cid", "")): v for k, v in bs.items()}
-    return sub_lookup
+        clusters[k] = {int(k.replace("cid", "")): v for k, v in cs.items()}
+        mrfs[k] = {int(k.replace("cid", "")): v for k, v in mrfs.items()}
+        models[k] = {int(k.replace("cid", "")): v for k, v in ms.items()}
+        bics[k] = {int(k.replace("cid", "")): v for k, v in bs.items()}
+    return SubLookup(clusters, mrfs, models, bics)
 
 
 def select_TICC_model(cluster_lookup: Dict[str, Dict[int, np.ndarray]],
@@ -335,7 +333,7 @@ def get_pattern_masks(uid: str, pid: str, idx: Tuple[int, int], target_pts: Iter
             spans = []
             for p in ps:
                 sub_offsets = [(sub_offset, sub_s, sub_e) for (ui, pi, sub_offset), (sub_s, sub_e) in
-                               subseries_lookup[cid]['idx_lookup'].items() if
+                               subseries_lookup[cid].idx_lookup.items() if
                                uid == ui and pid == pi and p.start_idx >= sub_s and p.end_idx <= sub_e]
                 assert len(sub_offsets) == 1
                 sub_offset, sub_s, sub_e = sub_offsets[0]
@@ -394,7 +392,7 @@ def get_pattern_lookups(krange: Iterable[int], sub_clusters: SubClusters,
             if cid not in sub_clusters[k]:
                 continue
             ps = [p for p in patterns[k]["base"] if p.cid == cid]
-            sub_idx_lookup = subseries_lookups[k][cid]["idx_lookup"]
+            sub_idx_lookup = subseries_lookups[k][cid].idx_lookup
             for sub_k in sub_clusters[k][cid]:
                 if not any(is_null_cluster(mrf) for mrf in sub_mrfs[k][cid][sub_k].values()) or \
                         len(sub_idx_lookup) <= sub_k:
@@ -495,7 +493,7 @@ def compute_subpattern_times(k: int, subs: Tuple[int, int], data: pd.DataFrame, 
         all_subclusters = all_clusters.astype(np.str)
         labels = ["{}{}".format(cid, string.ascii_uppercase[x]) for x in range(sub_k)]
         cs = sub_clusters[k][cid][sub_k]
-        for (_, _, start_idx), (s, e) in subseries_lookups[k][cid]['idx_lookup'].items():
+        for (_, _, start_idx), (s, e) in subseries_lookups[k][cid].idx_lookup.items():
             all_subclusters[start_idx: start_idx + (min(e, len(cs)) - s)] = [labels[c] for c in cs[s:e]]
         for uid, pid in results:
             puz_cs = all_subclusters[slice(*puz_idx_lookup[(uid, pid)])]
@@ -541,7 +539,7 @@ def get_predicted_lookups(all_series: np.ndarray, krange: Iterable[int], model_l
                 sub_cs[cid] = {}
                 for sub_k in sub_models[k][cid]:
                     print("    cid =", cid, "({})".format(sub_k))
-                    sub_cs[cid][sub_k] = predict_from_saved_model(subseries_lookup[k][cid]["series"],
+                    sub_cs[cid][sub_k] = predict_from_saved_model(subseries_lookup[k][cid].series,
                                                                   sub_models[k][cid][sub_k])
         sub_clusters[k] = sub_cs
 
@@ -576,8 +574,8 @@ def make_selection_lookups(all_series: np.ndarray, pattern_lookups: Dict[int, Pa
             if cid not in sub_clusters[k]:
                 continue
 
-            idx_lookup = subseries_lookups[k][cid]["idx_lookup"]
-            ser = subseries_lookups[k][cid]["series"]
+            idx_lookup = subseries_lookups[k][cid].idx_lookup
+            ser = subseries_lookups[k][cid].series
             for sub_k in sub_clusters[k][cid]:
                 if not any(is_null_cluster(mrf) for mrf in sub_mrfs[k][cid][sub_k].values()) or len(idx_lookup) <= sub_k:
                     continue
@@ -656,7 +654,7 @@ def find_best_dispersion_model(all_series: np.ndarray, pattern_lookups: Dict[int
             if cid not in sub_clusters[k]:
                 candidate.append(xs[0])
                 continue
-            idx_lookup = subseries_lookups[k][cid]["idx_lookup"]
+            idx_lookup = subseries_lookups[k][cid].idx_lookup
             for sub_k in sub_clusters[k][cid]:
                 if (k, cid, sub_k) not in dispersion_lookup:
                     print("SKIPPING", k, cid, sub_k)

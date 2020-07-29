@@ -122,8 +122,8 @@ if __name__ == "__main__":
     logging.debug("Loading recursive TICC output")
     sub_lookup = load_sub_lookup(f"{results_path}/all", subseries_lookups, config.sub_krange)
 
-    sub_clusters = sub_lookup["clusters"]
-    pattern_lookup = get_pattern_lookups(krange, sub_clusters, sub_lookup["mrfs"], subseries_lookups,
+    sub_clusters = sub_lookup.clusters
+    pattern_lookup = get_pattern_lookups(krange, sub_clusters, sub_lookup.mrfs, subseries_lookups,
                                          cluster_lookup["all"], mrf_lookup["all"], puz_idx_lookup)
     os.makedirs(f"{results_path}/eval", exist_ok=True)
     with open(f"{results_path}/eval/cluster_lookup.pickle", "wb") as fp:
