@@ -28,7 +28,7 @@ protoss_fields = ['adept', 'archon', 'assimilator', 'carrier', 'colossus', 'cybe
 terran_fields = ['armory', 'banshee', 'barracks', 'barrackstechlab', 'barracksreactor', 'battlecruiser',
                  'battlehellion', 'bunker', 'commandcenter', 'cyclone', 'engineeringbay', 'factory', 'factoryreactor',
                  'factorytechlab', 'fusioncore', 'ghost', 'ghostacademy', 'hellion', 'marauder', 'marine', 'medivac',
-                 'missileturret', 'mule', 'orbitalcommand', 'planetaryfortress', 'raven', 'reaper', 'refinery', 'scv',
+                 'missileturret', 'mule', 'orbitalcommand', 'planetaryfortress', 'raven', 'reactor', 'reaper', 'refinery', 'scv',
                  'sensortower', 'siegetank', 'starport', 'starportreactor', 'starporttechlab', 'supplydepot', 'techlab',
                  'thor', 'viking', 'warhound', 'widowmine']
 aliases = {"supplydepotlowered": "supplydepot", "siegetanksieged": "siegetank", "widowmineburrowed": "widowmine"}
@@ -115,6 +115,10 @@ def replay_to_series(replay_file: str) -> Optional[Dict[Tuple[str, str], np.ndar
     """
     try:
         replay = sc2reader.load_replay(replay_file)
+    except Exception as e:
+        print(f"error loading replay {replay_file}: {e}")
+        return
+    try:
         if len(replay.players) != 2:
             return
         game_id = replay_file.split("_")[1].split(".")[0]
@@ -125,14 +129,16 @@ def replay_to_series(replay_file: str) -> Optional[Dict[Tuple[str, str], np.ndar
         return {(replay.players[i].detail_data['bnet']['uid'], game_id, replay.players[i].play_race):
                     make_unit_series(replay, i) for i in range(len(replay.players))}
     except Exception as e:
-        print(f"error on replay {replay_file}: {e}")
+        print(f"error making series for {replay_file}: {e}")
         traceback.print_exc()
         return
 
 
 if __name__ == "__main__":
+    with open("valid_game_ids.txt") as fp:
+        replay_files = [x.strip() for x in fp.readlines()]
     with Pool(20) as pool:
-        series = pool.map(replay_to_series, [f"replays/{x}" for x in os.listdir("replays") if x.endswith("SC2Replay")])
+        series = pool.map(replay_to_series, [f"replays/{x}" for x in replay_files])
 
     # sort series k-v pairs by race
     series = sorted([(k, v) for d in [x for x in series if x] for k, v in d.items()], key=lambda x: x[0][2])

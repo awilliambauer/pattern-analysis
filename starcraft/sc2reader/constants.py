@@ -15,6 +15,9 @@ LOCALIZED_RACES = {
     "Терран": "Terran",
     "Протосс": "Protoss",
     "Зерг": "Zerg",
+    "Терраны": "Terran",
+    "Протоссы": "Protoss",
+    "Зерги": "Zerg",
     # koKR
     "테란": "Terran",
     "프로토스": "Protoss",
