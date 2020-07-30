@@ -7,8 +7,10 @@ import numpy as np
 import sc2reader
 import os
 import sys
+import pickle
 from typing import Iterable, List, Optional, Tuple, Dict
 from itertools import groupby
+from functools import partial
 import matplotlib.pyplot as plt
 
 sys.path.append("../")  # enable importing from parent directory
@@ -35,25 +37,25 @@ aliases = {"supplydepotlowered": "supplydepot", "siegetanksieged": "siegetank", 
 field_lookup = {"Protoss": protoss_fields, "Zerg": zerg_fields, "Terran": terran_fields}
 
 
-def make_unit_series(replay: sc2reader.resources.Replay, pindex: int) -> np.ndarray:
+def make_unit_series(replay: sc2reader.resources.Replay, pindex: int, binsize: int) -> np.ndarray:
     """
 
     :param replay:
     :param pindex:
     :return:
     """
-    frame_to_events = {frame: list(events) for frame, events in
-                       groupby(sorted(replay.events, key=lambda e: e.frame), lambda e: e.frame)}
+    frame_to_events = {frame_bin: list(events) for frame_bin, events in
+                       groupby(sorted(replay.events, key=lambda e: e.frame // binsize), lambda e: e.frame // binsize)}
 
 
     player = replay.players[pindex]
     fields = field_lookup[player.play_race]
-    series = np.zeros((replay.frames, len(fields)))
+    series = np.zeros((replay.frames // binsize, len(fields)))
 
-    for frame in range(len(series)):
-        if frame > 0:
-            series[frame] = series[frame - 1]
-        for e in frame_to_events.get(frame, []):
+    for frame_bin in range(len(series)):
+        if frame_bin > 0:
+            series[frame_bin] = series[frame_bin - 1]
+        for e in frame_to_events.get(frame_bin, []):
             if not hasattr(e, "unit") or e.unit.owner != player:
                 continue
             if isinstance(e, sc2reader.events.UnitBornEvent) or isinstance(e, sc2reader.events.UnitDoneEvent):
@@ -63,7 +65,7 @@ def make_unit_series(replay: sc2reader.resources.Replay, pindex: int) -> np.ndar
                     if name in aliases:
                         name = aliases[name]
                     assert name in fields, f"{player.play_race} {name} {unit.is_army} {unit.is_worker} {unit.is_building}, {unit._type_class.name}"
-                    series[frame][fields.index(name)] += 1
+                    series[frame_bin][fields.index(name)] += 1
             if isinstance(e, sc2reader.events.UnitDiedEvent):
                 unit = e.unit
                 if unit.is_army or unit.is_worker or unit.is_building:
@@ -72,7 +74,7 @@ def make_unit_series(replay: sc2reader.resources.Replay, pindex: int) -> np.ndar
                         name = aliases[name]
                     assert name in fields
                     if unit.finished_at:  # ignore the death of an incomplete building
-                        series[frame][fields.index(name)] -= 1
+                        series[frame_bin][fields.index(name)] -= 1
     return series
 
 
@@ -107,7 +109,7 @@ def plot_unit_series(series: np.ndarray, fields: List[str], filename: str = "") 
         plt.show()
 
 
-def replay_to_series(replay_file: str) -> Optional[Dict[Tuple[str, str], np.ndarray]]:
+def replay_to_series(replay_file: str, binsize: int) -> Optional[Dict[Tuple[str, str], np.ndarray]]:
     """
 
     :param replay_file:
@@ -127,7 +129,7 @@ def replay_to_series(replay_file: str) -> Optional[Dict[Tuple[str, str], np.ndar
         elif replay_file.startswith("spawningtool"):
             game_id = "st-" + game_id
         return {(replay.players[i].detail_data['bnet']['uid'], game_id, replay.players[i].play_race):
-                    make_unit_series(replay, i) for i in range(len(replay.players))}
+                    make_unit_series(replay, i, binsize) for i in range(len(replay.players))}
     except Exception as e:
         print(f"error making series for {replay_file}: {e}")
         traceback.print_exc()
@@ -136,16 +138,27 @@ def replay_to_series(replay_file: str) -> Optional[Dict[Tuple[str, str], np.ndar
 
 if __name__ == "__main__":
     with open("valid_game_ids.txt") as fp:
-        replay_files = [x.strip() for x in fp.readlines()]
-    with Pool(20) as pool:
-        series = pool.map(replay_to_series, [f"replays/{x}" for x in replay_files])
+        replay_files = [x.strip() for x in fp.readlines() if x.startswith("spawningtool")]
+    with Pool() as pool:
+        series = pool.map(partial(replay_to_series, binsize=160), [f"replays/{x}" for x in replay_files])
 
     # sort series k-v pairs by race
     series = sorted([(k, v) for d in [x for x in series if x] for k, v in d.items()], key=lambda x: x[0][2])
     race_lookup = {race: dict(vs) for race, vs in groupby(series, lambda x: x[0][2])}
+    all_series_lookup = {}
+
     for race, series_lookup in race_lookup.items():
-        idx_lookup, all_series = combine_user_series(series_lookup, np.array([-1] * len(field_lookup[race])))
 
-        os.makedirs("results", exist_ok=True)
+        results_path = f"results/{race}"
+        os.makedirs(results_path, exist_ok=True)
 
-        run_TICC({"all": all_series}, "./results", [10, 15, 20], window_size=16, num_proc=8)
+        print("combining series for", race)
+        idx_lookup, all_series = combine_user_series(series_lookup, np.array([-1] * len(field_lookup[race])), 100)
+
+        np.savetxt(f"{results_path}/all_series.txt", all_series)
+        all_series_lookup[race] = all_series
+        with open(f"{results_path}/idx_lookup.pickle", 'wb') as fp:
+            pickle.dump(idx_lookup, fp)
+            
+    print("running ticc")
+    run_TICC(all_series_lookup, "results", [20], window_size=5, num_proc=8)
