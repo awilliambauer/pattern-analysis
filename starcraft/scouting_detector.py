@@ -356,12 +356,28 @@ def categorize_player(scouting_dict, frames):
 
     return category
 
-def detect_scouting(replay):
-    '''detect_scouting is the main function of this script. detect_scouting does
+def scouting_timefrac_list(scouting_dict, frames):
+    time_fracs = []
+    keys = scouting_dict.keys()
+    cur_scouting = False
+    for key in keys:
+        state = scouting_dict[key]
+        if state == "Scouting opponent":
+            if not(cur_scouting):
+                frac = key/frames
+                time_fracs.append(frac)
+            cur_scouting = True
+        else:
+            cur_scouting = False
+
+    return time_fracs
+
+def scouting_freq_and_cat(replay):
+    '''scouting_freq_and_cat is the main function of this script. detect_scouting does
     error checking on replays and raises errors for replays with incomplete information,
     as well as combines all other functions. It takes in a previously loaded replay
-    from sc2reader and returns the scouting frequency for each player, as well as
-    the winner of the game.'''
+    from sc2reader and returns the scouting frequency for each player, their
+    category of scouting, as well as the winner of the game.'''
     r = replay
 
     # # Only applied to missing ability info, which doesn't matter for scouting detection
@@ -428,3 +444,24 @@ def detect_scouting(replay):
     except:
         print(replay.filename + "contains errors within scouting_detector")
         raise
+
+
+def scouting_times(replay):
+    r = replay
+
+    tracker_events = r.tracker_events
+    game_events = r.game_events
+    frames = r.frames
+
+    allEvents = buildEventLists(tracker_events, game_events)
+    objects = r.objects.values()
+    team1_scouting_states, team2_scouting_states = buildScoutingDictionaries(allEvents, objects)
+
+    battles = battle_detector.buildBattleList(r)
+    team1_scouting_states = integrateBattles(team1_scouting_states, battles)
+    team2_scouting_states = integrateBattles(team2_scouting_states, battles)
+
+    team1_time_list = scouting_timefrac_list(team1_scouting_states, frames)
+    team2_time_list = scouting_timefrac_list(team2_scouting_states, frames)
+
+    return team1_time_list, team2_time_list

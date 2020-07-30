@@ -49,7 +49,7 @@ def generateFields(filename):
             raise RuntimeError()
 
         #collecting stats and values
-        team1_freq, team1_cat, team2_freq, team2_cat, winner = scouting_detector.detect_scouting(r)
+        team1_freq, team1_cat, team2_freq, team2_cat, winner = scouting_detector.scouting_freq_and_cat(r)
         team1_rank, team1_rel_rank, team2_rank, team2_rel_rank = ranking_stats(r)
         team1_cps, team1_peace_rate, team1_battle_rate, team2_cps, team2_peace_rate, team2_battle_rate = control_groups.control_group_stats(r)
         team1_rel_freq = team1_freq - team2_freq
