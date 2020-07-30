@@ -205,7 +205,7 @@ def writeToCsv(write, debug, start, end):
             pool.close()
             pool.join()
             for fields in results:
-                if fields: #skipping over invalid replays (generateFields will return None in these cases)
+                if fields: #generateFields will return None for invalid replays
                     if write:
                         #formatting filenames to add to the text file
                         if fields[0].startswith("ggg-"):
@@ -232,6 +232,7 @@ def writeToCsv(write, debug, start, end):
                                         "PeaceRate":fields[27], "RelPeaceRate":fields[28],
                                         "BattleRate":fields[29], "RelBattleRate":fields[30],
                                         "Win":fields[31]})
+
     #writing to a new text file if the command line arguments indicate to do so
     if write:
         with open("valid_game_ids.txt", 'w') as file:

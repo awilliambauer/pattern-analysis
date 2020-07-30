@@ -83,7 +83,7 @@ def buildScoutingDictionaries(events, objects):
     base_names = set(["Hatchery", "Lair", "Hive", "Nexus", "CommandCenter", "CommandCenterFlying",
                         "OrbitalCommand", "OrbitalCommandFlying","PlanetaryFortress"])
     for i in range(1, 3):
-        start_base = [u for u in objects if u.name in base_names and u.owner.pid == i and u.finished_at == 0][0]
+        start_base = [u for u in objects if u.name in base_names and u.owner != None and u.owner.pid == i and u.finished_at == 0][0]
         bases[i][start_base.id] = start_base.location
 
     # Dictionaries for each team of the active units where the keys are the unit ids
