@@ -78,7 +78,7 @@ def fit_TICC(series: np.ndarray, k: int, window_size=1, num_proc=4,
     return clusters, mrfs, bic
 
 
-def run_TICC(series_lookup: Dict[str, np.ndarray], datapath: str, krange: list,
+def run_TICC(series_lookup: Dict[str, np.ndarray], datapath: str, krange: Iterable[int],
              save_model=True, skip_series_fn=None, window_size=1, num_proc=4) -> None:
     """
 
@@ -180,7 +180,7 @@ def run_sub_TICC(subseries_lookups: dict, datapath: str, uid: str, sub_krange: l
 
     with ProcessPoolExecutor(len(subseries_lookups)) as pool:
         pool.map(partial(run_TICC, krange=sub_krange, save_model=save_model, skip_series_fn=skip_series_fn, window_size=window_size, num_proc=num_proc),
-                 [{f"cid{cid}": lookup["series"] for cid, lookup in subseries_lookups[k].items()} for k in subseries_lookups],
+                 [{f"cid{cid}": lookup.series for cid, lookup in subseries_lookups[k].items()} for k in subseries_lookups],
                  [f"{results_dir}/k{k}" for k in subseries_lookups])
     # for k in subseries_lookups:
     #     logging.debug(f"running TICC to get subpatterns for k={k}")
