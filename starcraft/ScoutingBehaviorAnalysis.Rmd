@@ -25,11 +25,11 @@ scouting$Win2 <- ifelse(scouting$Win == 1, "win", "loss")
 
 ### Checking distribution and associations for each variable
 ```{r}
+hist(scouting$ScoutingCategory)
 hist(scouting$ScoutingFrequency)
-hist(scouting$ScoutingTime)
-hist(scouting$APM)
+hist(scouting$APS)
 hist(scouting$Rank)
-hist(scouting$RelativeRank)
+hist(scouting$RelRank)
 hist(scouting$CPS)
 hist(scouting$PeaceRate)
 hist(scouting$BattleRate)
@@ -273,6 +273,45 @@ ratioPlot
 scoutingFPlot
 scoutingTPlot
 ```
+
+### Testing individual variables
+
+Start with scouting frequency
+```{r}
+win.glm <- glm(Win ~ logSF, data = scouting3, family = binomial, subset = -outliers)
+plot(win.glm, which = 1)
+```
+
+scouting time
+```{r}
+win.glm2 <- glm(Win ~ cenLogST, data = scouting3, family = binomial, subset = -outliers)
+plot(win.glm2, which = 1)
+```
+
+apm
+```{r}
+win.glm3 <- glm(Win ~ APM, data = scouting3, family = binomial, subset = -outliers)
+plot(win.glm3, which = 1)
+```
+
+cps
+```{r}
+win.glm4 <- glm(Win ~ cenLogCPS, data = scouting3, family = binomial, subset = -outliers)
+plot(win.glm4, which = 1)
+```
+
+peace rate
+```{r}
+win.glm5 <- glm(Win ~ cenLogPeaceRate, data = scouting3, family = binomial, subset = -outliers)
+plot(win.glm5, which = 1)
+```
+
+battle rate
+```{r}
+win.glm6 <- glm(Win ~ cenLogBattleRate, data = scouting3, family = binomial, subset = -outliers)
+plot(win.glm6, which = 1)
+```
+
 
 
 

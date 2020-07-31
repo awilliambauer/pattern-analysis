@@ -372,6 +372,29 @@ def scouting_timefrac_list(scouting_dict, frames):
 
     return time_fracs
 
+def scouting_timeframe_list1(scouting_dict):
+    time_frames = []
+    keys = scouting_dict.keys()
+    cur_scouting = False
+    for key in keys:
+        state = scouting_dict[key]
+        if state == "Scouting opponent":
+            if not(cur_scouting):
+                time_frames.append(key)
+            cur_scouting = True
+        else:
+            cur_scouting = False
+    return time_frames
+
+def scouting_timeframe_list2(scouting_dict):
+    time_frames = []
+    keys = scouting_dict.keys()
+    for key in keys:
+        state = scouting_dict[key]
+        if state == "Scouting opponent":
+            time_frames.append(key)
+    return time_frames
+
 def scouting_freq_and_cat(replay):
     '''scouting_freq_and_cat is the main function of this script. detect_scouting does
     error checking on replays and raises errors for replays with incomplete information,
@@ -446,7 +469,7 @@ def scouting_freq_and_cat(replay):
         raise
 
 
-def scouting_times(replay):
+def scouting_times(replay, which):
     r = replay
 
     tracker_events = r.tracker_events
@@ -461,7 +484,17 @@ def scouting_times(replay):
     team1_scouting_states = integrateBattles(team1_scouting_states, battles)
     team2_scouting_states = integrateBattles(team2_scouting_states, battles)
 
-    team1_time_list = scouting_timefrac_list(team1_scouting_states, frames)
-    team2_time_list = scouting_timefrac_list(team2_scouting_states, frames)
+    #times normalized by the length of the game
+    if which == 1:
+        team1_time_list = scouting_timefrac_list(team1_scouting_states, frames)
+        team2_time_list = scouting_timefrac_list(team2_scouting_states, frames)
+    #absolute frames - only counted once for each state switch
+    elif which == 2:
+        team1_time_list = scouting_timeframe_list1(team1_scouting_states)
+        team2_time_list = scouting_timeframe_list1(team2_scouting_states)
+    #absolute frames - each scouting opponent frame is counted
+    elif which == 3:
+        team1_time_list = scouting_timeframe_list2(team1_scouting_states)
+        team2_time_list = scouting_timeframe_list2(team2_scouting_states)
 
     return team1_time_list, team2_time_list

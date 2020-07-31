@@ -1,0 +1,165 @@
+---
+title: "Scouting Distribution"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(Rmisc)
+library(dplyr)
+library(car)
+library(tidyverse)
+library(broom)
+library(Hmisc)
+library(mice)
+```
+
+### Reading data
+```{r}
+time_fracs <- read.csv("scouting_time_fraction.csv")
+time_frames1 <- read.csv("scouting_time_frames1.csv")
+#time_frames2 <- read.csv("scouting_time_frames2.csv")
+
+time_fracs$RankStr <- ifelse(time_fracs$Rank == 1, "1-Bronze", ifelse(time_fracs$Rank == 2,
+                      "2-Silver", ifelse(time_fracs$Rank == 3, "3-Gold", ifelse(time_fracs$Rank == 4,
+                      "4-Platinum", ifelse(time_fracs$Rank == 5, "5-Diamond", ifelse(time_fracs$Rank
+                      == 6, "6-Master", ifelse(time_fracs$Rank ==7, "7-Grandmaster", "No Rank")))))))
+time_frames1$RankStr <- ifelse(time_frames1$Rank == 1, "1-Bronze", ifelse(time_frames1$Rank == 2,
+                        "2-Silver", ifelse(time_frames1$Rank == 3, "3-Gold", ifelse(time_frames1$Rank
+                        == 4, "4-Platinum", ifelse(time_frames1$Rank == 5, "5-Diamond",
+                        ifelse(time_frames1$Rank == 6, "6-Master", ifelse(time_frames1$Rank == 7,
+                        "7-Grandmaster", "No Rank")))))))
+#time_frames2$RankStr <- ifelse(time_frames2$Rank == 1, "Bronze", ifelse(time_frames2$Rank == 2,
+                        #"Silver", ifelse(time_frames2$Rank == 3, "Gold", ifelse(time_frames2$Rank ==
+                        #4, "Platinum", ifelse(time_frames2$Rank == 5, "Diamond",
+                        #ifelse(time_frames2$Rank == 6, "Master", ifelse(time_frames2$Rank == 7,
+                        #"Grandmaster", "No Rank")))))))
+```
+
+```{r}
+hist(time_fracs$Rank)
+
+bronze_fracs <- which(time_fracs$Rank == 1)
+silver_fracs <- which(time_fracs$Rank == 2)
+gold_fracs <- which(time_fracs$Rank == 3)
+plat_fracs <- which(time_fracs$Rank == 4)
+diam_fracs <- which(time_fracs$Rank == 5)
+master_fracs <- which(time_fracs$Rank == 6)
+gmaster_fracs <- which(time_fracs$Rank == 7)
+
+hist(time_frames1$Rank)
+
+bronze_frames <- which(time_frames1$Rank == 1)
+silver_frames <- which(time_frames1$Rank == 2)
+gold_frames <- which(time_frames1$Rank == 3)
+plat_frames <- which(time_frames1$Rank == 4)
+diam_frames <- which(time_frames1$Rank == 5)
+master_frames <- which(time_frames1$Rank == 6)
+gmaster_frames <- which(time_frames1$Rank == 7)
+```
+
+### Distribution of scouting by fraction of game time, Normalized by # of Players
+```{r}
+all_hist1 <- ggplot(time_fracs, aes(x = ScoutTime)) + geom_histogram() + 
+          ggtitle("Distribution of Scouting by Fraction of Game Time, All Ranks") + labs(y = "Count",
+          x = "Fraction of Game Time at which Players Scout")
+rank_hist1 <- ggplot(time_fracs, aes(x = ScoutTime)) +geom_histogram(aes(y = ..ncount.., color =
+              RankStr, fill = RankStr), position = "identity", bins = 30, alpha = 0.4) +
+              facet_wrap(~RankStr) +
+              ggtitle("Distribution of Scouting by Fraction of Game Time, Separated by Rank") +
+              labs(y="Count", x="Fraction of Game Time at which Players Scout")
+
+bronze_fracs_hist <- ggplot(time_fracs[bronze_fracs,], aes(x = ScoutTime)) +
+                geom_histogram(aes(y=(..count..)/length(bronze_fracs)), color="pink", fill="pink",
+                bins = 20, alpha = 0.4) + labs(y="% of Players", x = "Bronze") + 
+                coord_cartesian(ylim =c(0, 0.1))
+
+silver_fracs_hist <- ggplot(time_fracs[silver_fracs,], aes(x = ScoutTime)) +
+                geom_histogram(aes(y=(..count..)/length(silver_fracs)),color="red",fill="red",
+                bins = 20, alpha = 0.4)+ labs(y = " ", x = "Silver") + 
+                coord_cartesian(ylim = c(0, 0.1))
+
+gold_fracs_hist <- ggplot(time_fracs[gold_fracs,], aes(x = ScoutTime)) +
+                geom_histogram(aes(y=(..count..)/length(gold_fracs)),color="orange",fill="orange",
+                bins = 20, alpha = 0.4)+ labs(y = " ", x = "Gold") + 
+                coord_cartesian(ylim = c(0, 0.1))
+
+plat_fracs_hist <- ggplot(time_fracs[plat_fracs,], aes(x = ScoutTime)) +
+                geom_histogram(aes(y=(..count..)/length(plat_fracs)),color="yellow",fill="yellow",
+                bins = 20, alpha = 0.4)+labs(y="% of Players", x = "Platinum") + 
+                coord_cartesian(ylim = c(0, 0.1))
+
+diam_fracs_hist <- ggplot(time_fracs[diam_fracs,], aes(x = ScoutTime)) +
+                geom_histogram(aes(y=(..count..)/length(diam_fracs)),color="green",fill="green",
+                bins = 20, alpha = 0.4)+ labs(y = " ", x = "Diamond") + 
+                coord_cartesian(ylim = c(0, 0.1))
+
+mast_fracs_hist <- ggplot(time_fracs[master_fracs,], aes(x = ScoutTime)) +
+                geom_histogram(aes(y=(..count..)/length(master_fracs)),color="blue",fill="blue",
+                bins = 20, alpha = 0.4)+ labs(y="% of Players", x = "Master") + 
+                coord_cartesian(ylim = c(0, 0.1))
+
+gmaster_fracs_hist <- ggplot(time_fracs[gmaster_fracs,], aes(x = ScoutTime)) +
+                geom_histogram(aes(y=(..count..)/length(gmaster_fracs)),color="purple",fill="purple",
+                bins = 20, alpha = 0.4)+labs(y = " ", x="Grandmaster") +
+                coord_cartesian(ylim = c(0, 0.1))
+
+all_hist1
+#rank_hist1
+multiplot(bronze_fracs_hist, plat_fracs_hist, mast_fracs_hist, silver_fracs_hist, diam_fracs_hist, gmaster_fracs_hist, gold_fracs_hist, cols = 3)
+```
+
+### Distribution of scouting by frames, Normalized by # of Players
+```{r}
+all_hist2 <- ggplot(time_frames1, aes(x = ScoutTime)) + geom_histogram() + coord_cartesian(xlim =
+            c(0, 75000)) +  ggtitle("Distribution of Scouting by Frame, All Ranks") + labs(y =
+            "Count", x = "Frames at which Players Scout") 
+rank_hist2 <- ggplot(time_frames1, aes(x = ScoutTime)) +geom_histogram(aes(y = ..ncount.., color =
+              RankStr, fill = RankStr), position = "identity", bins = 40, alpha = 0.4) +
+              facet_wrap(~RankStr) + coord_cartesian(xlim = c(0, 75000)) +
+              ggtitle("Distribution of Scouting by Frame, Separated by Rank") +
+              labs(y="Count", x="Frame at which Players Scout")
+
+bronze_frames_hist <- ggplot(time_frames1[bronze_frames,], aes(x = ScoutTime)) +
+                geom_histogram(aes(y=(..count..)/length(bronze_frames)), color="pink", fill="pink",
+                bins = 20, binwidth = 4000, alpha = 0.4) + labs(y="% of Players", x = "Bronze") + 
+                coord_cartesian(ylim =c(0, 0.6), xlim = c(0, 65000))
+
+silver_frames_hist <- ggplot(time_frames1[silver_frames,], aes(x = ScoutTime)) +
+                geom_histogram(aes(y=(..count..)/length(silver_frames)),color="red",fill="red",
+                bins = 20, binwidth = 4000, alpha = 0.4)+ labs(y = " ", x = "Silver") + 
+                coord_cartesian(ylim = c(0, 0.6), xlim = c(0, 65000))
+
+gold_frames_hist <- ggplot(time_frames1[gold_frames,], aes(x = ScoutTime)) +
+                geom_histogram(aes(y=(..count..)/length(gold_frames)),color="orange",fill="orange",
+                bins = 20, binwidth = 4000, alpha = 0.4)+ labs(y = " ", x = "Gold") + 
+                coord_cartesian(ylim = c(0, 0.6), xlim = c(0, 65000))
+
+plat_frames_hist <- ggplot(time_frames1[plat_frames,], aes(x = ScoutTime)) +
+                geom_histogram(aes(y=(..count..)/length(plat_frames)),color="yellow",fill="yellow",
+                bins = 20, binwidth = 4000, alpha = 0.4)+labs(y="% of Players", x = "Platinum") + 
+                coord_cartesian(ylim = c(0, 0.6), xlim = c(0, 65000))
+
+diam_frames_hist <- ggplot(time_frames1[diam_frames,], aes(x = ScoutTime)) +
+                geom_histogram(aes(y=(..count..)/length(diam_frames)),color="green",fill="green",
+                bins = 20, binwidth = 4000, alpha = 0.4)+ labs(y = " ", x = "Diamond") + 
+                coord_cartesian(ylim = c(0, 0.6), xlim = c(0, 65000))
+
+mast_frames_hist <- ggplot(time_frames1[master_frames,], aes(x = ScoutTime)) +
+                geom_histogram(aes(y=(..count..)/length(master_frames)),color="blue",fill="blue",
+                bins = 20, binwidth = 4000, alpha = 0.4)+ labs(y="% of Players", x = "Master") + 
+                coord_cartesian(ylim = c(0, 0.6), xlim = c(0, 65000))
+
+gmaster_frames_hist <- ggplot(time_frames1[gmaster_frames,], aes(x = ScoutTime)) +
+                geom_histogram(aes(y=(..count..)/length(gmaster_frames)),color="purple",fill="purple",
+                bins = 20, binwidth = 4000, alpha = 0.4)+labs(y = " ", x="Grandmaster") +
+                coord_cartesian(ylim = c(0, 0.6), xlim = c(0, 65000))
+
+all_hist2
+#rank_hist1
+multiplot(bronze_frames_hist, plat_frames_hist, mast_frames_hist, silver_frames_hist, diam_frames_hist, gmaster_frames_hist, gold_frames_hist, cols = 3)
+```
+
+
+
