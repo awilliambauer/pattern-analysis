@@ -250,8 +250,30 @@ def uid_stats(counter):
     print("Number of players with only one game:", one_game, "or {:2d}% of players".format(one_perc))
     print("Number of players with multiple games:", mult_games, "or {:2d}% of players".format(mult_perc))
 
+def uid_counter(filename):
+    unique_ids = [[], [], [], [], [], [], []]
+    with open(filename, 'r') as my_csv:
+        reader = csv.DictReader(my_csv)
+        for row in reader:
+            game_id, rank = row["GameID"], row["Rank"]
+            if rank == "nan":
+                continue
+            else:
+                intRank = int(rank)
 
-def main():
+            if not(game_id in unique_ids[intRank-1]):
+                unique_ids[intRank-1].append(game_id)
+    print("---{}---".format(filename))
+    print("Bronze unique ids:", len(unique_ids[0]))
+    print("Silver unique ids:", len(unique_ids[1]))
+    print("Gold unique ids:", len(unique_ids[2]))
+    print("Platinum unique ids:", len(unique_ids[3]))
+    print("Diamond unique ids:", len(unique_ids[4]))
+    print("Master unique ids:", len(unique_ids[5]))
+    print("Grandmaster unique ids:", len(unique_ids[6]))
+
+
+def main1():
     t1 = time.time()
     uid_counter = read_scouting_stats()
     read_event_counts()
@@ -272,4 +294,8 @@ def main():
     deltatime = time.time()-t1
     print("Run time: ", "{:2d}".format(int(deltatime//60)), "minutes and", "{:05.2f}".format(deltatime%60), "seconds")
 
-main()
+def main2():
+    uid_counter("scouting_time_fraction.csv")
+    uid_counter("scouting_time_frames1.csv")
+
+main2()

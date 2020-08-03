@@ -5,6 +5,7 @@ import csv
 import sc2reader
 import time
 from multiprocessing import Pool
+from collections import Counter
 import scouting_detector
 import scouting_stats
 from sc2reader.engine.plugins import SelectionTracker, APMTracker
@@ -127,14 +128,14 @@ def writeToCsv(which, filename):
     pool.close()
     pool.join()
 
-    bad_files = 0
-
     with open(filename, 'w', newline = '') as my_csv:
         events_out = csv.DictWriter(my_csv, fieldnames=["GameID", "Rank", "ScoutTime"])
         events_out.writeheader()
         for fields in results:
             if fields:
                 game_id = fields[0]
+                if not(game_id in unique_ids):
+                    unique_ids.append(game_id)
                 rank = fields[1]
                 times = fields[2]
                 for time in times:
@@ -143,9 +144,7 @@ def writeToCsv(which, filename):
                 times = fields[4]
                 for time in times:
                     events_out.writerow({"GameID": game_id, "Rank": rank, "ScoutTime": time})
-            else:
-                bad_files += 1
-    print(bad_files)
+
 
 if __name__ == "__main__":
     t1 = time.time()
