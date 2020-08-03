@@ -79,19 +79,40 @@ def make_unit_series(replay: sc2reader.resources.Replay, pindex: int, binsize: i
     return series
 
 
-def plot_unit_series(series: np.ndarray, fields: List[str], filename: str = "") -> None:
+def plot_unit_series(series: np.ndarray, fields: List[str], pattern_masks: Dict[str, np.ndarray], filename: str = "", figsize: Tuple[int, int] = (20, 10)) -> None:
     """
 
     :param series:
+    :param pattern_masks:
     :param fields:
     :param filename:
+    :param figsize:
     """
-    fig, ax = plt.subplots(figsize=(20, 10))
+    fig, ax = plt.subplots(figsize=figsize)
     colors = plt.cm.get_cmap("tab20").colors + plt.cm.get_cmap("tab20b").colors
+    x = np.arange(len(series))
     for j in range(series.shape[1]):
-        ax.plot(np.arange(len(series)), series[:, j], color=colors[j], alpha=0.7)
+        ax.plot(x, series[:, j], color=colors[j], alpha=0.7)
+    ax.set_xlim(-10, len(series) + 10)
     fig.tight_layout()
     plt.draw()
+
+    if pattern_masks:
+        mask_colors = plt.cm.get_cmap("viridis", len(pattern_masks)).colors
+        fills = []
+        pattern_labels = []
+        for i, (pt, mask) in enumerate(pattern_masks.items()):
+            if mask.any():
+                fills.append(ax.fill_between(x, 0, series.max(), mask, color=mask_colors[i], alpha=0.4))
+                pattern_labels.append(pt)
+                if mask[0]:
+                    ax.text(-2, series.max(), pt)
+                for i, (a, b) in enumerate(zip(mask, mask[1:])):
+                    if b and not a:
+                        ax.text(i, series.max(), pt)
+        if len(pattern_masks) > 0:
+            ax.legend(fills, pattern_labels, bbox_to_anchor=(1.01, 1), fancybox=True, shadow=True)
+        plt.draw()
 
     cols = {j for j in np.nonzero(series)[1]}
     for j in cols:
@@ -108,6 +129,26 @@ def plot_unit_series(series: np.ndarray, fields: List[str], filename: str = "") 
         plt.savefig(filename)
     else:
         plt.show()
+
+
+def plot_model():
+    # TODO prototype code from ipython
+    k = 20
+    for race in field_lookup:
+        all_series = np.loadtxt(f"{results_path}/{race}/all_series.txt")
+        with open(f"{results_path}/{race}/idx_lookup.pickle", 'rb') as fp:
+            idx_lookup = pickle.load(fp)
+        noise = np.array([-1] * len(field_lookup[race]))
+        subseries_lookups = {}
+        patterns = get_patterns(mrf_lookup[race][k], cluster_lookup[race][k], idx_lookup)
+        subseries_lookups[k] = make_subseries_lookup(k, patterns, mrf_lookup[race][k], all_series, noise)
+        pattern_lookups = get_pattern_lookups(krange, {20: {}}, {}, subseries_lookups,
+                                             cluster_lookup[race], mrf_lookup[race], idx_lookup)
+        for x, ((uid, gid, _), idx) in enumerate(idx_lookup.items()):
+            print(f"plotting {x} out of {len(idx_lookup)} {race} series\r", end="")
+            masks = get_pattern_masks(uid, gid, idx, [str(i) for i in pattern_lookups[20].keys() if i != "base"], {}, pattern_lookups[20], {})
+            plot_unit_series(all_series[idx[0]: idx[1]], field_lookup[race], masks, f"{results_path}/{race}/{uid}_{gid}.png")
+        plot_model(f"{results_path}/{race}", 20, [(i, 0) for i in pattern_lookups.keys() if i != "base"], all_series, pattern_lookup, field_lookup[race])
 
 
 def replay_to_series(replay_file: str, binsize: int) -> Optional[Dict[Tuple[str, str], np.ndarray]]:
@@ -137,7 +178,7 @@ def replay_to_series(replay_file: str, binsize: int) -> Optional[Dict[Tuple[str,
         return
 
 
-def make_combined_series(race, series_lookup):
+def make_combined_series(race: str, series_lookup: Dict[Hashable, np.ndarray]) -> None:
     results_path = f"results/{race}"
     os.makedirs(results_path, exist_ok=True)
 
@@ -156,6 +197,8 @@ if __name__ == "__main__":
     group.add_argument("--sample", nargs=1, type=int)
     args = parser.parse_args()
 
+    results_path = "results/small"
+
     if args.lookup:
         with open(args.lookup, "rb") as fp:
             race_lookup = pickle.load(fp)
@@ -167,7 +210,7 @@ if __name__ == "__main__":
             metas = {}
             rng = np.random.default_rng(42)
             for rf in replay_files:
-                with open(f"{rf.replace('.SC2Replay', '_meta.json')}")as fp:
+                with open(f"replays/{rf.replace('.SC2Replay', '_meta.json')}")as fp:
                     meta = json.load(fp)
                     metas[rf.split("_")[1].split(".")[0]] = meta
                     matchups.extend(meta['tags'].get("Matchup", ["Missing"]))
@@ -187,16 +230,52 @@ if __name__ == "__main__":
         # sort series k-v pairs by race
         series = sorted([(k, v) for d in series for k, v in d.items()], key=lambda x: x[0][2])
         race_lookup = {race: dict(vs) for race, vs in groupby(series, lambda x: x[0][2])}
-        with open("results/race_lookup.pickle", "wb") as fp:
+        with open(f"{results_path}/race_lookup.pickle", "wb") as fp:
             pickle.dump(race_lookup, fp)
 
     all_series_lookup = {}
 
-    with Pool() as pool:
-        pool.starmap(make_combined_series, iter(race_lookup.items()))
+    if not all(os.path.exists(f"{results_path}/{race}/all_series.txt") for race in race_lookup):
+        with Pool() as pool:
+            pool.starmap(make_combined_series, iter(race_lookup.items()))
 
     for race in race_lookup:
-        all_series_lookup[race] = np.loadtxt(f"results/{race}/all_series.txt")
+        all_series_lookup[race] = np.loadtxt(f"{results_path}/{race}/all_series.txt")
 
     print("running ticc")
-    run_TICC(all_series_lookup, "results", [20], window_size=5, num_proc=8)
+    logging.getLogger().setLevel(logging.DEBUG)
+    krange = range(3, 21)
+    sub_krange = range(2, 11)
+    run_TICC(all_series_lookup, results_path, krange, num_proc=8)
+
+    cluster_lookup, mrf_lookup, model_lookup, bic_lookup = load_TICC_output(results_path, ["Zerg", "Terran", "Protoss"], krange)
+
+    for race, all_series in all_series_lookup.items():
+        results_path_race = f"{results_path}/{race}"
+        with open(f"{results_path_race}/idx_lookup.pickle", 'rb') as fp:
+            idx_lookup = pickle.load(fp)
+        noise = np.array([-1] * len(field_lookup[race]))
+
+        subseries_lookups: Dict[int, Dict[int, SubSeriesLookup]] = {}
+        for k in krange:
+            patterns = get_patterns(mrf_lookup[race][k], cluster_lookup[race][k], idx_lookup)
+            subseries_lookups[k] = make_subseries_lookup(k, patterns, mrf_lookup[race][k], all_series, noise)
+
+        logging.debug("Running recursive TICC")
+        run_sub_TICC(subseries_lookups, results_path, race, sub_krange)
+
+        logging.debug("Loading recursive TICC output")
+        sub_lookup = load_sub_lookup(results_path_race, subseries_lookups, sub_krange)
+        sub_clusters = sub_lookup.clusters
+        pattern_lookup = get_pattern_lookups(krange, sub_clusters, sub_lookup.mrfs, subseries_lookups,
+                                             cluster_lookup[race], mrf_lookup[race], idx_lookup)
+
+        os.makedirs(f"{results_path_race}/eval", exist_ok=True)
+        with open(f"{results_path_race}/eval/cluster_lookup.pickle", "wb") as fp:
+            pickle.dump(cluster_lookup, fp)
+        with open(f"{results_path_race}/eval/subseries_lookups.pickle", "wb") as fp:
+            pickle.dump(subseries_lookups, fp)
+        with open(f"{results_path_race}/eval/sub_clusters.pickle", "wb") as fp:
+            pickle.dump(sub_clusters, fp)
+        with open(f"{results_path_race}/eval/pattern_lookup.pickle", "wb") as fp:
+            pickle.dump(pattern_lookup, fp)
