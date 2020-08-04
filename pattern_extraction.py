@@ -176,7 +176,7 @@ def run_sub_TICC(subseries_lookups: dict, datapath: str, uid: str, sub_krange: l
         pickle.dump(subseries_lookups, fp)
 
     for k in subseries_lookups:
-        os.makedirs(results_dir + "/k{}".format(k), exist_ok=True)
+        os.makedirs(f"{results_dir}/k{k}", exist_ok=True)
 
     with ProcessPoolExecutor(min(len(subseries_lookups), os.cpu_count() // num_proc)) as pool:
         pool.map(partial(run_TICC, krange=sub_krange, save_model=save_model, skip_series_fn=skip_series_fn, window_size=window_size, num_proc=num_proc),
