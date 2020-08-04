@@ -356,6 +356,41 @@ def categorize_player(scouting_dict, frames):
 
     return category
 
+def avg_interval(scouting_dict, scale):
+    '''Returns the average interval, in seconds, between instances of scouting'''
+    intervals = []
+    keys = scouting_dict.keys()
+    after_first = False
+    any_scouting = False
+    start_interval = 0
+    interval = 0
+
+    for key in keys:
+        state = scouting_dict[key]
+        if state == "Scouting opponent":
+            after_first = True
+            any_scouting = True
+            if interval:
+                intervals.append(interval)
+            interval = 0
+        else:
+            if after_first:
+                interval += 1
+            else:
+                start_interval += 1
+
+    if len(intervals) == 0 and any_scouting:
+        #only one instance of scouting, return the time it took to get
+        #to that first instance
+        return start_interval/scale
+    elif len(intervals) == 0 and not(any_scouting):
+        #no scouting ocurred, return a flag to indicate so
+        return -1
+    elif len(intervals) > 0:
+        #2 or more instances of scouting ocurred, find the average interval between
+        mean_interval = (statistics.mean(intervals))/scale
+        return mean_interval
+
 def scouting_timefrac_list(scouting_dict, frames):
     time_fracs = []
     keys = scouting_dict.keys()
@@ -395,6 +430,23 @@ def scouting_timeframe_list2(scouting_dict):
             time_frames.append(key)
     return time_frames
 
+def final_scouting_states(replay):
+    r = replay
+
+    tracker_events = r.tracker_events
+    game_events = r.game_events
+    frames = r.frames
+
+    allEvents = buildEventLists(tracker_events, game_events)
+    objects = r.objects.values()
+    team1_scouting_states, team2_scouting_states = buildScoutingDictionaries(allEvents, objects)
+
+    battles = battle_detector.buildBattleList(r)
+    team1_scouting_states = integrateBattles(team1_scouting_states, battles)
+    team2_scouting_states = integrateBattles(team2_scouting_states, battles)
+
+    return team1_scouting_states, team2_scouting_states
+
 def scouting_freq_and_cat(replay):
     '''scouting_freq_and_cat is the main function of this script. detect_scouting does
     error checking on replays and raises errors for replays with incomplete information,
@@ -428,19 +480,12 @@ def scouting_freq_and_cat(replay):
     if len(r.players) != 2:
         print(r.filename, "is not a 1v1 game")
         raise RuntimeError()
-    tracker_events = r.tracker_events
-    game_events = r.game_events
+
     frames = r.frames
     seconds = r.length.seconds
 
     try:
-        allEvents = buildEventLists(tracker_events, game_events)
-        objects = r.objects.values()
-        team1_scouting_states, team2_scouting_states = buildScoutingDictionaries(allEvents, objects)
-
-        battles = battle_detector.buildBattleList(r)
-        team1_scouting_states = integrateBattles(team1_scouting_states, battles)
-        team2_scouting_states = integrateBattles(team2_scouting_states, battles)
+        team1_scouting_states, team2_scouting_states = final_scouting_states(r)
 
         team1_num_times, team1_time = scouting_stats(team1_scouting_states)
         team2_num_times, team2_time = scouting_stats(team2_scouting_states)
@@ -451,17 +496,6 @@ def scouting_freq_and_cat(replay):
         team1_cat = categorize_player(team1_scouting_states, frames)
         team2_cat = categorize_player(team2_scouting_states, frames)
 
-        # team1_time_dict = toTime(team1_scouting_states, frames, seconds)
-        # team2_time_dict = toTime(team2_scouting_states, frames, seconds)
-
-        # timelist = battle_detector.toTime(battles, frames, seconds)
-        # print("---Battles---")
-        # battle_detector.printTime(timelist)
-        # print("---Team 1---")
-        # printTime(team1_time_dict)
-        # print("\n\n---Team 2---")
-        # printTime(team2_time_dict)
-
         return team1_freq, team1_cat, team2_freq, team2_cat, r.winner.number
 
     except:
@@ -471,18 +505,9 @@ def scouting_freq_and_cat(replay):
 
 def scouting_times(replay, which):
     r = replay
-
-    tracker_events = r.tracker_events
-    game_events = r.game_events
     frames = r.frames
 
-    allEvents = buildEventLists(tracker_events, game_events)
-    objects = r.objects.values()
-    team1_scouting_states, team2_scouting_states = buildScoutingDictionaries(allEvents, objects)
-
-    battles = battle_detector.buildBattleList(r)
-    team1_scouting_states = integrateBattles(team1_scouting_states, battles)
-    team2_scouting_states = integrateBattles(team2_scouting_states, battles)
+    team1_scouting_states, team2_scouting_states = final_scouting_states(r)
 
     #times normalized by the length of the game
     if which == 1:
@@ -498,3 +523,28 @@ def scouting_times(replay, which):
         team2_time_list = scouting_timeframe_list2(team2_scouting_states)
 
     return team1_time_list, team2_time_list
+
+
+def scouting_interval(replay):
+    r = replay
+    factors = sc2reader.constants.GAME_SPEED_FACTOR
+    scale = 16*factors[r.expansion][r.speed]
+
+    team1_scouting_states, team2_scouting_states = final_scouting_states(r)
+
+    team1_avg_int = avg_interval(team1_scouting_states, scale)
+    team2_avg_int = avg_interval(team2_scouting_states, scale)
+
+    return team1_avg_int, team2_avg_int
+
+
+
+# frames = r.frames
+# seconds = r.length.seconds
+# team1_time_dict = toTime(team1_scouting_states, frames, seconds)
+# team2_time_dict = toTime(team2_scouting_states, frames, seconds)
+#
+# print("---Team 1---")
+# printTime(team1_time_dict)
+# print("\n\n---Team 2---")
+# printTime(team2_time_dict)
