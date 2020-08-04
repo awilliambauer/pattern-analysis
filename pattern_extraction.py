@@ -142,7 +142,7 @@ def make_subseries_lookup(k: int, patterns: List[PatternInstance], mrfs: Dict[in
     for cid in range(k):
         if is_null_cluster(mrfs[cid]):
             continue
-        logging.debug(f"assembling series for pattern {cid}")
+        # logging.debug(f"assembling series for pattern {cid}")
         subpatterns = {(p.uid, p.pid, p.start_idx): all_series[p.start_idx:p.end_idx] for p in patterns if
                         p.cid == cid}
         if len(subpatterns) == 0:
@@ -178,7 +178,7 @@ def run_sub_TICC(subseries_lookups: dict, datapath: str, uid: str, sub_krange: l
     for k in subseries_lookups:
         os.makedirs(results_dir + "/k{}".format(k), exist_ok=True)
 
-    with ProcessPoolExecutor(len(subseries_lookups)) as pool:
+    with ProcessPoolExecutor(min(len(subseries_lookups), os.cpu_count() // num_proc)) as pool:
         pool.map(partial(run_TICC, krange=sub_krange, save_model=save_model, skip_series_fn=skip_series_fn, window_size=window_size, num_proc=num_proc),
                  [{f"cid{cid}": lookup.series for cid, lookup in subseries_lookups[k].items()} for k in subseries_lookups],
                  [f"{results_dir}/k{k}" for k in subseries_lookups])
@@ -260,10 +260,10 @@ def load_sub_lookup(datapath: str, subseries_lookup: dict, sub_krange: Iterable[
     bics = {}     # Dict[int, Dict[int, Dict[int, float]]] (k to cid to sub_k to bic)
     for k in subseries_lookup:
         dp = "{}/subpatterns/k{}".format(datapath, k)
-        cs, mrfs, ms, bs = load_TICC_output(dp, ["cid{}".format(cid) for cid in subseries_lookup[k]], sub_krange)
+        cs, ms, mods, bs = load_TICC_output(dp, ["cid{}".format(cid) for cid in subseries_lookup[k]], sub_krange)
         clusters[k] = {int(k.replace("cid", "")): v for k, v in cs.items()}
-        mrfs[k] = {int(k.replace("cid", "")): v for k, v in mrfs.items()}
-        models[k] = {int(k.replace("cid", "")): v for k, v in ms.items()}
+        mrfs[k] = {int(k.replace("cid", "")): v for k, v in ms.items()}
+        models[k] = {int(k.replace("cid", "")): v for k, v in mods.items()}
         bics[k] = {int(k.replace("cid", "")): v for k, v in bs.items()}
     return SubLookup(clusters, mrfs, models, bics)
 

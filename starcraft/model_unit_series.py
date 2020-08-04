@@ -9,13 +9,14 @@ import sc2reader
 import os
 import sys
 import pickle
-from typing import Iterable, List, Optional, Tuple, Dict
+import logging
+from typing import Iterable, List, Optional, Tuple, Dict, Hashable
 from itertools import groupby
 from functools import partial
 import matplotlib.pyplot as plt
 
 sys.path.append("../")  # enable importing from parent directory
-from pattern_extraction import combine_user_series, run_TICC
+from pattern_extraction import *
 
 zerg_fields = ['baneling', 'banelingnest', 'broodlord', 'corruptor', 'drone', 'evolutionchamber', 'extractor',
                'greaterspire', 'hatchery', 'hive', 'hydralisk', 'hydraliskden', 'infestationpit', 'infestedterran',
@@ -198,8 +199,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     results_path = "results/small"
+    os.makedirs(results_path, exist_ok=True)
 
     if args.lookup:
+        print(f"loading {args.lookup}")
         with open(args.lookup, "rb") as fp:
             race_lookup = pickle.load(fp)
     else:
@@ -240,15 +243,21 @@ if __name__ == "__main__":
             pool.starmap(make_combined_series, iter(race_lookup.items()))
 
     for race in race_lookup:
+        print(f"loading {race} series")
         all_series_lookup[race] = np.loadtxt(f"{results_path}/{race}/all_series.txt")
 
-    print("running ticc")
+
     logging.getLogger().setLevel(logging.DEBUG)
     krange = range(3, 21)
     sub_krange = range(2, 11)
-    run_TICC(all_series_lookup, results_path, krange, num_proc=8)
-
-    cluster_lookup, mrf_lookup, model_lookup, bic_lookup = load_TICC_output(results_path, ["Zerg", "Terran", "Protoss"], krange)
+    try:
+        print("attempting to laod existing ticc models... ", end="")
+        cluster_lookup, mrf_lookup, model_lookup, bic_lookup = load_TICC_output(results_path, ["Zerg", "Terran", "Protoss"], krange)
+        print("done")
+    except:
+        print("failed\n running ticc")
+        run_TICC(all_series_lookup, results_path, krange, num_proc=8)
+        cluster_lookup, mrf_lookup, model_lookup, bic_lookup = load_TICC_output(results_path, ["Zerg", "Terran", "Protoss"], krange)
 
     for race, all_series in all_series_lookup.items():
         results_path_race = f"{results_path}/{race}"
@@ -256,18 +265,34 @@ if __name__ == "__main__":
             idx_lookup = pickle.load(fp)
         noise = np.array([-1] * len(field_lookup[race]))
 
-        subseries_lookups: Dict[int, Dict[int, SubSeriesLookup]] = {}
-        for k in krange:
+        subseries_lookups = {}
+        cd = cluster_lookup[race]
+        md = mrf_lookup[race]
+        ser = all_series_lookup[race]
+        no_dups = {k for k in cd if
+                   not any(any((m == md[k][ci]).all() for cj, m in md[k].items() if cj > ci) for ci in range(k))}
+        print(f"{race} k with no dups: {no_dups}")
+        null_clusters = {k: [ci for ci in md[k] if is_null_cluster(md[k][ci])] for k in md}
+        handles_noise = {k for k in cd if len(null_clusters[k]) > 0 and all(
+            cd[k][i] in null_clusters[k] for i in range(len(ser)) if (ser[i] == noise).all())}
+        print(f"{race} k that handle noise: {handles_noise}")
+        valid_k = no_dups.intersection(handles_noise)
+
+        for k in valid_k:
             patterns = get_patterns(mrf_lookup[race][k], cluster_lookup[race][k], idx_lookup)
             subseries_lookups[k] = make_subseries_lookup(k, patterns, mrf_lookup[race][k], all_series, noise)
 
-        logging.debug("Running recursive TICC")
-        run_sub_TICC(subseries_lookups, results_path, race, sub_krange)
+        try:
+            print(f"Attempting to laod existing recursive ticc models for {race}... ", end="")
+            sub_lookup = load_sub_lookup(results_path_race, subseries_lookups, sub_krange)
+        except:
+            print("failed\n Running recursive ticc")
+            run_sub_TICC(subseries_lookups, results_path, race, sub_krange)
+            sub_lookup = load_sub_lookup(results_path_race, subseries_lookups, sub_krange)
 
-        logging.debug("Loading recursive TICC output")
-        sub_lookup = load_sub_lookup(results_path_race, subseries_lookups, sub_krange)
+        print("saving final model output for", race)
         sub_clusters = sub_lookup.clusters
-        pattern_lookup = get_pattern_lookups(krange, sub_clusters, sub_lookup.mrfs, subseries_lookups,
+        pattern_lookup = get_pattern_lookups(valid_k, sub_clusters, sub_lookup.mrfs, subseries_lookups,
                                              cluster_lookup[race], mrf_lookup[race], idx_lookup)
 
         os.makedirs(f"{results_path_race}/eval", exist_ok=True)
