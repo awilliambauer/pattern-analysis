@@ -41,21 +41,34 @@ def download_replays(start_replay_num: int, end_replay_num: int) -> None:
     official_maps = [x.strip() for x in open("blizzard_maps.txt").readlines()]
 
     for replay_num in range(start_replay_num, end_replay_num + 1):
-        subprocess.run(["wget", "-O", f"replays/dropsc_{replay_num}.SC2Replay",
-                        f"https://sc2replaystats.com/download/{replay_num}"])
+        print()
+        with open(f"replays/dropsc_{replay_num}.SC2Replay", 'wb') as outfile:
+            # running into issues with 301 redirects on connection from some machines, so download via mirage
+            sp = subprocess.run(["ssh", "awb@mirage.mathcs.carleton.edu",
+                                 "wget", "--no-check-certificate", "-O", "-", f"https://sc2replaystats.com/download/{replay_num}"],
+                                stdout=outfile, stderr=subprocess.DEVNULL)
+
+            if sp.returncode == 0:
+                print(f"wget {replay_num} success")
+            else:
+                print(f"wget {replay_num} FAILED")
+                continue
 
         try:
             r = sc2reader.load_replay(f"replays/dropsc_{replay_num}.SC2Replay")
-            if r.map_name not in official_maps or r.real_length.total_seconds() < 300:
+            if r.map_name not in official_maps or r.real_length.total_seconds() < 300 or len(r.humans) - len(r.observers) != 2:
+                print(f"{replay_num} uninteresting replay ({r.map_name}, {r.real_length.total_seconds()}, {len(r.humans) - len(r.observers)}), deleting")
                 os.remove(f"replays/dropsc_{replay_num}.SC2Replay")
                 continue
-        except:
+        except Exception as e:
+            print(f"{replay_num} invalid replay ({e}), deleting")
             try:
                 os.remove(f"replays/dropsc_{replay_num}.SC2Replay")
                 continue
             except:
                 continue
 
+        print(f"{replay_num} valid, parsing metadata")
         html_str = request(f"https://drop.sc/replay/{replay_num}")
         tree = html.fromstring(html_str)
 
@@ -66,7 +79,7 @@ def download_replays(start_replay_num: int, end_replay_num: int) -> None:
             for pdiv in player_divs:
                 name = pdiv.xpath(".//h3")[0].text_content()
                 info = pdiv.xpath(".//div[@class='col-md-4']")[0].text_content()
-                info.replace("Battle Net Profile", "").split("\n")
+                info = info.replace("Battle Net Profile", "").split("\n")
                 assert len(info) == 4
                 replay_json[name] = {
                     "clan": info[1].split(":")[1].strip(),
@@ -76,7 +89,10 @@ def download_replays(start_replay_num: int, end_replay_num: int) -> None:
                     "rank": pdiv.xpath(".//img/@src")[0].split("/")[-1][:-4],  # get string form of rank from image name used for rank insignia
                     "bnet_url": pdiv.xpath(".//a/@href")[0]
                 }
+            json.dump(replay_json, json_out)
 
 if __name__ == "__main__":
     # scrap replays back to Dec. 2017 (id 6000000)
     download_replays(6000000, 15649277)
+    #download_replays(6000000, 6000001)
+
