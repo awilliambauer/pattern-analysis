@@ -12,6 +12,7 @@ from plot_util import make_boxplot
 
 
 def read_scouting_stats():
+    '''Creates boxplots and calculates other values for all data in scouting_stats.py'''
     rank_uid_counter = {1: Counter(), 2: Counter(), 3: Counter(), 4: Counter(),
                         5: Counter(), 6: Counter(), 7: Counter()}
     total_rows = 0
@@ -187,6 +188,8 @@ def read_scouting_stats():
     return rank_uid_counter
 
 def read_event_counts():
+    '''Creates boxplots for control group selections for gold and grandmaster ranks,
+        as well as boxplots for control group selection ratio for each rank'''
     total_rows = 0
 
     gold_bxplt_data = [[], []]
@@ -272,6 +275,21 @@ def uid_counter(filename):
     print("Master unique ids:", len(unique_ids[5]))
     print("Grandmaster unique ids:", len(unique_ids[6]))
 
+def read_intervals():
+    interval_data = [[], [], [], [], [], [], []]
+    rank_categories = ["Bronze", "Silver", "Gold", "Platinum", "Diamond", "Master", "Grandmaster"]
+    with open("intervals.csv", 'r') as my_csv:
+        reader = csv.DictReader(my_csv)
+        for row in reader:
+            rank, interval = row["Rank"], float(row["Interval"])
+            if rank == "nan":
+                continue
+            else:
+                intRank = int(rank)
+            interval_data[intRank-1].append(interval)
+
+    make_boxplot(interval_data, rank_categories, "Average Length (in seconds) Between Scouting Periods", "Intervals.png", yscale = "log")
+    make_boxplot([interval_data[6]], ["Grandmaster"], "Average Length (in seconds) Between Scouting Periods", "IntervalsGrandmaster.png")
 
 def main1():
     t1 = time.time()
@@ -298,4 +316,4 @@ def main2():
     uid_counter("scouting_time_fraction.csv")
     uid_counter("scouting_time_frames1.csv")
 
-main2()
+read_intervals()
