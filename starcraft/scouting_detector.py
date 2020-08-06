@@ -307,43 +307,44 @@ def scouting_stats(scouting_dict):
 
     return num_times, scouting_frames
 
-def integrateBattles(scouting_dict, battles, scale):
-    '''integrateBattles is used to cross-check a scouting dictionary with a
-    list of battles. More specifically, it is used to avoid false-positives
-    of "scouting" an opponent during battle. integrateBattles takes in a
-    scouting dictionary returned by buildScoutingDictionaries and a list
-    of battles returned by battle_detector.buildBattleList. It returns the
-    updated scouting dictionary.'''
+def integrateEngagements(scouting_dict, engagements, scale, replacement):
+    '''integrateEngagements is used to cross-check a scouting dictionary with a
+    list of engagements(battles or harassing). More specifically, it is used to
+    avoid false positives of "scouting" an opponent during engagements.
+    integrateEngagements takes in a scouting dictionary returned by
+    buildScoutingDictionaries, a list of engagements returned by
+    battle_detector.buildBattleList, and a string indicating what the false
+    positives should be replaced by. It returns the updated scouting dictionary.'''
     frame_jump7 = 7*int(scale)
     keys = scouting_dict.keys()
-    start_battle = False
+    start_engagement = False
     start_frame = None
-    end_battle = False
+    end_engagement = False
     end_frame = None
     length = len(keys)
     frame = 1
     while frame < length:
-        if scouting_dict[frame] == "Scouting opponent" and battle_detector.duringBattle(frame, battles):
-            scouting_dict[frame] = "No scouting"
+        if scouting_dict[frame] == "Scouting opponent" and battle_detector.duringBattle(frame, engagements):
+            scouting_dict[frame] = replacement
             if scouting_dict[frame-1] != "Scouting opponent":
-                start_battle = True
+                start_engagement = True
                 start_frame = frame
             if scouting_dict[frame+1] != "Scouting opponent":
-                end_battle = True
+                end_engagement = True
                 end_frame = frame
 
         else:
             #reset scouting instances if they are within 7 seconds of a battle
-            if start_battle:
+            if start_engagement:
                 for i in range(start_frame-frame_jump7, start_frame):
                     if i in keys and scouting_dict[i] == "Scouting opponent":
-                        scouting_dict[i] = "No scouting"
-            if end_battle:
+                        scouting_dict[i] = replacement
+            if end_engagement:
                 for i in range(end_frame, end_frame+frame_jump7):
                     if i in keys and scouting_dict[i] == "Scouting opponent":
-                        scouting_dict[i] = "No scouting"
-            end_battle = False
-            start_battle = False
+                        scouting_dict[i] = replacement
+            end_engagement = False
+            start_engagement = False
         frame += 1
     return scouting_dict
 
@@ -531,9 +532,11 @@ def final_scouting_states(replay):
     team1_scouting_states = checkFirstInstance(team1_scouting_states, scale)
     team2_scouting_states = checkFirstInstance(team2_scouting_states, scale)
 
-    battles = battle_detector.buildBattleList(r)
-    team1_scouting_states = integrateBattles(team1_scouting_states, battles, scale)
-    team2_scouting_states = integrateBattles(team2_scouting_states, battles, scale)
+    battles, harassing = battle_detector.buildBattleList(r)
+    team1_scouting_states = integrateEngagements(team1_scouting_states, battles, scale, "Viewing opponent during battle")
+    team2_scouting_states = integrateEngagements(team2_scouting_states, battles, scale, "Viewing opponent during battle")
+    team1_scouting_states = integrateEngagements(team1_scouting_states, harassing, scale, "Harassing")
+    team2_scouting_states = integrateEngagements(team2_scouting_states, harassing, scale, "Harassing")
 
     # battleTimes = battle_detector.toTime(battles, frames, r.length.seconds)
     # battle_detector.printTime(battleTimes)

@@ -15,14 +15,15 @@ def buildBattleList(replay):
     if replay.build < 25446:
         return 0
 
-    #initializing the list of battles, where each battle is a tuple that contains
-    #the frame that the battle began and the frame that the battle ended
+    #initializing the list of battles and harssing, where each instance is a tuple that contains
+    #the frame that the engagement began and the frame that the engagement ended
     battles = []
+    harassing = []
 
     MAX_DEATH_SPACING_FRAMES = 160.0 #max number of frames between deaths for
     #deaths to be considered part of the same engagement
 
-    INTERESTING_ENGAGEMENT = 0.1 #threshold of army that must be killed in order
+    BATTLE = 0.1 #threshold of army that must be killed in order
     #for the engagement to be considered a battle
 
     owned_units = []
@@ -81,14 +82,31 @@ def buildBattleList(replay):
 
         #deciding whether an engagement meets the threshold to be a battle
         if engagement[2] > engagement[1]:
+            defense_buildings = ["Bunker", "MissileTurret", "PlanetaryFortress",
+                                "PhotonCannon", "ShieldBattery", "SpineCrawler",
+                                "SporeCrawler"]
             for team in replay.teams:
-                if(units_at_start[team] > 0) and ((float(killed[team] + killed_econ[team])/(units_at_start[team] + born_during_battle[team])) > INTERESTING_ENGAGEMENT):
+                total_units = len(engagement[0])
+                worker_count = 0
+                non_defense = False
+                for unit in engagement[0]:
+                    if unit.is_worker:
+                        worker_count += 1
+                    elif not(unit.name in defense_buildings):
+                        non_defense = True
+                perc_worker = worker_count/total_units
+                perc_died = float(killed[team] + killed_econ[team])/(units_at_start[team] + born_during_battle[team])
+                if(units_at_start[team] > 0) and (perc_died >= BATTLE):
                     #greater than 10% of a team's army value was killed, add to battles
                     tuple = (engagement[1], engagement[2])
                     if tuple not in battles:
                         battles.append(tuple)
+                elif(units_at_start[team] > 0) and (perc_died < BATTLE) and (total_units >= 4) and (perc_worker >= 0.5 or non_defense):
+                    tuple = (engagement[1], engagement[2])
+                    if tuple not in harassing:
+                        harassing.append(tuple)
 
-    return battles
+    return battles, harassing
 
 def duringBattle(frame, battles):
     '''duringBattle returns true if a frame takes place during a battle.
