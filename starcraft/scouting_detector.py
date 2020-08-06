@@ -316,15 +316,34 @@ def integrateBattles(scouting_dict, battles, scale):
     updated scouting dictionary.'''
     frame_jump7 = 7*int(scale)
     keys = scouting_dict.keys()
+    start_battle = False
+    start_frame = None
+    end_battle = False
+    end_frame = None
     length = len(keys)
     frame = 1
     while frame < length:
         if scouting_dict[frame] == "Scouting opponent" and battle_detector.duringBattle(frame, battles):
             scouting_dict[frame] = "No scouting"
-            #Also check for scouting for 7 seconds in either direction
-            for i in range(frame-frame_jump7, frame+frame_jump7):
-                if i in keys and scouting_dict[i] == "Scouting opponent":
-                    scouting_dict[i] = "No scouting"
+            if scouting_dict[frame-1] != "Scouting opponent":
+                start_battle = True
+                start_frame = frame
+            if scouting_dict[frame+1] != "Scouting opponent":
+                end_battle = True
+                end_frame = frame
+
+        else:
+            #reset scouting instances if they are within 7 seconds of a battle
+            if start_battle:
+                for i in range(start_frame-frame_jump7, start_frame):
+                    if i in keys and scouting_dict[i] == "Scouting opponent":
+                        scouting_dict[i] = "No scouting"
+            if end_battle:
+                for i in range(end_frame, end_frame+frame_jump7):
+                    if i in keys and scouting_dict[i] == "Scouting opponent":
+                        scouting_dict[i] = "No scouting"
+            end_battle = False
+            start_battle = False
         frame += 1
     return scouting_dict
 
@@ -515,6 +534,9 @@ def final_scouting_states(replay):
     battles = battle_detector.buildBattleList(r)
     team1_scouting_states = integrateBattles(team1_scouting_states, battles, scale)
     team2_scouting_states = integrateBattles(team2_scouting_states, battles, scale)
+
+    # battleTimes = battle_detector.toTime(battles, frames, r.length.seconds)
+    # battle_detector.printTime(battleTimes)
 
     return team1_scouting_states, team2_scouting_states
 
