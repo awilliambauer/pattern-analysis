@@ -118,7 +118,7 @@ def writeToCsv(which, filename):
         files.append(line.strip())
     games.close()
 
-    pool = Pool(40)
+    pool = Pool(20)
     if which == 1:
         results = pool.map(generateFields1, files)
     elif which == 2:
@@ -134,8 +134,6 @@ def writeToCsv(which, filename):
         for fields in results:
             if fields:
                 game_id = fields[0]
-                if not(game_id in unique_ids):
-                    unique_ids.append(game_id)
                 rank = fields[1]
                 times = fields[2]
                 for time in times:
@@ -150,6 +148,5 @@ if __name__ == "__main__":
     t1 = time.time()
     writeToCsv(1, "scouting_time_fraction.csv")
     writeToCsv(2, "scouting_time_frames1.csv")
-    writeToCsv(3, "scouting_time_frames2.csv")
     deltatime = time.time()-t1
     print("Run time: ", "{:2d}".format(int(deltatime//60)), "minutes and", "{:05.2f}".format(deltatime%60), "seconds")

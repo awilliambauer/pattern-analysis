@@ -54,7 +54,7 @@ def writeToCsv():
         files.append(line.strip())
     games.close()
 
-    pool = Pool(40)
+    pool = Pool(20)
     results = pool.map(generateFields, files)
     pool.close()
     pool.join()

@@ -316,4 +316,4 @@ def main2():
     uid_counter("scouting_time_fraction.csv")
     uid_counter("scouting_time_frames1.csv")
 
-read_intervals()
+main1()

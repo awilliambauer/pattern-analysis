@@ -35,6 +35,8 @@ def generateFields(filename):
             game_id = "ggg-" + game_id
         elif filename.startswith("spawningtool"):
             game_id = "st-" + game_id
+        elif filename.startswith("dropsc"):
+            game_id = "ds-" + game_id
 
         #loading the replay
         try:
@@ -178,6 +180,8 @@ def writeToCsv(write, debug, start, end):
                             filename = "gggreplays_{}.SC2Replay".format(fields[0][4:])
                         elif fields[0].startswith("st-"):
                             filename = "spawningtool_{}.SC2Replay".format(fields[0][3:])
+                        elif fields[0].startswith("ds-"):
+                            filename = "dropsc_{}.SC2Replay".format(fields[0][3:])
                         valid_games.append(filename)
                     #updating the map counter
                     map_counter[fields[32]] += 1
@@ -200,7 +204,7 @@ def writeToCsv(write, debug, start, end):
                                         "Win":fields[31]})
         #running with multiprocessing
         else:
-            pool = Pool(40)
+            pool = Pool(20)
             results = pool.map(generateFields, files)
             pool.close()
             pool.join()
@@ -212,6 +216,8 @@ def writeToCsv(write, debug, start, end):
                             filename = "gggreplays_{}.SC2Replay".format(fields[0][4:])
                         elif fields[0].startswith("st-"):
                             filename = "spawningtool_{}.SC2Replay".format(fields[0][3:])
+                        elif fields[0].startswith("ds-"):
+                            filename = "dropsc_{}.SC2Replay".format(fields[0][3:])
                         valid_games.append(filename)
                     #updating the map counter
                     map_counter[fields[32]] += 1

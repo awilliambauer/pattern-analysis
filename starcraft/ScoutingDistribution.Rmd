@@ -74,6 +74,20 @@ prof_uids <- plat_uids + diam_uids
 expert_uids <- gmast_uids
 ```
 
+```{r}
+bronze_col <- "#4d4dff"
+silver_col <- "#36b3b3"
+gold_col <- "#884dff"
+plat_col <- "#00e5e6"
+diam_col <- "#3655b3"
+mast_col <- "#000066"
+gmast_col <- "#3c00b3"
+
+novice_col <- "#4d4dff"
+prof_col <- "#36b3b3"
+expert_col <- "#884dff"
+```
+
 ### Distribution of scouting by fraction of game time for each rank, Normalized by % of Scouting instances
 ```{r}
 all_hist1 <- ggplot(time_fracs, aes(x = ScoutTime)) + geom_histogram() + 
@@ -86,43 +100,43 @@ rank_hist1 <- ggplot(time_fracs, aes(x = ScoutTime)) +geom_histogram(aes(y = ..n
               labs(y="Count", x="Fraction of Game Time at which Players Scout")
 
 bronze_fracs_hist <- ggplot(time_fracs[bronze_fracs,], aes(x = ScoutTime)) +
-              geom_histogram(aes(y=(..count..)/length(bronze_fracs)),color="#4d4dff", fill="#4d4dff",
+              geom_histogram(aes(y=(..count..)/length(bronze_fracs)),color=bronze_col, fill=bronze_col,
                 bins = 20, alpha = 0.6) + labs(y="% of Scouting", x = "Gametime-Bronze") + 
                 coord_cartesian(ylim =c(0, 0.1)) + scale_y_continuous(labels=scales::percent) +
                 scale_x_continuous(labels = scales::percent)
 
 silver_fracs_hist <- ggplot(time_fracs[silver_fracs,], aes(x = ScoutTime)) +
-              geom_histogram(aes(y=(..count..)/length(silver_fracs)),color="#36b3b3",fill="#36b3b3",
+              geom_histogram(aes(y=(..count..)/length(silver_fracs)),color=silver_col,fill=silver_col,
                 bins = 20, alpha = 0.4)+ labs(y = " ", x = "Gametime-Silver") + 
                 coord_cartesian(ylim = c(0, 0.1))+ scale_y_continuous(labels=scales::percent) +
                 scale_x_continuous(labels = scales::percent)
 
 gold_fracs_hist <- ggplot(time_fracs[gold_fracs,], aes(x = ScoutTime)) +
-                geom_histogram(aes(y=(..count..)/length(gold_fracs)),color="#884dff",fill="#884dff",
+                geom_histogram(aes(y=(..count..)/length(gold_fracs)),color=gold_col,fill=gold_col,
                 bins = 20, alpha = 0.4)+ labs(y = " ", x = "Gametime-Gold") + 
                 coord_cartesian(ylim = c(0, 0.1))+ scale_y_continuous(labels=scales::percent) +
                 scale_x_continuous(labels = scales::percent)
 
 plat_fracs_hist <- ggplot(time_fracs[plat_fracs,], aes(x = ScoutTime)) +
-                geom_histogram(aes(y=(..count..)/length(plat_fracs)),color="#00e5e6",fill="#00e5e6",
+                geom_histogram(aes(y=(..count..)/length(plat_fracs)),color=plat_col,fill=plat_col,
                 bins = 20, alpha = 0.4)+labs(y="% of Scouting", x = "Gametime-Platinum") + 
                 coord_cartesian(ylim = c(0, 0.1))+ scale_y_continuous(labels=scales::percent) +
                 scale_x_continuous(labels = scales::percent)
 
 diam_fracs_hist <- ggplot(time_fracs[diam_fracs,], aes(x = ScoutTime)) +
-                geom_histogram(aes(y=(..count..)/length(diam_fracs)),color="#3655b3",fill="#3655b3",
+                geom_histogram(aes(y=(..count..)/length(diam_fracs)),color=diam_col,fill=diam_col,
                 bins = 20, alpha = 0.4)+ labs(y = " ", x = "Gametime-Diamond") + 
                 coord_cartesian(ylim = c(0, 0.1))+ scale_y_continuous(labels=scales::percent) +
                 scale_x_continuous(labels = scales::percent)
 
 mast_fracs_hist <- ggplot(time_fracs[master_fracs,], aes(x = ScoutTime)) +
-                geom_histogram(aes(y=(..count..)/length(master_fracs)),color="#000066",fill="#000066",
+                geom_histogram(aes(y=(..count..)/length(master_fracs)),color=mast_col,fill=mast_col,
                 bins = 20, alpha = 0.4)+ labs(y=" ", x = "Gametime-Master") + 
                 coord_cartesian(ylim = c(0, 0.1))+ scale_y_continuous(labels=scales::percent) +
                 scale_x_continuous(labels = scales::percent)
 
 gmaster_fracs_hist <- ggplot(time_fracs[gmaster_fracs,], aes(x = ScoutTime)) +
-                geom_histogram(aes(y=(..count..)/length(gmaster_fracs)),color="#3c00b3",fill="#3c00b3",
+                geom_histogram(aes(y=(..count..)/length(gmaster_fracs)),color=gmast_col,fill=gmast_col,
                 bins = 20, alpha = 0.4)+labs(y = "% of Scouting", x="Gametime-Grandmaster") +
                 coord_cartesian(ylim = c(0, 0.1))+ scale_y_continuous(labels=scales::percent) +
                 scale_x_continuous(labels = scales::percent)
@@ -136,17 +150,17 @@ grid.arrange(bronze_fracs_hist, silver_fracs_hist, gold_fracs_hist, plat_fracs_h
 ### Distribution of scouting by fraction of game time for expertise, normalized by % of Scouting instances
 ```{r}
 novice_fracs_hist <- ggplot(time_fracs[novice_fracs,], aes(x = ScoutTime)) +
-              geom_histogram(aes(y=(..count..)/length(novice_fracs)), color="#4d4dff", fill="#4d4dff",
+              geom_histogram(aes(y=(..count..)/length(novice_fracs)),color=novice_col, fill=novice_col,
                 bins = 20, alpha = 0.4) + labs(y="% of Scouting", x = "Gametime-Novice") + 
                 coord_cartesian(ylim =c(0, 0.1))+ scale_y_continuous(labels=scales::percent) +
                 scale_x_continuous(labels = scales::percent)
 prof_fracs_hist <- ggplot(time_fracs[prof_fracs,], aes(x = ScoutTime)) +
-                geom_histogram(aes(y=(..count..)/length(prof_fracs)),color="#36b3b3",fill="#36b3b3",
+                geom_histogram(aes(y=(..count..)/length(prof_fracs)),color=prof_col,fill=prof_col,
                 bins = 20, alpha = 0.4)+ labs(y = " ", x = "Gametime-Proficient") + 
                 coord_cartesian(ylim = c(0, 0.1))+ scale_y_continuous(labels=scales::percent) +
                 scale_x_continuous(labels = scales::percent)
 expert_fracs_hist <- ggplot(time_fracs[expert_fracs,], aes(x = ScoutTime)) +
-                geom_histogram(aes(y=(..count..)/length(expert_fracs)),color="#884dff",fill="#884dff",
+              geom_histogram(aes(y=(..count..)/length(expert_fracs)),color=expert_col,fill=expert_col,
                 bins = 20, alpha = 0.4)+ labs(y = " ", x = "Gametime-Expert") + 
                 coord_cartesian(ylim = c(0, 0.1))+ scale_y_continuous(labels=scales::percent) +
                 scale_x_continuous(labels = scales::percent)
@@ -159,37 +173,37 @@ grid.arrange(novice_fracs_hist, prof_fracs_hist, expert_fracs_hist, ncol=3, nrow
 ### Distribution of scouting by fraction of game time for each rank, normalized by % of matches
 ```{r}
 bronze_fracs_hist2 <- ggplot(time_fracs[bronze_fracs,], aes(x = ScoutTime)) +
-                geom_histogram(aes(y=(..count..)/(bronze_uids*2)), color="#4d4dff", fill="#4d4dff",
+                geom_histogram(aes(y=(..count..)/(bronze_uids*2)), color=bronze_col, fill=bronze_col,
                 bins = 30, alpha = 0.4) + labs(y="% of Matches", x = "Gametime-Bronze") + 
                 coord_cartesian(ylim =c(0, 1))+ scale_y_continuous(labels=scales::percent) +
                 scale_x_continuous(labels = scales::percent)
 silver_fracs_hist2 <- ggplot(time_fracs[silver_fracs,], aes(x = ScoutTime)) +
-                geom_histogram(aes(y=(..count..)/(silver_uids*2)),color="#36b3b3",fill="#36b3b3",
+                geom_histogram(aes(y=(..count..)/(silver_uids*2)),color=silver_col,fill=silver_col,
                 bins = 30, alpha = 0.4)+ labs(y = " ", x = "Gametime-Silver") + 
                 coord_cartesian(ylim = c(0, 1))+ scale_y_continuous(labels=scales::percent) +
                 scale_x_continuous(labels = scales::percent)
 gold_fracs_hist2 <- ggplot(time_fracs[gold_fracs,], aes(x = ScoutTime)) +
-                geom_histogram(aes(y=(..count..)/(gold_uids*2)),color="#884dff",fill="#884dff",
+                geom_histogram(aes(y=(..count..)/(gold_uids*2)),color=gold_col,fill=gold_col,
                 bins = 30, alpha = 0.4)+ labs(y = " ", x = "% of Gametime-Gold") + 
                 coord_cartesian(ylim = c(0, 1))+ scale_y_continuous(labels=scales::percent) +
                 scale_x_continuous(labels = scales::percent)
 plat_fracs_hist2 <- ggplot(time_fracs[plat_fracs,], aes(x = ScoutTime)) +
-                geom_histogram(aes(y=(..count..)/(plat_uids*2)),color="#00e5e6",fill="#00e5e6",
+                geom_histogram(aes(y=(..count..)/(plat_uids*2)),color=plat_col,fill=plat_col,
                 bins = 30, alpha = 0.4)+labs(y="% of Matches", x = "Gametime-Platinum") + 
                 coord_cartesian(ylim = c(0, 1))+ scale_y_continuous(labels=scales::percent) +
                 scale_x_continuous(labels = scales::percent)
 diam_fracs_hist2 <- ggplot(time_fracs[diam_fracs,], aes(x = ScoutTime)) +
-                geom_histogram(aes(y=(..count..)/(diam_uids*2)),color="#3655b3",fill="#3655b3",
+                geom_histogram(aes(y=(..count..)/(diam_uids*2)),color=diam_col,fill=diam_col,
                 bins = 30, alpha = 0.4)+ labs(y = " ", x = "Gametime-Diamond") + 
                 coord_cartesian(ylim = c(0, 1))+ scale_y_continuous(labels=scales::percent) +
                 scale_x_continuous(labels = scales::percent)
 mast_fracs_hist2 <- ggplot(time_fracs[master_fracs,], aes(x = ScoutTime)) +
-                geom_histogram(aes(y=(..count..)/(mast_uids*2)),color="#000066",fill="#000066",
+                geom_histogram(aes(y=(..count..)/(mast_uids*2)),color=mast_col,fill=mast_col,
                 bins = 30, alpha = 0.4)+ labs(y=" ", x = "Gametime-Master") + 
                 coord_cartesian(ylim = c(0, 1))+ scale_y_continuous(labels=scales::percent) +
                 scale_x_continuous(labels = scales::percent)
 gmaster_fracs_hist2 <- ggplot(time_fracs[gmaster_fracs,], aes(x = ScoutTime)) +
-                geom_histogram(aes(y=(..count..)/(gmast_uids*2)),color="#3c00b3",fill="#3c00b3",
+                geom_histogram(aes(y=(..count..)/(gmast_uids*2)),color=gmast_col,fill=gmast_col,
                 bins = 30, alpha = 0.4)+labs(y = "% of Matches", x="Gametime-Grandmaster") +
                 coord_cartesian(ylim = c(0, 1))+ scale_y_continuous(labels=scales::percent) +
                 scale_x_continuous(labels = scales::percent)
@@ -203,17 +217,17 @@ grid.arrange(bronze_fracs_hist2, silver_fracs_hist2, gold_fracs_hist2, plat_frac
 ### Distribution of scouting by fraction of game time for expertise, normalized by % of matches
 ```{r}
 novice_fracs_hist2 <- ggplot(time_fracs[novice_fracs,], aes(x = ScoutTime)) +
-                geom_histogram(aes(y=(..count..)/(novice_uids*2)), color="#4d4dff", fill="#4d4dff",
+                geom_histogram(aes(y=(..count..)/(novice_uids*2)), color=novice_col, fill=novice_col,
                 bins = 30, alpha = 0.4) + labs(y="% of Matches", x = "Gametime-Novice") + 
                 coord_cartesian(ylim =c(0, 1))+ scale_y_continuous(labels=scales::percent) +
                 scale_x_continuous(labels = scales::percent)
 prof_fracs_hist2 <- ggplot(time_fracs[prof_fracs,], aes(x = ScoutTime)) +
-                geom_histogram(aes(y=(..count..)/(prof_uids*2)),color="#36b3b3",fill="#36b3b3",
+                geom_histogram(aes(y=(..count..)/(prof_uids*2)),color=prof_col,fill=prof_col,
                 bins = 30, alpha = 0.4)+ labs(y = " ", x = "Gametime-Proficient") + 
                 coord_cartesian(ylim = c(0, 1))+ scale_y_continuous(labels=scales::percent) +
                 scale_x_continuous(labels = scales::percent)
 expert_fracs_hist2 <- ggplot(time_fracs[expert_fracs,], aes(x = ScoutTime)) +
-                geom_histogram(aes(y=(..count..)/(expert_uids*2)),color="#884dff",fill="#884dff",
+                geom_histogram(aes(y=(..count..)/(expert_uids*2)),color=expert_col,fill=expert_col,
                 bins = 30, alpha = 0.4)+ labs(y = " ", x = "Gametime-Expert") + 
                 coord_cartesian(ylim = c(0, 1))+ scale_y_continuous(labels=scales::percent) +
                 scale_x_continuous(labels = scales::percent)
@@ -234,43 +248,43 @@ rank_hist2 <- ggplot(time_frames1, aes(x = ScoutTime)) +geom_histogram(aes(y = .
               labs(y="Count", x="Frame at which Players Scout")
 
 bronze_frames_hist <- ggplot(time_frames1[bronze_frames,], aes(x = ScoutTime)) +
-              geom_histogram(aes(y=(..count..)/length(bronze_frames)), color="#4d4dff", fill="#4d4dff",
+              geom_histogram(aes(y=(..count..)/length(bronze_frames)),color=bronze_col,fill=bronze_col,
                 bins = 20, binwidth =4000, alpha = 0.4) + labs(y="% of Scouting", x="Frames-Bronze") +
                 coord_cartesian(ylim =c(0, 0.35), xlim = c(0, 65000))+
                 scale_y_continuous(labels=scales::percent)
 
 silver_frames_hist <- ggplot(time_frames1[silver_frames,], aes(x = ScoutTime)) +
-                geom_histogram(aes(y=(..count..)/length(silver_frames)),color="#36b3b3",fill="#36b3b3",
+              geom_histogram(aes(y=(..count..)/length(silver_frames)),color=silver_col,fill=silver_col,
                 bins = 20, binwidth = 4000, alpha = 0.4)+ labs(y = " ", x = "Frames-Silver") + 
                 coord_cartesian(ylim = c(0, 0.35), xlim = c(0, 65000))+
                 scale_y_continuous(labels=scales::percent)
 
 gold_frames_hist <- ggplot(time_frames1[gold_frames,], aes(x = ScoutTime)) +
-                geom_histogram(aes(y=(..count..)/length(gold_frames)),color="#884dff",fill="#884dff",
+                geom_histogram(aes(y=(..count..)/length(gold_frames)),color=gold_col,fill=gold_col,
                 bins = 20, binwidth = 4000, alpha = 0.4)+ labs(y = " ", x = "Frames-Gold") + 
                 coord_cartesian(ylim = c(0, 0.35), xlim = c(0, 65000))+
                 scale_y_continuous(labels=scales::percent)
 
 plat_frames_hist <- ggplot(time_frames1[plat_frames,], aes(x = ScoutTime)) +
-                geom_histogram(aes(y=(..count..)/length(plat_frames)),color="#00e5e6",fill="#00e5e6",
+                geom_histogram(aes(y=(..count..)/length(plat_frames)),color=plat_col,fill=plat_col,
                 bins = 20, binwidth = 4000, alpha = 0.4)+labs(y="% of Scouting", x="Frames-Platinum") +
                 coord_cartesian(ylim = c(0, 0.35), xlim = c(0, 65000))+
                 scale_y_continuous(labels=scales::percent)
 
 diam_frames_hist <- ggplot(time_frames1[diam_frames,], aes(x = ScoutTime)) +
-                geom_histogram(aes(y=(..count..)/length(diam_frames)),color="#3655b3",fill="#3655b3",
+                geom_histogram(aes(y=(..count..)/length(diam_frames)),color=diam_col,fill=diam_col,
                 bins = 20, binwidth = 4000, alpha = 0.4)+ labs(y = " ", x = "Frames-Diamond") + 
                 coord_cartesian(ylim = c(0, 0.4), xlim = c(0, 65000))+
                 scale_y_continuous(labels=scales::percent)
 
 mast_frames_hist <- ggplot(time_frames1[master_frames,], aes(x = ScoutTime)) +
-                geom_histogram(aes(y=(..count..)/length(master_frames)),color="#000066",fill="#000066",
+                geom_histogram(aes(y=(..count..)/length(master_frames)),color=mast_col,fill=mast_col,
                 bins = 20, binwidth = 4000, alpha = 0.4)+ labs(y=" ", x="Frames-Master") + 
                 coord_cartesian(ylim = c(0, 0.35), xlim = c(0, 65000))+
                 scale_y_continuous(labels=scales::percent)
 
 gmaster_frames_hist <- ggplot(time_frames1[gmaster_frames,], aes(x = ScoutTime)) +
-              geom_histogram(aes(y=(..count..)/length(gmaster_frames)),color="#3c00b3",fill="#3c00b3",
+              geom_histogram(aes(y=(..count..)/length(gmaster_frames)),color=gmast_col,fill=gmast_col,
                 bins = 20, binwidth = 4000, alpha = 0.4)+labs(y = "% of Scouting", x="Frames-Grandmaster") +
                 coord_cartesian(ylim = c(0, 0.35), xlim = c(0, 65000))+
                 scale_y_continuous(labels=scales::percent)
@@ -285,17 +299,17 @@ grid.arrange(bronze_frames_hist, silver_frames_hist, gold_frames_hist, plat_fram
 ### Distribution of scouting by frames for expertise, Normalized by # of scouting instances
 ```{r}
 novice_frames_hist <- ggplot(time_frames1[novice_frames,], aes(x = ScoutTime)) +
-              geom_histogram(aes(y=(..count..)/length(novice_frames)), color="#4d4dff", fill="#4d4dff",
+              geom_histogram(aes(y=(..count..)/length(novice_frames)),color=novice_col,fill=novice_col,
                 bins = 20, binwidth = 4000, alpha=0.4) + labs(y="% of Scouting", x="Frames-Novice") + 
                 coord_cartesian(ylim =c(0, 0.35), xlim = c(0, 65000))+
                 scale_y_continuous(labels=scales::percent)
 prof_frames_hist <- ggplot(time_frames1[prof_frames,], aes(x = ScoutTime)) +
-                geom_histogram(aes(y=(..count..)/length(prof_frames)), color="#36b3b3", fill="#36b3b3",
+                geom_histogram(aes(y=(..count..)/length(prof_frames)), color=prof_col, fill=prof_col,
                 bins = 20, binwidth = 4000, alpha = 0.4) + labs(y=" ", x = "Frames-Proficient") + 
                 coord_cartesian(ylim =c(0, 0.35), xlim = c(0, 65000))+
                 scale_y_continuous(labels=scales::percent)
 expert_frames_hist <- ggplot(time_frames1[expert_frames,], aes(x = ScoutTime)) +
-              geom_histogram(aes(y=(..count..)/length(expert_frames)), color="#884dff", fill="#884dff",
+              geom_histogram(aes(y=(..count..)/length(expert_frames)),color=expert_col,fill=expert_col,
                 bins = 20, binwidth = 4000, alpha = 0.4) + labs(y=" ", x = "Frames-Expert") + 
                 coord_cartesian(ylim =c(0, 0.35), xlim = c(0, 65000))+
                 scale_y_continuous(labels=scales::percent)
@@ -307,37 +321,37 @@ grid.arrange(novice_frames_hist, prof_frames_hist, expert_frames_hist, ncol=3, n
 ### Distribution of scouting by frames for each rank, Normalized by % of matches
 ```{r}
 bronze_frames_hist2 <- ggplot(time_frames1[bronze_frames,], aes(x = ScoutTime)) +
-                geom_histogram(aes(y=(..count..)/(bronze_uids*2)), color="#4d4dff", fill="#4d4dff",
+                geom_histogram(aes(y=(..count..)/(bronze_uids*2)), color=bronze_col, fill=bronze_col,
                 binwidth = 600, alpha = 0.4) + labs(y="% of Matches", x = "Frames-Bronze") + 
                 coord_cartesian(ylim =c(0, 1), xlim = c(0, 65000))+
                 scale_y_continuous(labels=scales::percent)
 silver_frames_hist2 <- ggplot(time_frames1[silver_frames,], aes(x = ScoutTime)) +
-                geom_histogram(aes(y=(..count..)/(silver_uids*2)), color="#36b3b3", fill="#36b3b3",
+                geom_histogram(aes(y=(..count..)/(silver_uids*2)), color=silver_col, fill=silver_col,
                 binwidth = 600, alpha = 0.4) + labs(y=" ", x = "Frames-Silver") + 
                 coord_cartesian(ylim =c(0, 1), xlim = c(0, 65000))+
                 scale_y_continuous(labels=scales::percent)
 gold_frames_hist2 <- ggplot(time_frames1[gold_frames,], aes(x = ScoutTime)) +
-                geom_histogram(aes(y=(..count..)/(gold_uids*2)), color="#884dff", fill="#884dff",
+                geom_histogram(aes(y=(..count..)/(gold_uids*2)), color=gold_col, fill=gold_col,
                 binwidth = 600, alpha = 0.4) + labs(y=" ", x = "Frames-Gold") + 
                 coord_cartesian(ylim =c(0, 1), xlim = c(0, 65000))+
                 scale_y_continuous(labels=scales::percent)
 plat_frames_hist2 <- ggplot(time_frames1[plat_frames,], aes(x = ScoutTime)) +
-                geom_histogram(aes(y=(..count..)/(plat_uids*2)), color="#00e5e6", fill="#00e5e6",
+                geom_histogram(aes(y=(..count..)/(plat_uids*2)), color=plat_col, fill=plat_col,
                 binwidth = 600, alpha = 0.4) + labs(y="% of Matches", x = "Frames-Platinum") + 
                 coord_cartesian(ylim =c(0, 1), xlim = c(0, 65000))+
                 scale_y_continuous(labels=scales::percent)
 diam_frames_hist2 <- ggplot(time_frames1[diam_frames,], aes(x = ScoutTime)) +
-                geom_histogram(aes(y=(..count..)/(diam_uids*2)), color="#3655b3", fill="#3655b3",
+                geom_histogram(aes(y=(..count..)/(diam_uids*2)), color=diam_col, fill=diam_col,
                 binwidth = 600, alpha = 0.4) + labs(y=" ", x = "Frames-Diamond") + 
                 coord_cartesian(ylim =c(0, 1), xlim = c(0, 65000))+
                 scale_y_continuous(labels=scales::percent)
 mast_frames_hist2 <- ggplot(time_frames1[master_frames,], aes(x = ScoutTime)) +
-                geom_histogram(aes(y=(..count..)/(mast_uids*2)), color="#000066", fill="#000066",
+                geom_histogram(aes(y=(..count..)/(mast_uids*2)), color=mast_col, fill=mast_col,
                 binwidth = 600, alpha = 0.4) + labs(y=" ", x = "Frames-Master") + 
                 coord_cartesian(ylim =c(0, 1), xlim = c(0, 65000))+
                 scale_y_continuous(labels=scales::percent)
 gmaster_frames_hist2 <- ggplot(time_frames1[gmaster_frames,], aes(x = ScoutTime)) +
-                geom_histogram(aes(y=(..count..)/(gmast_uids*2)), color="#3c00b3", fill="#3c00b3",
+                geom_histogram(aes(y=(..count..)/(gmast_uids*2)), color=gmast_col, fill=gmast_col,
                 binwidth = 600, alpha = 0.4) + labs(y="% of Matches", x = "Frames-Grandmaster") + 
                 coord_cartesian(ylim =c(0, 1), xlim = c(0, 65000))+
                 scale_y_continuous(labels=scales::percent)
@@ -349,17 +363,17 @@ grid.arrange(bronze_frames_hist2, silver_frames_hist2, gold_frames_hist2, plat_f
 ### Distribution of scouting by frames for each rank, Normalized by % of matches
 ```{r}
 novice_frames_hist2 <- ggplot(time_frames1[novice_frames,], aes(x = ScoutTime)) +
-                geom_histogram(aes(y=(..count..)/(novice_uids*2)), color="#4d4dff", fill="#4d4dff",
+                geom_histogram(aes(y=(..count..)/(novice_uids*2)), color=novice_col, fill=novice_col,
                 binwidth = 600, alpha = 0.4) + labs(y="% of Matches", x = "Frames-Novice") + 
                 coord_cartesian(ylim =c(0, 1), xlim = c(0, 65000))+
                 scale_y_continuous(labels=scales::percent)
 prof_frames_hist2 <- ggplot(time_frames1[prof_frames,], aes(x = ScoutTime)) +
-                geom_histogram(aes(y=(..count..)/(prof_uids*2)), color="#36b3b3", fill="#36b3b3",
+                geom_histogram(aes(y=(..count..)/(prof_uids*2)), color=prof_col, fill=prof_col,
                 binwidth = 600, alpha = 0.4) + labs(y=" ", x = "Frames-Proficient") + 
                 coord_cartesian(ylim =c(0, 1), xlim = c(0, 65000))+
                 scale_y_continuous(labels=scales::percent)
 expert_frames_hist2 <- ggplot(time_frames1[expert_frames,], aes(x = ScoutTime)) +
-                geom_histogram(aes(y=(..count..)/(expert_uids*2)), color="#884dff", fill="#884dff",
+                geom_histogram(aes(y=(..count..)/(expert_uids*2)), color=expert_col, fill=expert_col,
                 binwidth = 600, alpha = 0.4) + labs(y=" ", x = "Frames-Expert") + 
                 coord_cartesian(ylim =c(0, 1), xlim = c(0, 65000))+
                 scale_y_continuous(labels=scales::percent)
@@ -368,7 +382,6 @@ title8 <- textGrob("Percentage of Matches where Scouting Ocurred at each Frame, 
                    gp=gpar(fontsize=11,font=3))
 grid.arrange(novice_frames_hist2, prof_frames_hist2, expert_frames_hist2, ncol=3, nrow=1, top = title8)
 ```
-
 
 
 
