@@ -42,53 +42,75 @@ def download_replays(start_page, end_page):
             with open(f"replays/spawningtool_{replay_num}_meta.html", 'wb') as out:
                 out.write(request(f"https://lotv.spawningtool.com/{replay_num}/"))
 
-
 def process_metas(reprocess=False):
-    replay_nums = [r[:r.index(".")].strip(string.ascii_letters + "_") for r in
-                   os.listdir("replays") if r.startswith("spawningtool") and r.endswith("_meta.html")]
+    replay_nums = sorted([r[:r.index(".")].strip(string.ascii_letters + "_") for r in
+                   os.listdir("replays") if r.startswith("spawningtool") and r.endswith("_meta.html")])
     for replay_num in replay_nums:
-        with open(f"replays/spawningtool_{replay_num}_meta.html", 'rb') as infile:
-            tree = html.fromstring(infile.read())
-
         if os.path.exists(f"replays/spawningtool_{replay_num}_meta.json") and not reprocess:
             continue
 
-        with open(f"replays/spawningtool_{replay_num}_meta.json", 'w') as json_out:
-            replay_json = {"tags": {}}
-            # select Players div (there should only be 1)
-            players_div = tree.xpath("//h3[text()='Players']/..")
-            assert len(players_div) == 1
-            players_div: html.Element = players_div[0]
+        with open(f"replays/spawningtool_{replay_num}_meta.html", 'rb') as infile:
+            tree = html.fromstring(infile.read())
 
-            # select player names
-            name_elems: List[html.Element] = players_div.xpath(".//h4")
-            for name_elem in name_elems:
-                player_json = {"tags": {}}
-                # assume no spaces allow in bnet names
-                name = name_elem.text_content()
-                player_json["winner"] = "Winner" in name
-                player_json["name"] = name.split()[0]
-                replay_json[name.split()[0]] = player_json
+        try:
+            with open(f"replays/spawningtool_{replay_num}_meta.json", 'w') as json_out:
+                replay_json = {"tags": {}}
+                # select Players div (there should only be 1)
+                players_div = tree.xpath("//h3[text()='Players']/..")
+                assert len(players_div) == 1
+                players_div: html.Element = players_div[0]
 
 
-                # select league label
-                league = name_elem.xpath(".//following-sibling::ul[1]/li/b[text()='League:']/../text()")
-                player_json["league"] = league[0].strip() if len(league) == 1 else None
+                # select player names
+                name_elems = players_div.xpath(".//h4")
+                for name_elem in name_elems:
+                    player_json = {"tags": {}}
+                    # assume no spaces allowed in bnet names
+                    text = name_elem.text_content()
+                    m = re.match(r"(\S+)(?: \((\S+)\))?( - Winner!)?", text)
 
-            # scrape tag info
-            tag_divs = tree.xpath("//div[@class='tags-category-wrapper']")
-            for tag_div in tag_divs:
-                category = tag_div.attrib["category"]
-                tag_elems = tag_div.xpath(".//a")
-                for tag_elem in tag_elems:
-                    # a player name, if present, is stored in the title attribute
-                    if tag_elem.attrib["title"] in replay_json:
-                        # there can be multiple tags per player per category, so store them in a list
-                        replay_json[tag_elem.attrib["title"]]["tags"].setdefault(category, list()).append(tag_elem.text_content())
+                    name = m.group(2) if m.group(2) else m.group(1)
+                    player_json["winner"] = True if m.group(3) else False
+                    player_json["name"] = name
+                    if m.group(2):
+                        player_json["alias"] = m.group(1)
+                    replay_json[name] = player_json
+                    # select league label
+                    league = name_elem.xpath(".//following-sibling::ul[1]/li/b[text()='League:']/../text()")
+                    player_json["league"] = league[0].strip() if len(league) == 1 else None
+
+                tag_divs = tree.xpath("//div[@class='tags-category-wrapper']")
+                tags = {}
+                for tag_div in tag_divs:
+                    category = tag_div.attrib["category"]
+                    tag_elems = tag_div.xpath(".//a")
+                    if category == "Player":
+                        pid_to_name = {tag_elem.attrib["data-pid"] : tag_elem.text for tag_elem in tag_elems}
                     else:
-                        replay_json["tags"].setdefault(category, list()).append(tag_elem.text_content())
+                        assert len(tag_elems) == 1 or all(tag_elem.attrib["data-pid"] for tag_elem in tag_elems)
+                        tags[category] = {pid: [t.text for t in ts] for pid, ts in groupby(sorted(tag_elems, key=lambda t: t.attrib["data-pid"]), 
+                                                                               lambda t: t.attrib["data-pid"])}
 
-            json.dump(replay_json, json_out)
+                for cat, d in tags.items():
+                    for p, v in d.items():
+                        if p in pid_to_name:
+                            # correct for case differences
+                            if pid_to_name[p] not in replay_json:
+                                names = [k for k in replay_json if k != "tags"]
+                                pid_to_name[p] = names[[n.lower() for n in names].index(pid_to_name[p].lower())]
+
+                            replay_json[pid_to_name[p]]["tags"].setdefault(cat, list()).extend(v)
+                        else:
+                            replay_json["tags"].setdefault(cat, list()).extend(v)
+
+                json.dump(replay_json, json_out)
+        except Exception as e:
+            print(f"FAILED to process meta for {replay_num}")
+            print(replay_json)
+            print(pid_to_name)
+            print(cat, d)
+            print()
+
 
 if __name__ == "__main__":
     # scrap replays back to Jan. 2018 (on page 417 as of 7/10/2020)
