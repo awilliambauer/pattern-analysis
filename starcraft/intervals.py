@@ -1,5 +1,5 @@
-#Intended to be used for data visualization of time in between periods
-#of scouting for players in StarCraft 2
+# Intended to be used for data visualization of time in between periods
+# of scouting for players in StarCraft 2
 
 import csv
 import sc2reader
@@ -17,14 +17,14 @@ sc2reader.engine.register_plugin(SelectionTracker())
 sc2reader.engine.register_plugin(ActiveSelection())
 
 def generateFields(filename):
-    #loading the replay
+    # loading the replay
     try:
-        #skipping non-replay files in the directory
+        # skipping non-replay files in the directory
         if filename[-9:] != "SC2Replay":
             raise RuntimeError()
 
-        #extracting the game id and adding the correct tag
-        #pathname = "practice_replays/" + filename
+        # extracting the game id and adding the correct tag
+        # pathname = "practice_replays/" + filename
         pathname = "/Accounts/awb/pattern-analysis/starcraft/replays/" + filename
         game_id = filename.split("_")[1].split(".")[0]
         if filename.startswith("ggg"):
@@ -32,7 +32,7 @@ def generateFields(filename):
         elif filename.startswith("spawningtool"):
             game_id = "st-" + game_id
 
-        #loading the replay
+        # loading the replay
         try:
             r = sc2reader.load_replay(pathname)
         except:

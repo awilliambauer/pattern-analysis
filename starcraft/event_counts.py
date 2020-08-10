@@ -1,4 +1,4 @@
-#A CSV of event counts for StarCraft 2 replays
+# A CSV of event counts for StarCraft 2 replays
 
 import sc2reader
 import csv

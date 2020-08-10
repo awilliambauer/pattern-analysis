@@ -1,4 +1,4 @@
-#tracking battles/engagements
+# tracking battles/engagements
 
 import sc2reader
 from collections import defaultdict
@@ -11,23 +11,23 @@ def buildBattleList(replay):
 
     An encounter between teams/players is considered a battle if greater than 10%
     of either team's army value is destroyed.'''
-    #unable to compute battles for pre 2.0.7
+    # unable to compute battles for pre 2.0.7
     if replay.build < 25446:
         return 0
 
-    #initializing the list of battles and harssing, where each instance is a tuple that contains
-    #the frame that the engagement began and the frame that the engagement ended
+    # initializing the list of battles and harssing, where each instance is a tuple that contains
+    # the frame that the engagement began and the frame that the engagement ended
     battles = []
     harassing = []
 
-    MAX_DEATH_SPACING_FRAMES = 160.0 #max number of frames between deaths for
-    #deaths to be considered part of the same engagement
+    MAX_DEATH_SPACING_FRAMES = 160.0 # max number of frames between deaths for
+    # deaths to be considered part of the same engagement
 
-    BATTLE = 0.1 #threshold of army that must be killed in order
-    #for the engagement to be considered a battle
+    BATTLE = 0.1 # threshold of army that must be killed in order
+    # for the engagement to be considered a battle
 
     owned_units = []
-    killed_units = [] #used to determine death of units as an identifier for battles
+    killed_units = [] # used to determine death of units as an identifier for battles
     for obj in replay.objects.values():
         if obj.owner is not None:
             if (replay.build >= 25446 or obj.is_army) and obj.minerals is not None and obj.finished_at is not None:
@@ -35,35 +35,35 @@ def buildBattleList(replay):
                 if obj.died_at is not None:
                     killed_units.append(obj)
 
-    #sorted by frame each unit died at
+    # sorted by frame each unit died at
     killed_units = sorted(killed_units, key=lambda obj: obj.died_at)
 
     engagements = []
     dead_units = []
     current_engagement = None
 
-    #building the list of engagements
+    # building the list of engagements
     for unit in killed_units:
         if(unit.killing_player is not None or replay.build<25446) and (unit.minerals + unit.vespene > 0):
             dead = unit
             dead_units.append(dead)
-            #create a new engagement
+            # create a new engagement
             if current_engagement is None or (dead.died_at - current_engagement[2] > MAX_DEATH_SPACING_FRAMES):
                 current_engagement = [[dead], dead.died_at, dead.died_at]
                 engagements.append(current_engagement)
-            #add information to current engagement
+            # add information to current engagement
             else:
                 current_engagement[0].append(dead)
                 current_engagement[2] = dead.died_at
 
-    #calculating the loss for each engagement and adding it to the list of
-    #battles if greater than 10% of a team's army value is destroyed
+    # calculating the loss for each engagement and adding it to the list of
+    # battles if greater than 10% of a team's army value is destroyed
     for engagement in engagements:
         killed = defaultdict(int)
         units_at_start = defaultdict(int)
         born_during_battle = defaultdict(int)
         killed_econ = defaultdict(int)
-        #calculating loss for each team
+        # calculating loss for each team
         for dead in engagement[0]:
             deadvalue = dead.minerals + dead.vespene
             if dead.is_army:
@@ -71,16 +71,16 @@ def buildBattleList(replay):
             elif replay.build >= 25446:
                 killed_econ[dead.owner.team] += deadvalue
 
-        #differentiating between units that were born before vs. during battle
+        # differentiating between units that were born before vs. during battle
         for unit in owned_units:
-            #units born before battle
+            # units born before battle
             if unit.finished_at < engagement[1]:
                 units_at_start[unit.owner.team] += unit.minerals + unit.vespene
-            #units born during battle
+            # units born during battle
             elif unit.finished_at >= engagement[1] and unit.finished_at < engagement[2]:
                 born_during_battle[unit.owner.team] += unit.minerals + unit.vespene
 
-        #deciding whether an engagement meets the threshold to be a battle
+        # deciding whether an engagement meets the threshold to be a battle
         if engagement[2] > engagement[1]:
             defense_buildings = ["Bunker", "MissileTurret", "PlanetaryFortress",
                                 "PhotonCannon", "ShieldBattery", "SpineCrawler",
@@ -97,7 +97,7 @@ def buildBattleList(replay):
                 perc_worker = worker_count/total_units
                 perc_died = float(killed[team] + killed_econ[team])/(units_at_start[team] + born_during_battle[team])
                 if(units_at_start[team] > 0) and (perc_died >= BATTLE):
-                    #greater than 10% of a team's army value was killed, add to battles
+                    # greater than 10% of a team's army value was killed, add to battles
                     tuple = (engagement[1], engagement[2])
                     if tuple not in battles:
                         battles.append(tuple)

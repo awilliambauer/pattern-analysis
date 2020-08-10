@@ -1,6 +1,6 @@
-#A script to read in a csv with data from StarCraft 2 and sort players
-#into novice, proficient, and expert categories as well as average all
-#available statistics for each player
+# A script to read in a csv with data from StarCraft 2 and sort players
+# into novice, proficient, and expert categories as well as average all
+# available statistics for each player
 
 import csv
 import time
@@ -8,7 +8,7 @@ from collections import defaultdict
 
 def readCSV():
     uid_dict = defaultdict()
-    #for each uid in uid_dict, there is a list of 6 lists
+    # for each uid in uid_dict, there is a list of 6 lists
     # list 0: rank, list 1: scouting frequency,
     # list 2: aps, list 3: cps,
     # list 4: peace rate, list 5: battle rate

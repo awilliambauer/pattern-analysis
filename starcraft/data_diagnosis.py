@@ -1,4 +1,4 @@
-#A script to gather summary statistics of StarCraft 2 data
+# A script to gather summary statistics of StarCraft 2 data
 
 import csv
 import time
@@ -62,7 +62,7 @@ def read_scouting_stats():
 
             uid, ScoutingFrequency, APS, Rank, CPS, PeaceRate, BattleRate, Win = row["UID"], row["ScoutingFrequency"], row["RelAPS"], row["Rank"], row["CPS"], row["PeaceRate"], row["BattleRate"], row["Win"]
 
-            #checking if Rank is valid and setting a flag if it is not
+            # checking if Rank is valid and setting a flag if it is not
             if Rank == "nan":
                 Rank_inv += 1
                 Rank_set.add(i)
@@ -73,7 +73,7 @@ def read_scouting_stats():
                 intWin = int(Win)
                 rank_uid_counter[intRank][uid] += 1
 
-            #Checking scouting frequency
+            # Checking scouting frequency
             if float(ScoutingFrequency) == 0:
                 SF_inv += 1
                 SF_set.add(i)
@@ -81,7 +81,7 @@ def read_scouting_stats():
                 SF_rank_data[intRank-1].append(float(ScoutingFrequency))
                 SF_win_data[intWin].append(float(ScoutingFrequency))
 
-            #Checking APS
+            # Checking APS
             if float(APS) == 0:
                 APS_inv += 1
                 APS_set.add(i)
@@ -100,7 +100,7 @@ def read_scouting_stats():
                 elif float(APS) < 0:
                     neg_APS_loss += 1
 
-            #Checking CPS
+            # Checking CPS
             if float(CPS) == 0:
                 CPS_inv += 1
                 CPS_set.add(i)
@@ -108,7 +108,7 @@ def read_scouting_stats():
                 CPS_rank_data[intRank-1].append(float(CPS))
                 CPS_win_data[intWin].append(float(CPS))
 
-            #Checking peace rate
+            # Checking peace rate
             if float(PeaceRate) == 0:
                 PR_inv += 1
                 PR_set.add(i)
@@ -116,7 +116,7 @@ def read_scouting_stats():
                 PR_rank_data[intRank-1].append(float(PeaceRate))
                 PR_win_data[intWin].append(float(PeaceRate))
 
-            #Checking battle rate
+            # Checking battle rate
             if float(BattleRate) == 0:
                 BR_inv += 1
                 BR_set.add(i)
