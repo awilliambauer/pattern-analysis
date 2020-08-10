@@ -62,7 +62,7 @@ def make_unit_series(replay: sc2reader.resources.Replay, pindex: int, binsize: i
                 continue
             if isinstance(e, sc2reader.events.UnitBornEvent) or isinstance(e, sc2reader.events.UnitDoneEvent):
                 unit = e.unit
-                if unit.is_army or unit.is_worker or unit.is_building:
+                if (unit.is_army or unit.is_worker or unit.is_building) and not unit.hallucinated:
                     name = sorted(unit.type_history.items())[0][1].name.lower()
                     if name in aliases:
                         name = aliases[name]

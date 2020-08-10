@@ -42,17 +42,16 @@ def download_replays(start_replay_num: int, end_replay_num: int) -> None:
 
     for replay_num in range(start_replay_num, end_replay_num + 1):
         print()
-        with open(f"replays/dropsc_{replay_num}.SC2Replay", 'wb') as outfile:
-            # running into issues with 301 redirects on connection from some machines, so download via mirage
-            sp = subprocess.run(["ssh", "awb@mirage.mathcs.carleton.edu",
-                                 "wget", "--no-check-certificate", "-O", "-", f"https://sc2replaystats.com/download/{replay_num}"],
-                                stdout=outfile, stderr=subprocess.DEVNULL)
+        # running into issues with 301 redirects, probably blacklisting, so download via tor
+        sp = subprocess.run(["torsocks", "wget", "--no-check-certificate", "-O", f"replays/dropsc_{replay_num}.SC2Replay",
+                             f"https://sc2replaystats.com/download/{replay_num}"],
+                            stderr=subprocess.DEVNULL)
 
-            if sp.returncode == 0:
-                print(f"wget {replay_num} success")
-            else:
-                print(f"wget {replay_num} FAILED")
-                continue
+        if sp.returncode == 0:
+            print(f"wget {replay_num} success")
+        else:
+            print(f"wget {replay_num} FAILED")
+            continue
 
         try:
             r = sc2reader.load_replay(f"replays/dropsc_{replay_num}.SC2Replay")
@@ -73,26 +72,29 @@ def download_replays(start_replay_num: int, end_replay_num: int) -> None:
         tree = html.fromstring(html_str)
 
         player_divs = tree.xpath("//div[contains(@class, 'tab-pane fade active')]/div/div")[::2]
-        assert len(player_divs) == 2
-        with open(f"replays/dropsc_{replay_num}_meta.json", 'w') as json_out:
-            replay_json = {}
-            for pdiv in player_divs:
-                name = pdiv.xpath(".//h3")[0].text_content()
-                info = pdiv.xpath(".//div[@class='col-md-4']")[0].text_content()
-                info = info.replace("Battle Net Profile", "").split("\n")
-                assert len(info) == 4
-                replay_json[name] = {
-                    "clan": info[1].split(":")[1].strip(),
-                    "name": name,
-                    "apm": int(info[2].split(":")[1]),
-                    "mmr": int(info[3].split(":")[1]),
-                    "rank": pdiv.xpath(".//img/@src")[0].split("/")[-1][:-4],  # get string form of rank from image name used for rank insignia
-                    "bnet_url": pdiv.xpath(".//a/@href")[0]
-                }
-            json.dump(replay_json, json_out)
+        try:
+            with open(f"replays/dropsc_{replay_num}_meta.json", 'w') as json_out:
+                replay_json = {}
+                for pdiv in player_divs:
+                    name = pdiv.xpath(".//h3")[0].text_content()
+                    info = pdiv.xpath(".//div[@class='col-md-4']")[0].text_content()
+                    info = info.replace("Battle Net Profile", "").split("\n")
+                    assert len(info) == 4
+                    replay_json[name] = {
+                        "clan": info[1].split(":")[1].strip(),
+                        "name": name,
+                        "apm": int(info[2].split(":")[1]),
+                        "mmr": int(info[3].split(":")[1]),
+                        "rank": pdiv.xpath(".//img/@src")[0].split("/")[-1][:-4],  # get string form of rank from image name used for rank insignia
+                        "bnet_url": pdiv.xpath(".//a/@href")[0]
+                    }
+                json.dump(replay_json, json_out)
+        except:
+            print(f"problem with {replay_num} meta, deleting")
+            os.remove(f"replays/dropsc_{replay_num}.SC2Replay")
+            os.remove(f"replays/dropsc_{replay_num}_meta.json")
 
 if __name__ == "__main__":
     # scrap replays back to Dec. 2017 (id 6000000)
     download_replays(6000000, 15649277)
-    #download_replays(6000000, 6000001)
 
