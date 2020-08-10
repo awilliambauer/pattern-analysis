@@ -62,8 +62,14 @@ def buildEventLists(tracker_events, game_events):
     sorted_events = sorted(events, key=lambda e: e.frame)
     return sorted_events
 
+def initializeScoutingDictionaries(frames):
+    dicts = {1: {}, 2: {}}
+    for i in range(1, 3):
+        for j in range(1, frames+1):
+            dicts[i][j] = ["", []]
+    return dicts
 
-def buildScoutingDictionaries(events, objects):
+def buildScoutingDictionaries(events, objects, frames):
     '''buildScoutingDictionaries returns dictionaries for each player where the
     keys are the frame and the value is the state of scouting. "No scouting"
     indicates the team/player is not looking at any bases, "Scouting themself"
@@ -75,7 +81,7 @@ def buildScoutingDictionaries(events, objects):
     team1 = 1
     team2 = 2
 
-    scouting_states = {1: {}, 2: {}}
+    scouting_states = initializeScoutingDictionaries(frames)
 
     # Dictionaries for each team of the locations of bases where the keys are unit ids
     # and the values are locations (as tuples of (x, y) coordinates)
@@ -142,7 +148,7 @@ def buildScoutingDictionaries(events, objects):
                     target_location = event.location
                     if withinDistance(target_location, bases[opp_team], 75):
                         first_instance[cur_team] = False
-                        scouting_states[cur_team][i] = "Scouting opponent - with units"
+                        scouting_states[cur_team][i][1].append("Sending units to the opponent's base")
 
         #checking camera events
         elif isinstance(event, sc2reader.events.game.CameraEvent):
@@ -157,23 +163,24 @@ def buildScoutingDictionaries(events, objects):
             camera_location = event.location
             #looking at their own base
             if withinDistance(camera_location, bases[cur_team], 25):
-                scouting_states[cur_team] = updatePrevScoutStates(scouting_states[cur_team], i, prev_frames[cur_team], prev_states[cur_team], False)
-                scouting_states[cur_team][i] = "Viewing themself"
+                scouting_states[cur_team] = updatePrevScoutStates(scouting_states[cur_team], i, prev_frames[cur_team], prev_states[cur_team])
+                scouting_states[cur_team][i][0] = "Viewing themself"
                 prev_frames[cur_team] = i
                 prev_states[cur_team] = "Viewing themself"
-            #looking at their opponent's base and has a unit with them
-            elif withinDistance(camera_location, bases[opp_team], 25) and withinDistance(camera_location, active_units[cur_team], 25):
-                scouting_states[cur_team] = updatePrevScoutStates(scouting_states[cur_team], i, prev_frames[cur_team], prev_states[cur_team], False)
-                scouting_states[cur_team][i] = "Scouting opponent"
+            #looking at their opponent's base
+            elif withinDistance(camera_location, bases[opp_team], 25): #and withinDistance(camera_location, active_units[cur_team], 25):
+                scouting_states[cur_team] = updatePrevScoutStates(scouting_states[cur_team], i, prev_frames[cur_team], prev_states[cur_team])
+                scouting_states[cur_team][i][0] = "Viewing opponent"
                 prev_frames[cur_team] = i
-                prev_states[cur_team] = "Scouting opponent"
+                prev_states[cur_team] = "Viewing opponent"
                 first_instance[cur_team] = False
             #not looking at a base
             else:
-                scouting_states[cur_team] = updatePrevScoutStates(scouting_states[cur_team], i, prev_frames[cur_team], prev_states[cur_team], False)
-                scouting_states[cur_team][i] = "No scouting"
+                scouting_states[cur_team] = updatePrevScoutStates(scouting_states[cur_team], i, prev_frames[cur_team], prev_states[cur_team])
+                scouting_states[cur_team][i][0] = "Viewing empty map space"
                 prev_frames[cur_team] = i
-                prev_states[cur_team] = "No scouting"
+                prev_states[cur_team] = "Viewing empty map space"
+
     return scouting_states[1], scouting_states[2]
 
 
@@ -191,7 +198,7 @@ def withinDistance(location, list, distance):
             return True
     return False
 
-def updatePrevScoutStates(scouting_dict, frame, prev_frame, prev_state, update_all):
+def updatePrevScoutStates(scouting_dict, frame, prev_frame, prev_state):
     '''updatePrevScoutStates updates the input scouting dictionary from
     the prev_frame to frame with prev_state and returns the scouting
     dictionary back.'''
@@ -201,37 +208,57 @@ def updatePrevScoutStates(scouting_dict, frame, prev_frame, prev_state, update_a
     keys = scouting_dict.keys()
     i = prev_frame + 1
     while(i != frame):
-        #override all previously updated frames
-        if update_all:
-            scouting_dict[i] = prev_state
-        #skip over frames that already exist
-        elif not(i in keys):
-            scouting_dict[i] = prev_state
+        scouting_dict[i][0] = prev_state
         i += 1
     return scouting_dict
 
 def checkFirstInstance(scouting_dict, scale):
     frame_jump45 = 45*int(scale)
+    send_units = "Sending units to the opponent's base"
     keys = scouting_dict.keys()
     for key in keys:
-        state = scouting_dict[key]
+        state = scouting_dict[key][1]
         #recorded instance of ordering units
-        if state == "Scouting opponent - with units":
+        if send_units in state:
             #check if there is a regular scouting instance within the next 45 secs
             for i in range(key+1, frame_jump45+key+1):
                 #make sure it doesn't throw a key error
                 if i in keys:
-                    if scouting_dict[i] == "Scouting opponent":
-                        #if there is an instance, reset the original
-                        scouting_dict[key] = "No scouting"
+                    if isScouting(scouting_dict[i]):
+                        #if there is an instance of scouting, reset the original
+                        scouting_dict[key][1].remove(send_units)
                         return scouting_dict
             #No instance that already corresponds to the unit ordering, consider it scouting
             #for 10 seconds
             frame_jump10 = 10*int(scale)
-            scouting_dict[key] = "Scouting opponent"
-            scouting_dict = updatePrevScoutStates(scouting_dict, frame_jump10+key, key, "Scouting opponent", True)
+            for i in range(key, key+frame_jump10+1):
+                if not(send_units in scouting_dict[i][1]):
+                    scouting_dict[i][1].append(send_units)
             return scouting_dict
+    #No ordering of units, return original dictionary
+    return scouting_dict
 
+def isScouting(frame_list):
+    state = frame_list[0]
+    events = frame_list[1]
+    #viewing opponent but not harassing or engaged in battle
+    if state == "Viewing opponent" and not("Harassing" in events) and not("Engaged in Battle" in events):
+        return True
+    #viewing anything, but sending units to the opponent's base for the first instance of scouting
+    elif "Sending units to the opponent's base" in events:
+        return True
+    else:
+        return False
+
+def removeEmptyFrames(scouting_dict, frames):
+    frame = frames
+    initial_list = ["", []]
+    state = scouting_dict[frame]
+    while(state == initial_list):
+        scouting_dict.pop(frame)
+        frame -= 1
+        state = scouting_dict[frame]
+    return scouting_dict
 
 def toTime(scouting_dict, frames, seconds):
     '''Creates and returns time-formatted dictionary of the time of game when
@@ -241,22 +268,33 @@ def toTime(scouting_dict, frames, seconds):
     length = len(scouting_dict.keys())
     time_dict = {}
 
+
     state = scouting_dict[1]
+    stateStr = state[0]
+    if not(stateStr):
+        stateStr = "No camera data"
+    for event in state[1]:
+        stateStr = stateStr + ", while" + event
     time = (1/frames)*(seconds)
     minStr = "{:2d}".format(int(time//60))
     secStr = "{:05.2f}".format(time%60)
     timeStr = minStr + ":" + secStr
-    time_dict[timeStr] = state
+    time_dict[timeStr] = stateStr
 
     frame = 2
     while(frame <= length):
         if scouting_dict[frame] != state:
             state = scouting_dict[frame]
+            stateStr = state[0]
+            if not(stateStr):
+                stateStr = "No camera data"
+            for event in state[1]:
+                stateStr = stateStr + ", while " + event
             time = (frame/frames)*(seconds)
             minStr = "{:2d}".format(int(time//60))
             secStr = "{:05.2f}".format(time%60)
             timeStr = minStr + ":" + secStr
-            time_dict[timeStr] = state
+            time_dict[timeStr] = stateStr
         frame += 1
     return time_dict
 
@@ -279,7 +317,7 @@ def scouting_stats(scouting_dict):
     cur_scouting = False
 
     length = len(scouting_dict.keys())
-    if scouting_dict[1] == "Scouting opponent":
+    if isScouting(scouting_dict[1]):
         num_times += 1
         scouting_frames += 1
         cur_scouting = True
@@ -287,7 +325,7 @@ def scouting_stats(scouting_dict):
     frame = 2
     while(frame < length):
         total_frames += 1
-        if scouting_dict[frame] == "Scouting opponent":
+        if isScouting(scouting_dict[frame]):
             #if the player is in a streak of scouting
             if cur_scouting == True:
                 scouting_frames += 1
@@ -324,12 +362,13 @@ def integrateEngagements(scouting_dict, engagements, scale, replacement):
     length = len(keys)
     frame = 1
     while frame < length:
-        if scouting_dict[frame] == "Scouting opponent" and battle_detector.duringBattle(frame, engagements):
-            scouting_dict[frame] = replacement
-            if scouting_dict[frame-1] != "Scouting opponent":
+        if battle_detector.duringBattle(frame, engagements):
+            if not(replacement in scouting_dict[frame][1]):
+                scouting_dict[frame][1].append(replacement)
+            if not(isScouting(scouting_dict[frame-1])):
                 start_engagement = True
                 start_frame = frame
-            if scouting_dict[frame+1] != "Scouting opponent":
+            if not(isScouting(scouting_dict[frame+1])):
                 end_engagement = True
                 end_frame = frame
 
@@ -337,12 +376,12 @@ def integrateEngagements(scouting_dict, engagements, scale, replacement):
             #reset scouting instances if they are within 7 seconds of a battle
             if start_engagement:
                 for i in range(start_frame-frame_jump7, start_frame):
-                    if i in keys and scouting_dict[i] == "Scouting opponent":
-                        scouting_dict[i] = replacement
+                    if i in keys and not(replacement in scouting_dict[i][1]):
+                        scouting_dict[i][1].append(replacement)
             if end_engagement:
                 for i in range(end_frame, end_frame+frame_jump7):
-                    if i in keys and scouting_dict[i] == "Scouting opponent":
-                        scouting_dict[i] = replacement
+                    if i in keys and not(replacement in scouting_dict[i][1]):
+                        scouting_dict[i][1].append(replacement)
             end_engagement = False
             start_engagement = False
         frame += 1
@@ -377,7 +416,7 @@ def categorize_player(scouting_dict, frames):
     after_first = False
     for key in keys:
         state = scouting_dict[key]
-        if state == "Scouting opponent":
+        if isScouting(state):
             after_first = True
             no_scouting = False
             if interval:
@@ -399,7 +438,7 @@ def categorize_player(scouting_dict, frames):
         category = 2
         return category
 
-    if len(intervals) == 0:
+    if len(intervals) >= 0 and len(intervals) <= 2:
         category = 3
         return category
 
@@ -431,7 +470,7 @@ def avg_interval(scouting_dict, scale):
 
     for key in keys:
         state = scouting_dict[key]
-        if state == "Scouting opponent":
+        if isScouting(state):
             after_first = True
             any_scouting = True
             if interval:
@@ -465,7 +504,7 @@ def scouting_timefrac_list(scouting_dict, frames):
     cur_scouting = False
     for key in keys:
         state = scouting_dict[key]
-        if state == "Scouting opponent":
+        if isScouting(state):
             if not(cur_scouting):
                 frac = key/frames
                 time_fracs.append(frac)
@@ -484,7 +523,7 @@ def scouting_timeframe_list1(scouting_dict):
     cur_scouting = False
     for key in keys:
         state = scouting_dict[key]
-        if state == "Scouting opponent":
+        if isScouting(state):
             if not(cur_scouting):
                 time_frames.append(key)
             cur_scouting = True
@@ -528,15 +567,19 @@ def final_scouting_states(replay):
 
     allEvents = buildEventLists(tracker_events, game_events)
     objects = r.objects.values()
-    team1_scouting_states, team2_scouting_states = buildScoutingDictionaries(allEvents, objects)
+    team1_scouting_states, team2_scouting_states = buildScoutingDictionaries(allEvents, objects, frames)
+
+    battles, harassing = battle_detector.buildBattleList(r)
+    team1_scouting_states = integrateEngagements(team1_scouting_states, battles, scale, "Engaged in Battle")
+    team2_scouting_states = integrateEngagements(team2_scouting_states, battles, scale, "Engaged in Battle")
+    team1_scouting_states = integrateEngagements(team1_scouting_states, harassing, scale, "Harassing")
+    team2_scouting_states = integrateEngagements(team2_scouting_states, harassing, scale, "Harassing")
+
     team1_scouting_states = checkFirstInstance(team1_scouting_states, scale)
     team2_scouting_states = checkFirstInstance(team2_scouting_states, scale)
 
-    battles, harassing = battle_detector.buildBattleList(r)
-    team1_scouting_states = integrateEngagements(team1_scouting_states, battles, scale, "Viewing opponent during battle")
-    team2_scouting_states = integrateEngagements(team2_scouting_states, battles, scale, "Viewing opponent during battle")
-    team1_scouting_states = integrateEngagements(team1_scouting_states, harassing, scale, "Harassing")
-    team2_scouting_states = integrateEngagements(team2_scouting_states, harassing, scale, "Harassing")
+    team1_scouting_states = removeEmptyFrames(team1_scouting_states, frames)
+    team2_scouting_states = removeEmptyFrames(team2_scouting_states, frames)
 
     # battleTimes = battle_detector.toTime(battles, frames, r.length.seconds)
     # battle_detector.printTime(battleTimes)
