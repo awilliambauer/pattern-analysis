@@ -132,7 +132,7 @@ def buildScoutingDictionaries(events, objects, frames):
         elif isinstance(event, sc2reader.events.game.TargetUnitCommandEvent) or isinstance(event, sc2reader.events.game.TargetPointCommandEvent):
             cur_team = event.player.pid
             # moving Terran bases
-            if "Unit" in event.name and event.ability_name in ["LandCommandCenter", "LandOrbitalCommand"]:
+            if "Point" in event.name and event.ability_name in ["LandCommandCenter", "LandOrbitalCommand"]:
                 bases[cur_team][event.target_unit_id] = event.location
             # updating unit positions and checking for the first instance of scouting
             elif event.ability_name in ["RightClick", "Attack"]:
