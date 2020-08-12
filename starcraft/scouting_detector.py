@@ -6,6 +6,7 @@ import sc2reader
 import math
 import statistics
 import battle_detector
+import os
 
 def buildEventLists(tracker_events, game_events):
     '''buildEventLists is used to build up a list of events related to
@@ -86,12 +87,14 @@ def buildScoutingDictionaries(events, objects, frames):
     # Dictionaries for each team of the locations of bases where the keys are unit ids
     # and the values are locations (as tuples of (x, y) coordinates)
     bases = {1: {}, 2: {}}
+    og_bases = {1: {}, 2: {}}
     # Add starting bases
     base_names = set(["Hatchery", "Lair", "Hive", "Nexus", "CommandCenter", "CommandCenterFlying",
                         "OrbitalCommand", "OrbitalCommandFlying","PlanetaryFortress"])
     for i in range(1, 3):
         start_base = [u for u in objects if u.name in base_names and u.owner != None and u.owner.pid == i and u.finished_at == 0][0]
         bases[i][start_base.id] = start_base.location
+        og_bases[i][start_base.id] = start_base.location
 
     # Dictionaries for each team of the active units where the keys are the unit ids
     # and the values are locations (as tuples of (x, y) coordinates)
@@ -167,12 +170,23 @@ def buildScoutingDictionaries(events, objects, frames):
                 scouting_states[cur_team][i][0] = "Viewing themself"
                 prev_frames[cur_team] = i
                 prev_states[cur_team] = "Viewing themself"
-            # looking at their opponent's base
+            # looking at their opponent's main base
+            elif withinDistance(camera_location, og_bases[opp_team], 25): #and withinDistance(camera_location, active_units[cur_team], 25):
+                scouting_states[cur_team] = updatePrevScoutStates(scouting_states[cur_team], i, prev_frames[cur_team], prev_states[cur_team])
+                location = (int(camera_location[0]), int(camera_location[1]))
+                scouting_states[cur_team][i][0] = "Viewing opponent - main base"
+                scouting_states[cur_team][i].append(location)
+                prev_frames[cur_team] = i
+                prev_states[cur_team] = "Viewing opponent - main base"
+                first_instance[cur_team] = False
+            # looking at their opponent's expansion bases
             elif withinDistance(camera_location, bases[opp_team], 25): #and withinDistance(camera_location, active_units[cur_team], 25):
                 scouting_states[cur_team] = updatePrevScoutStates(scouting_states[cur_team], i, prev_frames[cur_team], prev_states[cur_team])
-                scouting_states[cur_team][i][0] = "Viewing opponent"
+                location = (int(camera_location[0]), int(camera_location[1]))
+                scouting_states[cur_team][i][0] = "Viewing opponent - expansions"
+                scouting_states[cur_team][i].append(location)
                 prev_frames[cur_team] = i
-                prev_states[cur_team] = "Viewing opponent"
+                prev_states[cur_team] = "Viewing opponent - expansions"
                 first_instance[cur_team] = False
             # not looking at a base
             else:
@@ -242,7 +256,7 @@ def isScouting(frame_list):
     state = frame_list[0]
     events = frame_list[1]
     # viewing opponent but not harassing or engaged in battle
-    if state == "Viewing opponent" and not("Harassing" in events) and not("Engaged in Battle" in events):
+    if ("Viewing opponent" in state) and not("Harassing" in events) and not("Engaged in Battle" in events):
         return True
     # viewing anything, but sending units to the opponent's base for the first instance of scouting
     elif "Sending units to the opponent's base" in events:
@@ -531,6 +545,122 @@ def scouting_timeframe_list1(scouting_dict):
             cur_scouting = False
     return time_frames
 
+def hasInitialScouting(scouting_dict, frames):
+    keys = scouting_dict.keys()
+    for key in keys:
+        state = scouting_dict[key]
+        if isScouting(state) and key/frames <= 0.25:
+            return True
+    return False
+
+def baseOrExpansions(scouting_dict):
+    keys = scouting_dict.keys()
+    mainbase_ct = 0
+    scouting_ct = 0
+    cur_scouting = False
+    for key in keys:
+        state = scouting_dict[key]
+        if isScouting(state) and not(cur_scouting):
+            scouting_ct += 1
+            cur_scouting = True
+
+            if "main base" in state[0]:
+                mainbase_ct += 1
+
+        else:
+            cur_scouting = False
+
+    if scouting_ct == 0:
+        return "No scouting"
+
+    if mainbase_ct/scouting_ct >= 0.5:
+        return "Main base"
+    else:
+        return "Expansions"
+
+def scoutNewAreas(scouting_dict):
+    locations = []
+    keys = scouting_dict.keys()
+    new_instance = True
+    for key in keys:
+        state = scouting_dict[key]
+        if isScouting(state) and "Viewing opponent" in state[0] and len(state) == 3:
+            new_instance = False
+            locations.append(state[2])
+
+    #1 or less instances of scouting, the player does not scout new areas consistently
+    if len(locations) <= 1:
+        return False
+
+    distances_apart = []
+    for i in range(len(locations)):
+        for j in range(i+1, len(locations)):
+            first_loc = locations[i]
+            second_loc = locations[j]
+            first_x, first_y = first_loc[0], first_loc[1]
+            second_x, second_y = second_loc[0], second_loc[1]
+            x_diff, y_diff = abs(first_x-second_x), abs(first_y-second_y)
+            distance_apart = math.sqrt(x_diff**2 + y_diff**2)
+            distances_apart.append(distance_apart)
+
+    avg_distance = statistics.mean(distances_apart)
+
+    if avg_distance > 20:
+        return True
+    else:
+        return False
+
+def scoutBetweenBattles(scouting_dict, battles, frames):
+    num_battles = len(battles)
+
+    # not enough battles for a player to scout between them, return a flag
+    if num_battles <= 1:
+        return -1
+
+    # creating a dictionary of frames of peacetime between battles
+    peacetime_dict = {}
+    peacetime_list = []
+    for i in range(num_battles-1):
+        battle = battles[i]
+        next_battle = battles[i+1]
+        peace_start = battle[1]+1
+        peace_end = next_battle[0]-1
+        peacetime_dict[(peace_start, peace_end)] = 0
+        peacetime_list.append((peace_start, peace_end))
+
+    # checking for scouting in between battles
+    scouting_keys = scouting_dict.keys()
+    peacetime_keys = peacetime_dict.keys()
+    new_instance = True
+    for s_key in scouting_keys:
+        state = scouting_dict[s_key]
+        # avoiding counting one instance of scouting more than once
+        if new_instance and isScouting(state):
+            new_instance = False
+            # checking which period of peacetime the scouting occurs
+            for p_key in peacetime_keys:
+                if s_key >= p_key[0] and s_key <= p_key[1]:
+                    # adding to the count of the correct peacetime
+                    peacetime_dict[p_key] += 1
+                    # breaking out of inner loop
+                    break
+        else:
+            #If the scouting state changes or it is no longer during peacetime, then reset to a new instance
+            if not(isScouting(state)) or not(battle_detector.duringBattle(s_key, peacetime_list)):
+                new_instance = True
+
+    # determine if there are enough scouting instances between battles
+    nums_between = []
+    for p_key in peacetime_keys:
+        num = peacetime_dict[p_key]
+        nums_between.append(num)
+
+    avg_between = statistics.mean(nums_between)
+    if avg_between >= 0.7:
+        # at least one instance of scouting for 70% of peacetime periods
+        return True
+    else:
+        return False
 
 def final_scouting_states(replay):
     '''final_scouting_states is the backbone of scouting_detector.py. It does
@@ -614,6 +744,33 @@ def scouting_freq_and_cat(replay):
         print(replay.filename + "contains errors within scouting_detector")
         raise
 
+def scouting_analysis(replay):
+    r = replay
+    try:
+        team1_scouting_states, team2_scouting_states = final_scouting_states(r)
+        battles, harassing = battle_detector.buildBattleList(r)
+
+        frames = r.frames
+        team1_initial = hasInitialScouting(team1_scouting_states, frames)
+        team2_initial = hasInitialScouting(team2_scouting_states, frames)
+
+        team1_cat = categorize_player(team1_scouting_states, frames)
+        team2_cat = categorize_player(team2_scouting_states, frames)
+
+        team1_base = baseOrExpansions(team1_scouting_states)
+        team2_base = baseOrExpansions(team2_scouting_states)
+
+        team1_newAreas = scoutNewAreas(team1_scouting_states)
+        team2_newAreas = scoutNewAreas(team2_scouting_states)
+
+        team1_betweenBattles = scoutBetweenBattles(team1_scouting_states, battles, frames)
+        team2_betweenBattles = scoutBetweenBattles(team2_scouting_states, battles, frames)
+
+        return {1: [team1_initial, team1_cat, team1_base, team1_newAreas, team1_betweenBattles],
+                2: [team2_initial, team2_cat, team2_base, team2_newAreas, team2_betweenBattles]}
+    except:
+        print(replay.filename + "contains errors within scouting_detector")
+        raise
 
 def scouting_times(replay, which):
     '''scouting_times takes in a previously loaded replay from sc2reader as
@@ -641,11 +798,10 @@ def scouting_times(replay, which):
         print(replay.filename + "contains errors within scouting_detector")
         raise
 
-
 def scouting_interval(replay):
-    '''scouting_interval takes in a previously loaded replay from sc2reader
-        and returns the average time (in seconds) between periods of scouting
-        for each player.'''
+    # scouting_interval takes in a previously loaded replay from sc2reader
+        # and returns the average time (in seconds) between periods of scouting
+        # for each player.'''
     r = replay
     try:
         factors = sc2reader.constants.GAME_SPEED_FACTOR
@@ -662,12 +818,11 @@ def scouting_interval(replay):
         print(replay.filename + "contains errors within scouting_detector")
         raise
 
-
 def print_verification(replay):
-    '''print_verification takes in a previously loaded replay from sc2reader
-        and prints out information useful for verification. More specifically,
-        it prints out the game time at which scouting states switch for each
-        team/player'''
+    # print_verification takes in a previously loaded replay from sc2reader
+        # and prints out information useful for verification. More specifically,
+        # it prints out the game time at which scouting states switch for each
+        # team/player'''
     r = replay
 
     try:
