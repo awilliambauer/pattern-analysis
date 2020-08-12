@@ -6,7 +6,6 @@ import sc2reader
 import math
 import statistics
 import battle_detector
-import os
 
 def buildEventLists(tracker_events, game_events):
     '''buildEventLists is used to build up a list of events related to
@@ -89,8 +88,9 @@ def buildScoutingDictionaries(events, objects, frames):
     bases = {1: {}, 2: {}}
     og_bases = {1: {}, 2: {}}
     # Add starting bases
-    base_names = set(["Hatchery", "Lair", "Hive", "Nexus", "CommandCenter", "CommandCenterFlying",
-                        "OrbitalCommand", "OrbitalCommandFlying","PlanetaryFortress"])
+    base_names = ["Hatchery", "Lair", "Hive", "Nexus", "CommandCenter", "CommandCenterFlying",
+                        "OrbitalCommand", "OrbitalCommandFlying","PlanetaryFortress"]
+    terran_bases = base_names[4:]
     for i in range(1, 3):
         start_base = [u for u in objects if u.name in base_names and u.owner != None and u.owner.pid == i and u.finished_at == 0][0]
         bases[i][start_base.id] = start_base.location
@@ -136,7 +136,11 @@ def buildScoutingDictionaries(events, objects, frames):
             cur_team = event.player.pid
             # moving Terran bases
             if "Point" in event.name and event.ability_name in ["LandCommandCenter", "LandOrbitalCommand"]:
-                bases[cur_team][event.target_unit_id] = event.location
+                cur_selection = event.player.selection[10]
+                for unit in cur_selection:
+                    if unit.name in terran_bases:
+                        bases[cur_team][unit.id] = event.location
+                        break
             # updating unit positions and checking for the first instance of scouting
             elif event.ability_name in ["RightClick", "Attack"]:
                 if "Unit" in event.name:
@@ -545,15 +549,21 @@ def scouting_timeframe_list1(scouting_dict):
             cur_scouting = False
     return time_frames
 
-def hasInitialScouting(scouting_dict, frames):
+def hasInitialScouting(scouting_dict, frames, battles):
     keys = scouting_dict.keys()
+    if len(battles) == 0:
+        first_battle_start = frames
+    else:
+        first_battle_start = battles[0][0]
     for key in keys:
         state = scouting_dict[key]
-        if isScouting(state) and key/frames <= 0.25:
-            return True
-    return False
+        if isScouting(state) and key/frames <= 0.25 and key < first_battle_start:
+            # True
+            return 1
+    # False
+    return 0
 
-def baseOrExpansions(scouting_dict):
+def scoutsMainBase(scouting_dict):
     keys = scouting_dict.keys()
     mainbase_ct = 0
     scouting_ct = 0
@@ -571,12 +581,15 @@ def baseOrExpansions(scouting_dict):
             cur_scouting = False
 
     if scouting_ct == 0:
-        return "No scouting"
+        # No scouting, return a flag
+        return -1
 
     if mainbase_ct/scouting_ct >= 0.5:
-        return "Main base"
+        # True
+        return 1
     else:
-        return "Expansions"
+        # False
+        return 0
 
 def scoutNewAreas(scouting_dict):
     locations = []
@@ -590,7 +603,7 @@ def scoutNewAreas(scouting_dict):
 
     #1 or less instances of scouting, the player does not scout new areas consistently
     if len(locations) <= 1:
-        return False
+        return 0
 
     distances_apart = []
     for i in range(len(locations)):
@@ -606,9 +619,11 @@ def scoutNewAreas(scouting_dict):
     avg_distance = statistics.mean(distances_apart)
 
     if avg_distance > 20:
-        return True
+        # True
+        return 1
     else:
-        return False
+        # False
+        return 0
 
 def scoutBetweenBattles(scouting_dict, battles, frames):
     num_battles = len(battles)
@@ -658,9 +673,9 @@ def scoutBetweenBattles(scouting_dict, battles, frames):
     avg_between = statistics.mean(nums_between)
     if avg_between >= 0.7:
         # at least one instance of scouting for 70% of peacetime periods
-        return True
+        return 1
     else:
-        return False
+        return 0
 
 def final_scouting_states(replay):
     '''final_scouting_states is the backbone of scouting_detector.py. It does
@@ -751,14 +766,14 @@ def scouting_analysis(replay):
         battles, harassing = battle_detector.buildBattleList(r)
 
         frames = r.frames
-        team1_initial = hasInitialScouting(team1_scouting_states, frames)
-        team2_initial = hasInitialScouting(team2_scouting_states, frames)
+        team1_initial = hasInitialScouting(team1_scouting_states, frames, battles)
+        team2_initial = hasInitialScouting(team2_scouting_states, frames, battles)
 
         team1_cat = categorize_player(team1_scouting_states, frames)
         team2_cat = categorize_player(team2_scouting_states, frames)
 
-        team1_base = baseOrExpansions(team1_scouting_states)
-        team2_base = baseOrExpansions(team2_scouting_states)
+        team1_base = scoutsMainBase(team1_scouting_states)
+        team2_base = scoutsMainBase(team2_scouting_states)
 
         team1_newAreas = scoutNewAreas(team1_scouting_states)
         team2_newAreas = scoutNewAreas(team2_scouting_states)
@@ -766,8 +781,8 @@ def scouting_analysis(replay):
         team1_betweenBattles = scoutBetweenBattles(team1_scouting_states, battles, frames)
         team2_betweenBattles = scoutBetweenBattles(team2_scouting_states, battles, frames)
 
-        return {1: [team1_initial, team1_cat, team1_base, team1_newAreas, team1_betweenBattles],
-                2: [team2_initial, team2_cat, team2_base, team2_newAreas, team2_betweenBattles]}
+        return {1: [team1_cat, team1_initial, team1_base, team1_newAreas, team1_betweenBattles],
+                2: [team2_cat, team2_initial, team2_base, team2_newAreas, team2_betweenBattles]}
     except:
         print(replay.filename + "contains errors within scouting_detector")
         raise
