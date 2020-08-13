@@ -603,7 +603,7 @@ def scoutNewAreas(scouting_dict):
 
     #1 or less instances of scouting, the player does not scout new areas consistently
     if len(locations) <= 1:
-        return 0
+        return -1
 
     distances_apart = []
     for i in range(len(locations)):
