@@ -439,7 +439,7 @@ def categorize_player(scouting_dict, frames):
             no_scouting = False
             if interval:
                 intervals.append(interval)
-            if key/frames > 0.25:
+            if key/frames >= 0.3:
                 beginning_scouting = False
             interval = 0
 
@@ -451,23 +451,19 @@ def categorize_player(scouting_dict, frames):
         category = 1
         return category
 
-    # only scouts in the beginning
-    if beginning_scouting:
+    # only scouts in the beginning or there are 2 or less instances of scouting
+    if beginning_scouting or (len(intervals) >= 0 and len(intervals) <= 2):
         category = 2
-        return category
-
-    if len(intervals) >= 0 and len(intervals) <= 2:
-        category = 3
         return category
 
     mean_interval = statistics.mean(intervals)
     stdev = statistics.pstdev(intervals)
 
     # Sporadic scouter
-    if stdev/mean_interval >= 0.5:
+    if stdev/mean_interval >= 0.3:
         category = 3
     # Consistent scouter
-    elif stdev/mean_interval < 0.5:
+    elif stdev/mean_interval < 0.3:
         category = 4
 
     return category
@@ -677,6 +673,57 @@ def scoutBetweenBattles(scouting_dict, battles, frames):
     else:
         return 0
 
+def avg_interval_before_battle(scouting_frames, battles, scale):
+    frame_jump60 = 60*int(scale)
+    num_battles = len(battles)
+    intervals = []
+
+    #no battles or no scouting, return a flag
+    if num_battles == 0 or len(scouting_frames) == 0:
+        return -1
+
+    #one interval for every battle
+    for i in range(num_battles):
+        intervals.append(0)
+
+    cur_battle = 0
+    prev_battle_end = 1
+    for frame in scouting_frames:
+        battle_start = battles[cur_battle][0]
+        #if the frame is within a minute of the start of the battle
+        if frame >= battle_start-frame_jump60 and frame < battle_start and frame > prev_battle_end:
+            frame_interval = battle_start-frame
+            sec_interval = frame_interval/scale
+            #reset the battle-specific interval to the smallest interval
+            intervals[cur_battle] = sec_interval
+
+        elif (frame > battle_start) and (cur_battle+1 < num_battles):
+            prev_battle_end = battles[cur_battle][1]
+            cur_battle += 1
+            #re-check scouting instance
+            battle_start = battles[cur_battle][0]
+            #if the frame is within a minute of the start of the battle
+            if frame >= battle_start-frame_jump60 and frame < battle_start and frame > prev_battle_end:
+                frame_interval = battle_start-frame
+                sec_interval = frame_interval/scale
+                #reset the battle-specific interval to the smallest interval
+                intervals[cur_battle] = sec_interval
+        elif cur_battle+1 >= num_battles:
+            break
+
+    # filtering out initialized zeros so they don't skew the average
+    non_zero_intervals = []
+    for interval in intervals:
+        if interval != 0:
+            non_zero_intervals.append(interval)
+
+    # no battles happened in response to scouting, return a flag
+    if len(non_zero_intervals) == 0:
+        return -1
+
+    avg = statistics.mean(non_zero_intervals)
+    return avg
+
 def final_scouting_states(replay):
     '''final_scouting_states is the backbone of scouting_detector.py. It does
         all of the error checking needed, as well as combines all functions to
@@ -831,6 +878,26 @@ def scouting_interval(replay):
 
     except:
         print(replay.filename + "contains errors within scouting_detector")
+        raise
+
+def scouting_response(replay):
+    r = replay
+    try:
+        factors = sc2reader.constants.GAME_SPEED_FACTOR
+        scale = 16*factors[r.expansion][r.speed]
+
+        team1_scouting_states, team2_scouting_states = final_scouting_states(r)
+        battles, harassing = battle_detector.buildBattleList(r)
+
+        team1_scouting_frames = scouting_timeframe_list1(team1_scouting_states)
+        team2_scouting_frames = scouting_timeframe_list1(team2_scouting_states)
+
+        team1_avg = avg_interval_before_battle(team1_scouting_frames, battles, scale)
+        team2_avg = avg_interval_before_battle(team2_scouting_frames, battles, scale)
+
+        return team1_avg, team2_avg
+
+    except:
         raise
 
 def print_verification(replay):

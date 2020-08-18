@@ -253,7 +253,7 @@ def uid_stats(counter):
     print("Number of players with only one game:", one_game, "or {:2d}% of players".format(one_perc))
     print("Number of players with multiple games:", mult_games, "or {:2d}% of players".format(mult_perc))
 
-def uid_counter(filename):
+def match_counter(filename):
     unique_ids = [[], [], [], [], [], [], []]
     with open(filename, 'r') as my_csv:
         reader = csv.DictReader(my_csv)
@@ -264,8 +264,7 @@ def uid_counter(filename):
             else:
                 intRank = int(rank)
 
-            if not(game_id in unique_ids[intRank-1]):
-                unique_ids[intRank-1].append(game_id)
+            unique_ids[intRank-1].append(game_id)
     print("---{}---".format(filename))
     print("Bronze unique ids:", len(unique_ids[0]))
     print("Silver unique ids:", len(unique_ids[1]))
@@ -313,7 +312,71 @@ def main1():
     print("Run time: ", "{:2d}".format(int(deltatime//60)), "minutes and", "{:05.2f}".format(deltatime%60), "seconds")
 
 def main2():
-    uid_counter("scouting_time_fraction.csv")
-    uid_counter("scouting_time_frames1.csv")
+    match_counter("scouting_time_fraction.csv")
+    match_counter("scouting_time_frames1.csv")
 
-main1()
+def scouting_analysis():
+    matches_rank = [0, 0, 0, 0, 0, 0, 0]
+    stats_dict_rank = {"initial": [0, 0, 0, 0, 0, 0, 0], "base": [0, 0, 0, 0, 0, 0, 0],
+                    "new": [0, 0, 0, 0, 0, 0, 0], "between": [0, 0, 0, 0, 0, 0, 0]}
+    matches_expertise = [0, 0, 0]
+    stats_dict_expertise = {"initial": [0, 0, 0], "base": [0, 0, 0],
+                    "new": [0, 0, 0], "between": [0, 0, 0]}
+    with open("scouting_analysis.csv") as my_csv:
+        reader = csv.DictReader(my_csv)
+        for row in reader:
+            rank, initial, base, new, between = row["Rank"], int(row["InitialScouting"]), int(row["BaseScouting"]), int(row["NewAreas"]), int(row["BetweenBattles"])
+            if rank == "nan":
+                continue
+            else:
+                intRank = int(rank)
+                matches_rank[intRank-1] += 1
+                if intRank == 1 or intRank == 2:
+                    expertise = 0
+                elif intRank == 4 or intRank == 5:
+                    expertise = 1
+                elif intRank == 7:
+                    expertise = 2
+                matches_expertise[expertise] += 1
+
+            if initial == 1:
+                stats_dict_rank["initial"][intRank-1] += 1
+                stats_dict_expertise["initial"][expertise] +=1
+
+            if base == 0:
+                stats_dict_rank["base"][intRank-1] += 1
+                stats_dict_expertise["base"][expertise] +=1
+
+            if new == 1:
+                stats_dict_rank["new"][intRank-1] += 1
+                stats_dict_expertise["new"][expertise] +=1
+
+            if between == 1:
+                stats_dict_rank["between"][intRank-1] += 1
+                stats_dict_expertise["between"][expertise] +=1
+
+    stats = stats_dict_rank.keys()
+    for stat in stats:
+        for i in range(7):
+            stats_dict_rank[stat][i] = stats_dict_rank[stat][i]/matches_rank[i]
+        for i in range(3):
+            stats_dict_expertise[stat][i] = stats_dict_expertise[stat][i]/matches_expertise[i]
+
+    print("RANK")
+    print("---Initial Scouting---")
+    print(stats_dict_rank["initial"])
+    print("---Scouting Expansions---")
+    print(stats_dict_rank["base"])
+    print("---Scouting New Areas---")
+    print(stats_dict_rank["new"])
+    print("---Scouting Between Battles")
+    print(stats_dict_rank["between"])
+    print("\n\nEXPERTISE")
+    print("---Initial Scouting---")
+    print(stats_dict_expertise["initial"])
+    print("---Scouting Expansions---")
+    print(stats_dict_expertise["base"])
+    print("---Scouting New Areas---")
+    print(stats_dict_expertise["new"])
+    print("---Scouting Between Battles")
+    print(stats_dict_expertise["between"])
