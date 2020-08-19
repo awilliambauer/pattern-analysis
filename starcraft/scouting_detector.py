@@ -6,6 +6,12 @@ import sc2reader
 import math
 import statistics
 import battle_detector
+from sc2reader.engine.plugins import SelectionTracker, APMTracker
+from selection_plugin import ActiveSelection
+
+sc2reader.engine.register_plugin(APMTracker())
+sc2reader.engine.register_plugin(SelectionTracker())
+sc2reader.engine.register_plugin(ActiveSelection())
 
 def buildEventLists(tracker_events, game_events):
     '''buildEventLists is used to build up a list of events related to
@@ -175,7 +181,7 @@ def buildScoutingDictionaries(events, objects, frames):
                 prev_frames[cur_team] = i
                 prev_states[cur_team] = "Viewing themself"
             # looking at their opponent's main base
-            elif withinDistance(camera_location, og_bases[opp_team], 25): #and withinDistance(camera_location, active_units[cur_team], 25):
+            elif withinDistance(camera_location, og_bases[opp_team], 25) and withinDistance(camera_location, active_units[cur_team], 25):
                 scouting_states[cur_team] = updatePrevScoutStates(scouting_states[cur_team], i, prev_frames[cur_team], prev_states[cur_team])
                 location = (int(camera_location[0]), int(camera_location[1]))
                 scouting_states[cur_team][i][0] = "Viewing opponent - main base"
@@ -184,7 +190,7 @@ def buildScoutingDictionaries(events, objects, frames):
                 prev_states[cur_team] = "Viewing opponent - main base"
                 first_instance[cur_team] = False
             # looking at their opponent's expansion bases
-            elif withinDistance(camera_location, bases[opp_team], 25): #and withinDistance(camera_location, active_units[cur_team], 25):
+            elif withinDistance(camera_location, bases[opp_team], 25) and withinDistance(camera_location, active_units[cur_team], 25):
                 scouting_states[cur_team] = updatePrevScoutStates(scouting_states[cur_team], i, prev_frames[cur_team], prev_states[cur_team])
                 location = (int(camera_location[0]), int(camera_location[1]))
                 scouting_states[cur_team][i][0] = "Viewing opponent - expansions"
@@ -200,7 +206,6 @@ def buildScoutingDictionaries(events, objects, frames):
                 prev_states[cur_team] = "Viewing empty map space"
 
     return scouting_states[1], scouting_states[2]
-
 
 def withinDistance(location, list, distance):
     '''withinDistance returns true if the input location is within a
@@ -405,7 +410,7 @@ def integrateEngagements(scouting_dict, engagements, scale, replacement):
         frame += 1
     return scouting_dict
 
-def categorize_player(scouting_dict, frames):
+def categorize_player(scouting_frames, battles, harassing, total_frames):
     '''categorize_player is used to sort players based on their scouting
     behavior. The categories are numerical (1-4) and are returned by this
     function. The following is a summary of each category.
@@ -425,31 +430,58 @@ def categorize_player(scouting_dict, frames):
     Intervals are considered consistent if the standard deviation is less
     than half of the mean.'''
 
+    # No scouting, return the 1st category
+    if len(scouting_frames) == 0:
+        category = 1
+        return category
+
+    unsorted_engagements = battles + harassing
+    engagements = sorted(unsorted_engagements, key=lambda e: e[0])
+    cur_engagement = 0
+    cur_scout = 0
+
     no_scouting = True
     beginning_scouting = True
     intervals = []
 
-    keys = scouting_dict.keys()
+    frame = 1
     interval = 0
     after_first = False
-    for key in keys:
-        state = scouting_dict[key]
-        if isScouting(state):
+    while frame <= total_frames:
+        engagement = engagements[cur_engagement]
+        scout = scouting_frames[cur_scout]
+
+        # handling the scouting frames
+        if frame == scout:
             after_first = True
-            no_scouting = False
             if interval:
                 intervals.append(interval)
-            if key/frames >= 0.3:
-                beginning_scouting = False
             interval = 0
+
+            if frame/total_frames >= 0.25:
+                beginning_scouting = False
+
+            if cur_scout+1 < len(scouting_frames):
+                cur_scout += 1
+
+        # handling the engagements
+        elif frame == engagement[0]:
+            after_first = True
+            if interval:
+                intervals.append(interval)
+            interval = 0
+
+            if cur_engagement+1 < len(engagements):
+                cur_engagement += 1
+                
+            frame = engagement[1]
 
         else:
             if after_first:
                 interval += 1
-    # a non-scouter
-    if no_scouting:
-        category = 1
-        return category
+
+        frame += 1
+
 
     # only scouts in the beginning or there are 2 or less instances of scouting
     if beginning_scouting or (len(intervals) >= 0 and len(intervals) <= 2):
@@ -816,8 +848,11 @@ def scouting_analysis(replay):
         team1_initial = hasInitialScouting(team1_scouting_states, frames, battles)
         team2_initial = hasInitialScouting(team2_scouting_states, frames, battles)
 
-        team1_cat = categorize_player(team1_scouting_states, frames)
-        team2_cat = categorize_player(team2_scouting_states, frames)
+        team1_frames = scouting_timeframe_list1(team1_scouting_states)
+        team2_frames = scouting_timeframe_list1(team2_scouting_states)
+
+        team1_cat = categorize_player(team1_frames, battles, harassing, frames)
+        team2_cat = categorize_player(team2_frames, battles, harassing, frames)
 
         team1_base = scoutsMainBase(team1_scouting_states)
         team2_base = scoutsMainBase(team2_scouting_states)

@@ -22,7 +22,7 @@ def generateFields(filename):
             raise RuntimeError()
 
         # extracting the game id and adding the correct tag
-        # pathname = "practice_replays/" + filename
+        #pathname = "practice_replays/" + filename
         pathname = "/Accounts/awb/pattern-analysis/starcraft/replays/" + filename
         game_id = filename.split("_")[1].split(".")[0]
         if filename.startswith("ggg"):
@@ -42,14 +42,6 @@ def generateFields(filename):
         # collecting stats and values
         analysis_dict = scouting_detector.scouting_analysis(r)
         team1_rank, team1_rel_rank, team2_rank, team2_rel_rank = scouting_stats.ranking_stats(r)
-
-        # removing replays with flags
-        for i in range(1, 3):
-            list = analysis_dict[i]
-            for item in list:
-                if item == -1:
-                    print(filename + " contains flags from scouting analysis")
-                    raise RuntimeError()
 
         team1_uid = r.players[0].detail_data['bnet']['uid']
         team2_uid = r.players[1].detail_data['bnet']['uid']
