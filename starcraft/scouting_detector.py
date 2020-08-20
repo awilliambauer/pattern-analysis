@@ -19,7 +19,7 @@ def buildEventLists(tracker_events, game_events):
     It returns one list of all relevant events.'''
 
     events = []
-    ability_names = ["LandCommandCenter", "LandOrbitalCommand", "RightClick", "Attack"]
+    ability_names = ["RightClick", "Attack"]
     base_names = ["Hatchery", "Lair", "Hive", "Nexus", "CommandCenter", "CommandCenterFlying",
                         "OrbitalCommand", "OrbitalCommandFlying","PlanetaryFortress"]
     team1 = 1
@@ -53,7 +53,7 @@ def buildEventLists(tracker_events, game_events):
                     team2_count += 1
             else:
                 raise RuntimeError()
-        # account for moving terran bases and moving units
+        # account for moving units
         elif isinstance(g_event, sc2reader.events.game.TargetUnitCommandEvent) and (g_event.ability_name in ability_names):
             events.append(g_event)
         elif isinstance(g_event, sc2reader.events.game.TargetPointCommandEvent) and (g_event.ability_name in ability_names):
@@ -75,7 +75,7 @@ def initializeScoutingDictionaries(frames):
             dicts[i][j] = ["", []]
     return dicts
 
-def buildScoutingDictionaries(events, objects, frames):
+def buildScoutingDictionaries(replay, events, objects, frames):
     '''buildScoutingDictionaries returns dictionaries for each player where the
     keys are the frame and the value is the state of scouting. "No scouting"
     indicates the team/player is not looking at any bases, "Scouting themself"
@@ -91,15 +91,13 @@ def buildScoutingDictionaries(events, objects, frames):
 
     # Dictionaries for each team of the locations of bases where the keys are unit ids
     # and the values are locations (as tuples of (x, y) coordinates)
-    bases = {1: {}, 2: {}}
     og_bases = {1: {}, 2: {}}
     # Add starting bases
     base_names = ["Hatchery", "Lair", "Hive", "Nexus", "CommandCenter", "CommandCenterFlying",
                         "OrbitalCommand", "OrbitalCommandFlying","PlanetaryFortress"]
-    terran_bases = base_names[4:]
+
     for i in range(1, 3):
         start_base = [u for u in objects if u.name in base_names and u.owner != None and u.owner.pid == i and u.finished_at == 0][0]
-        bases[i][start_base.id] = start_base.location
         og_bases[i][start_base.id] = start_base.location
 
     # Dictionaries for each team of the active units where the keys are the unit ids
@@ -115,10 +113,7 @@ def buildScoutingDictionaries(events, objects, frames):
     # iterating through events in order
     for event in events:
         i = event.frame
-        # accounting for new bases
-        if isinstance(event, sc2reader.events.tracker.UnitInitEvent):
-            cur_team = event.control_pid
-            bases[cur_team][event.unit_id] = event.location
+
         # adding new units to the list of active units
         elif isinstance(event, sc2reader.events.tracker.UnitBornEvent):
             cur_team = event.control_pid
@@ -137,18 +132,11 @@ def buildScoutingDictionaries(events, objects, frames):
             if event.unit_id in active_units[cur_team]:
                 active_units[cur_team].pop(event.unit_id)
 
-        # accounting for Terran bases moving, updating unit positions, and the first instance of scouting
+        # updating unit positions, and the first instance of scouting
         elif isinstance(event, sc2reader.events.game.TargetUnitCommandEvent) or isinstance(event, sc2reader.events.game.TargetPointCommandEvent):
             cur_team = event.player.pid
-            # moving Terran bases
-            if "Point" in event.name and event.ability_name in ["LandCommandCenter", "LandOrbitalCommand"]:
-                cur_selection = event.player.selection[10]
-                for unit in cur_selection:
-                    if unit.name in terran_bases:
-                        bases[cur_team][unit.id] = event.location
-                        break
             # updating unit positions and checking for the first instance of scouting
-            elif event.ability_name in ["RightClick", "Attack"]:
+            if event.ability_name in ["RightClick", "Attack"]:
                 if "Unit" in event.name:
                     active_units[cur_team][event.target_unit_id] = event.location
                 # checking for the first instance of scouting - units ordered to
@@ -175,12 +163,12 @@ def buildScoutingDictionaries(events, objects, frames):
                 opp_team = 1
             camera_location = event.location
             # looking at their own base
-            if withinDistance(camera_location, bases[cur_team], 25):
+            if withinDistance(camera_location, event.player.bases, 25):
                 scouting_states[cur_team] = updatePrevScoutStates(scouting_states[cur_team], i, prev_frames[cur_team], prev_states[cur_team])
                 scouting_states[cur_team][i][0] = "Viewing themself"
                 prev_frames[cur_team] = i
                 prev_states[cur_team] = "Viewing themself"
-            # looking at their opponent's main base
+            # looking at their opponent's original base
             elif withinDistance(camera_location, og_bases[opp_team], 25) and withinDistance(camera_location, active_units[cur_team], 25):
                 scouting_states[cur_team] = updatePrevScoutStates(scouting_states[cur_team], i, prev_frames[cur_team], prev_states[cur_team])
                 location = (int(camera_location[0]), int(camera_location[1]))
@@ -190,7 +178,7 @@ def buildScoutingDictionaries(events, objects, frames):
                 prev_states[cur_team] = "Viewing opponent - main base"
                 first_instance[cur_team] = False
             # looking at their opponent's expansion bases
-            elif withinDistance(camera_location, bases[opp_team], 25) and withinDistance(camera_location, active_units[cur_team], 25):
+            elif withinDistance(camera_location, replay.player[opp_team].bases, 25) and withinDistance(camera_location, active_units[cur_team], 25):
                 scouting_states[cur_team] = updatePrevScoutStates(scouting_states[cur_team], i, prev_frames[cur_team], prev_states[cur_team])
                 location = (int(camera_location[0]), int(camera_location[1]))
                 scouting_states[cur_team][i][0] = "Viewing opponent - expansions"
@@ -774,11 +762,13 @@ def final_scouting_states(replay):
     tracker_events = r.tracker_events
     game_events = r.game_events
     frames = r.frames
-    scale = 16*sc2reader.constants.GAME_SPEED_FACTOR[r.expansion][r.speed]
+    # scale = 16*sc2reader.constants.GAME_SPEED_FACTOR[r.expansion][r.speed]
+    # it appears the scale is always 22.4 in our dataset, despite documentation to the contrary
+    scale = 22.4
 
     allEvents = buildEventLists(tracker_events, game_events)
     objects = r.objects.values()
-    team1_scouting_states, team2_scouting_states = buildScoutingDictionaries(allEvents, objects, frames)
+    team1_scouting_states, team2_scouting_states = buildScoutingDictionaries(r, allEvents, objects, frames)
 
     battles, harassing = battle_detector.buildBattleList(r)
     team1_scouting_states = integrateEngagements(team1_scouting_states, battles, scale, "Engaged in Battle")
@@ -889,7 +879,9 @@ def scouting_interval(replay):
     r = replay
     try:
         factors = sc2reader.constants.GAME_SPEED_FACTOR
-        scale = factors[r.expansion][r.speed]
+        # scale = factors[r.expansion][r.speed]
+        # it appears the scale is always 22.4 in our dataset, despite documentation to the contrary
+        scale = 22.4
 
         team1_scouting_states, team2_scouting_states = final_scouting_states(r)
 
@@ -906,7 +898,9 @@ def scouting_response(replay):
     r = replay
     try:
         factors = sc2reader.constants.GAME_SPEED_FACTOR
-        scale = 16*factors[r.expansion][r.speed]
+        # scale = 16*factors[r.expansion][r.speed]
+        # it appears the scale is always 22.4 in our dataset, despite documentation to the contrary
+        scale = 22.4
 
         team1_scouting_states, team2_scouting_states = final_scouting_states(r)
         battles, harassing = battle_detector.buildBattleList(r)
