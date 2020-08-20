@@ -376,38 +376,25 @@ def integrateEngagements(scouting_dict, engagements, scale, replacement):
     buildScoutingDictionaries, a list of engagements returned by
     battle_detector.buildBattleList, and a string indicating what the false
     positives should be replaced by. It returns the updated scouting dictionary.'''
-    frame_jump7 = 7*int(scale)
-    keys = scouting_dict.keys()
-    start_engagement = False
-    start_frame = None
-    end_engagement = False
-    end_frame = None
-    length = len(keys)
-    frame = 1
-    while frame < length:
-        if battle_detector.duringBattle(frame, engagements):
-            if not(replacement in scouting_dict[frame][1]):
-                scouting_dict[frame][1].append(replacement)
-            if not(isScouting(scouting_dict[frame-1])):
-                start_engagement = True
-                start_frame = frame
-            if not(isScouting(scouting_dict[frame+1])):
-                end_engagement = True
-                end_frame = frame
 
-        else:
-            # reset scouting instances if they are within 7 seconds of a battle
-            if start_engagement:
-                for i in range(start_frame-frame_jump7, start_frame):
-                    if i in keys and not(replacement in scouting_dict[i][1]):
-                        scouting_dict[i][1].append(replacement)
-            if end_engagement:
-                for i in range(end_frame, end_frame+frame_jump7):
-                    if i in keys and not(replacement in scouting_dict[i][1]):
-                        scouting_dict[i][1].append(replacement)
-            end_engagement = False
-            start_engagement = False
-        frame += 1
+    BUFFER = int(20 * scale)
+
+    # TODO make list of tags a set so we can get away with not caring about duplicates
+    for frame in scouting_dict:
+        if battle_detector.duringBattle(frame, engagements):
+            scouting_dict[frame][1].append(replacement)
+            # extend engagement tag BUFFER frames before it starts
+            # TODO differentiate between these "fake" pre-engagement tags and the actual period of engagement
+            if not battle_detector.duringBattle(frame - 1, engagements):
+                for f in range(frame - BUFFER, frame):
+                    if f in scouting_dict:
+                        scouting_dict[f][1].append(replacement)
+            # extend engagement tag BUFFER frames after it ends
+            if not battle_detector.duringBattle(frame + 1, engagements):
+                for f in range(frame + 1, frame + BUFFER + 1):
+                    if f in scouting_dict:
+                        scouting_dict[f][1].append(replacement)
+
     return scouting_dict
 
 def categorize_player(scouting_frames, battles, harassing, total_frames):
