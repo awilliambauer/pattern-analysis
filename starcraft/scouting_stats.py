@@ -5,7 +5,7 @@ import csv
 import os
 import sys
 import scouting_detector
-from multiprocessing import Pool
+from multiprocessing import Pool, cpu_count
 import argparse
 import time
 import math
@@ -14,9 +14,6 @@ from collections import Counter
 from sc2reader.engine.plugins import SelectionTracker, APMTracker
 from selection_plugin import ActiveSelection
 
-sc2reader.engine.register_plugin(APMTracker())
-sc2reader.engine.register_plugin(SelectionTracker())
-sc2reader.engine.register_plugin(ActiveSelection())
 
 def generateFields(filename):
     '''generateFields takes in a filename of a replay to load, and returns
@@ -204,7 +201,7 @@ def writeToCsv(write, debug, start, end):
                                         "Win":fields[31]})
         # running with multiprocessing
         else:
-            pool = Pool(20)
+            pool = Pool(min(cpu_count(), 20))
             results = pool.map(generateFields, files)
             pool.close()
             pool.join()
@@ -251,6 +248,11 @@ if __name__ == "__main__":
     '''This main function parses command line arguments and calls
     writeToCsv, which will write statistics to a csv for each
     StarCraft 2 replay file in a directory.'''
+    sc2reader.engine.register_plugin(APMTracker())
+    sc2reader.engine.register_plugin(SelectionTracker())
+    sc2reader.engine.register_plugin(ActiveSelection())
+    sc2reader.engine.register_plugin(BaseTracker())
+
     t1 = time.time()
     # command line arguments for debugging and saving a list of valid replays
     parser = argparse.ArgumentParser()

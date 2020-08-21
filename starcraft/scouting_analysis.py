@@ -4,16 +4,14 @@ import os
 import sys
 import scouting_detector
 import scouting_stats
-from multiprocessing import Pool
+from multiprocessing import Pool, cpu_count
 import argparse
 import time
 import math
 from sc2reader.engine.plugins import SelectionTracker, APMTracker
 from selection_plugin import ActiveSelection
+from base_plugins import BaseTracker
 
-sc2reader.engine.register_plugin(APMTracker())
-sc2reader.engine.register_plugin(SelectionTracker())
-sc2reader.engine.register_plugin(ActiveSelection())
 
 def generateFields(filename):
     try:
@@ -72,7 +70,7 @@ def writeToCsv():
                                          "BetweenBattles", "Win"])
         events_out.writeheader()
 
-        pool = Pool(20)
+        pool = Pool(min(cpu_count(), 20))
         results = pool.map(generateFields, files)
         pool.close()
         pool.join()
@@ -90,6 +88,11 @@ def writeToCsv():
                                     "BetweenBattles": fields[16], "Win": fields[17]})
 
 if __name__ == "__main__":
+    sc2reader.engine.register_plugin(APMTracker())
+    sc2reader.engine.register_plugin(SelectionTracker())
+    sc2reader.engine.register_plugin(ActiveSelection())
+    sc2reader.engine.register_plugin(BaseTracker())
+
     t1 = time.time()
     writeToCsv()
     deltatime = time.time()-t1

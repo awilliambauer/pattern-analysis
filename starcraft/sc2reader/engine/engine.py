@@ -118,6 +118,8 @@ class GameEngine(object):
         self.register_plugins(*plugins)
 
     def register_plugin(self, plugin):
+        if any(type(p).__name__ == type(plugin).__name__ for p in self._plugins):
+            raise ValueError(f"there's already an instance of {type(plugin).__name__} registered")
         self._plugins.append(plugin)
 
     def register_plugins(self, *plugins):

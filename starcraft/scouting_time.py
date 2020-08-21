@@ -4,16 +4,14 @@
 import csv
 import sc2reader
 import time
-from multiprocessing import Pool
+from multiprocessing import Pool, cpu_count
 from collections import Counter
 import scouting_detector
 import scouting_stats
 from sc2reader.engine.plugins import SelectionTracker, APMTracker
 from selection_plugin import ActiveSelection
 
-sc2reader.engine.register_plugin(APMTracker())
-sc2reader.engine.register_plugin(SelectionTracker())
-sc2reader.engine.register_plugin(ActiveSelection())
+
 
 def generateFields1(filename):
     # loading the replay
@@ -118,7 +116,7 @@ def writeToCsv(which, filename):
         files.append(line.strip())
     games.close()
 
-    pool = Pool(20)
+    pool = Pool(min(cpu_count(), 20))
     if which == 1:
         results = pool.map(generateFields1, files)
     elif which == 2:
@@ -145,6 +143,11 @@ def writeToCsv(which, filename):
 
 
 if __name__ == "__main__":
+    sc2reader.engine.register_plugin(APMTracker())
+    sc2reader.engine.register_plugin(SelectionTracker())
+    sc2reader.engine.register_plugin(ActiveSelection())
+    sc2reader.engine.register_plugin(BaseTracker())
+
     t1 = time.time()
     writeToCsv(1, "scouting_time_fraction.csv")
     writeToCsv(2, "scouting_time_frames1.csv")
