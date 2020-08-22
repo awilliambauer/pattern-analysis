@@ -26,7 +26,7 @@ def is_mining_loc(resource_locs, location):
     to cluster resource locations into possible base locations, returns True if location within 8.5 of a center
     """
     try:
-        af = AffinityPropagation(preference=-1000).fit(resource_locs)
+        af = AffinityPropagation(preference=-1000, random_state=None).fit(resource_locs)
         cluster_centers = af.cluster_centers_
         # 8.5 threshold set empirically based on 5-replay sample
         # TODO verify with bigger sample
@@ -139,7 +139,7 @@ class BaseTracker(object):
                 prefs = np.array(prefs)
                 finishes = np.array(finishes)
 
-                af = AffinityPropagation(preference=[0 if p else -5000 for p in prefs]).fit(locs)
+                af = AffinityPropagation(preference=[0 if p else -5000 for p in prefs], random_state=None).fit(locs)
                 cluster_centers_indices = af.cluster_centers_indices_
                 centers = af.cluster_centers_.tolist()
                 labels = af.labels_

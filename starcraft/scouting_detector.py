@@ -683,7 +683,7 @@ def scoutBetweenBattles(scouting_dict, battles, frames):
 
     # determine if there are enough scouting instances between battles
     nums_between = []
-    for (pstart, pend), count in peacetime_keys.items():
+    for (pstart, pend), count in peacetime_dict.items():
         if pend - pstart > 22.4 * 20:  # only consider peacetime longer than 20s
             # we care whether they scouted, during each peacetime, but not how many times
             nums_between.append(min(1, count))
