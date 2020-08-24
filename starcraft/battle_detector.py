@@ -106,7 +106,49 @@ def buildBattleList(replay):
                     if tuple not in harassing:
                         harassing.append(tuple)
 
-    return battles, harassing
+    battle_dict = initializeDictionary(battles)
+    harassing_dict = initializeDictionary(harassing)
+    t_events = replay.tracker_events
+    # compiling a list of locations for all battles and harassing
+    for event in t_events:
+        if isinstance(event, sc2reader.events.tracker.UnitDiedEvent):
+            frame = event.frame
+            location = event.location
+            for battle in battles:
+                if frame >= battle[0] and frame <= battle[1]:
+                    battle_dict[battle].append(location)
+                    break
+            for harass in harassing:
+                if frame >= harass[0] and frame <= harass[1]:
+                    harassing_dict[harass].append(location)
+                    break
+
+    # averaging the locations for each battle and harassing
+    new_battles = averageLocations(battles, battle_dict)
+    new_harassing = averageLocations(harassing, harassing_dict)
+
+    return new_battles, new_harassing
+
+def initializeDictionary(list):
+    dict = {}
+    for item in list:
+        dict[item] = []
+    return dict
+
+def averageLocations(list, dict):
+    new_list = []
+    for item in list:
+        locations = dict[item]
+        x_vals = 0
+        y_vals = 0
+        for place in locations:
+            x_vals += place[0]
+            y_vals += place[1]
+        x_avg = int(x_vals/len(locations))
+        y_avg = int(y_vals/len(locations))
+        new_tuple = (item[0], item[1], (x_avg, y_avg))
+        new_list.append(new_tuple)
+    return new_list
 
 def duringBattle(frame, battles):
     '''duringBattle returns true if a frame takes place during a battle.
