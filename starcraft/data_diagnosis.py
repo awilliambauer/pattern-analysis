@@ -60,7 +60,7 @@ def read_scouting_stats():
         for row in reader:
             total_rows += 1
 
-            uid, ScoutingFrequency, APS, Rank, CPS, PeaceRate, BattleRate, Win = row["UID"], row["ScoutingFrequency"], row["RelAPS"], row["Rank"], row["CPS"], row["PeaceRate"], row["BattleRate"], row["Win"]
+            uid, ScoutingFrequency, APS, Rank, CPS, PeaceRate, BattleRate, Win = row["UID"], row["ScoutingFrequency"], row["APS"], row["Rank"], row["CPS"], row["PeaceRate"], row["BattleRate"], row["Win"]
 
             # checking if Rank is valid and setting a flag if it is not
             if Rank == "nan":
@@ -128,13 +128,13 @@ def read_scouting_stats():
 
 
     make_boxplot(SF_rank_data, rank_categories, "Scouting Frequency", "ScoutingFrequencyByRank.png")
-    make_boxplot(APS_rank_data, rank_categories, "Actions per Second", "APSByRank.png")
+    make_boxplot(APS_rank_data, rank_categories, "Actions per Second", "APSByRank.png", ylims=(0, 20))
     make_boxplot(CPS_rank_data, rank_categories, "Commands per Second", "CPSByRank.png")
     make_boxplot(PR_rank_data, rank_categories, "Macro Selection Rate during Peace Time", "PeaceRateByRank.png")
     make_boxplot(BR_rank_data, rank_categories, "Macro Selection Rate during Battle Time", "BattleRateByRank.png")
 
     make_boxplot(SF_win_data, win_categories, "Scouting Frequency", "ScoutingFrequencyByWin.png")
-    make_boxplot(APS_win_data, win_categories, "Actions per Second", "APSByWin.png")
+    make_boxplot(APS_win_data, win_categories, "Actions per Second", "APSByWin.png", ylims=(0, 20))
     make_boxplot(CPS_win_data, win_categories, "Commands per Second", "CPSByWin.png")
     make_boxplot(PR_win_data, win_categories, "Macro Selection Rate during Peace Time", "PeaceRateByWin.png")
     make_boxplot(BR_win_data, win_categories, "Macro Selection Rate during Battle Time", "BattleRateByWin.png")
@@ -186,6 +186,7 @@ def read_scouting_stats():
     print("Negative APS wins:", neg_APS_wins, ", and losses:", neg_APS_loss)
 
     return rank_uid_counter
+
 
 def read_event_counts():
     '''Creates boxplots for control group selections for gold and grandmaster ranks,
