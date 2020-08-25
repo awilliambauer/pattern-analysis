@@ -4,6 +4,7 @@ from __future__ import absolute_import, print_function, unicode_literals, divisi
 import collections
 from sc2reader.events import *
 from sc2reader.engine.events import InitGameEvent, EndGameEvent, PluginExit
+import traceback, sys
 
 
 class GameEngine(object):
@@ -192,6 +193,7 @@ class GameEngine(object):
                             event_handler.__self__, code=1, details=dict(error=e)
                         )
                         new_events.append(new_event)
+                        traceback.print_exc(file=sys.stdout)
             event_queue.extendleft(new_events)
 
         # For any plugins that didn't yield a PluginExit event or throw unexpected exceptions,

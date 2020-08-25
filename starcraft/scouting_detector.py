@@ -890,6 +890,7 @@ def scouting_times(replay, which):
         return team1_time_list, team2_time_list
 
     except:
+        traceback.print_exc()
         print(replay.filename, "contains errors within scouting_detector")
         raise
 

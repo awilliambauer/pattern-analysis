@@ -29,7 +29,7 @@ class TrackerEvent(Event):
         pass
 
     def _str_prefix(self):
-        return "{0}\t ".format(Length(seconds=int(self.frame / 16)))
+        return "{0}\t ".format(Length(seconds=int(self.frame / 22.4)))
 
     def __str__(self):
         return self._str_prefix() + self.name

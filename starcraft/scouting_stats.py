@@ -13,6 +13,7 @@ import control_groups
 from collections import Counter
 from sc2reader.engine.plugins import SelectionTracker, APMTracker
 from selection_plugin import ActiveSelection
+import traceback
 
 
 def generateFields(filename):
@@ -38,8 +39,11 @@ def generateFields(filename):
         # loading the replay
         try:
             r = sc2reader.load_replay(pathname)
+            if any(v != (0, {}) for v in r.plugin_result.values()):
+                print(pathname, r.plugin_result)
         except:
-            print(filename + " cannot load using sc2reader due to an internal ValueError")
+            print(filename, "cannot load using sc2reader due to an internal ValueError")
+            traceback.print_exc()
             raise RuntimeError()
 
         # checking the map
