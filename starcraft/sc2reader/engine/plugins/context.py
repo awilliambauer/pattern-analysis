@@ -52,6 +52,7 @@ class ContextLoader(object):
                     replay.datapack.__class__.__name__,
                 )
             )
+            self.logger.error(f"{event.ability_link} {event.command_index}")
 
         else:
             event.ability = replay.datapack.abilities[event.ability_id]

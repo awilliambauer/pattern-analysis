@@ -4,16 +4,15 @@ import os
 import sys
 import scouting_detector
 import scouting_stats
-from multiprocessing import Pool
+from multiprocessing import Pool, cpu_count
 import argparse
 import time
 import math
 from sc2reader.engine.plugins import SelectionTracker, APMTracker
 from selection_plugin import ActiveSelection
+from base_plugins import BaseTracker
+import traceback
 
-sc2reader.engine.register_plugin(APMTracker())
-sc2reader.engine.register_plugin(SelectionTracker())
-sc2reader.engine.register_plugin(ActiveSelection())
 
 def generateFields(filename):
     try:
@@ -35,8 +34,11 @@ def generateFields(filename):
         # loading the replay
         try:
             r = sc2reader.load_replay(pathname)
+            if any(v != (0, {}) for v in r.plugin_result.values()):
+                print(pathname, r.plugin_result)
         except:
-            print(filename + " cannot load using sc2reader due to an internal ValueError")
+            print(filename, "cannot load using sc2reader due to an internal ValueError")
+            traceback.print_exc()
             raise RuntimeError()
 
         # collecting stats and values
@@ -59,7 +61,13 @@ def generateFields(filename):
         return
 
 
-def writeToCsv():
+if __name__ == "__main__":
+    sc2reader.engine.register_plugin(APMTracker())
+    sc2reader.engine.register_plugin(SelectionTracker())
+    sc2reader.engine.register_plugin(ActiveSelection())
+    sc2reader.engine.register_plugin(BaseTracker())
+
+    t1 = time.time()
     files = []
     games = open("valid_game_ids.txt", 'r')
     for line in games:
@@ -72,10 +80,8 @@ def writeToCsv():
                                          "BetweenBattles", "Win"])
         events_out.writeheader()
 
-        pool = Pool(20)
-        results = pool.map(generateFields, files)
-        pool.close()
-        pool.join()
+        with Pool(min(cpu_count(), 20)) as pool:
+            results = pool.map(generateFields, files)
 
         for fields in results:
             if fields: # generateFields will return None for invalid replays
@@ -88,9 +94,5 @@ def writeToCsv():
                                     "Category": fields[12], "InitialScouting": fields[13],
                                     "BaseScouting": fields[14], "NewAreas": fields[15],
                                     "BetweenBattles": fields[16], "Win": fields[17]})
-
-if __name__ == "__main__":
-    t1 = time.time()
-    writeToCsv()
     deltatime = time.time()-t1
     print("Run time: ", "{:2d}".format(int(deltatime//60)), "minutes and", "{:05.2f}".format(deltatime%60), "seconds")

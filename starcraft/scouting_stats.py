@@ -5,7 +5,7 @@ import csv
 import os
 import sys
 import scouting_detector
-from multiprocessing import Pool
+from multiprocessing import Pool, cpu_count
 import argparse
 import time
 import math
@@ -13,10 +13,8 @@ import control_groups
 from collections import Counter
 from sc2reader.engine.plugins import SelectionTracker, APMTracker
 from selection_plugin import ActiveSelection
+import traceback
 
-sc2reader.engine.register_plugin(APMTracker())
-sc2reader.engine.register_plugin(SelectionTracker())
-sc2reader.engine.register_plugin(ActiveSelection())
 
 def generateFields(filename):
     '''generateFields takes in a filename of a replay to load, and returns
@@ -41,8 +39,11 @@ def generateFields(filename):
         # loading the replay
         try:
             r = sc2reader.load_replay(pathname)
+            if any(v != (0, {}) for v in r.plugin_result.values()):
+                print(pathname, r.plugin_result)
         except:
-            print(filename + " cannot load using sc2reader due to an internal ValueError")
+            print(filename, "cannot load using sc2reader due to an internal ValueError")
+            traceback.print_exc()
             raise RuntimeError()
 
         # checking the map
@@ -204,7 +205,7 @@ def writeToCsv(write, debug, start, end):
                                         "Win":fields[31]})
         # running with multiprocessing
         else:
-            pool = Pool(20)
+            pool = Pool(min(cpu_count(), 20))
             results = pool.map(generateFields, files)
             pool.close()
             pool.join()
@@ -251,6 +252,11 @@ if __name__ == "__main__":
     '''This main function parses command line arguments and calls
     writeToCsv, which will write statistics to a csv for each
     StarCraft 2 replay file in a directory.'''
+    sc2reader.engine.register_plugin(APMTracker())
+    sc2reader.engine.register_plugin(SelectionTracker())
+    sc2reader.engine.register_plugin(ActiveSelection())
+    sc2reader.engine.register_plugin(BaseTracker())
+
     t1 = time.time()
     # command line arguments for debugging and saving a list of valid replays
     parser = argparse.ArgumentParser()

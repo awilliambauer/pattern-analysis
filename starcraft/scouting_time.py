@@ -4,18 +4,21 @@
 import csv
 import sc2reader
 import time
-from multiprocessing import Pool
+from multiprocessing import Pool, cpu_count
 from collections import Counter
 import scouting_detector
 import scouting_stats
 from sc2reader.engine.plugins import SelectionTracker, APMTracker
 from selection_plugin import ActiveSelection
+from base_plugins import BaseTracker
+import numpy as np
+import traceback
+from functools import partial
+import logging
+import sys
 
-sc2reader.engine.register_plugin(APMTracker())
-sc2reader.engine.register_plugin(SelectionTracker())
-sc2reader.engine.register_plugin(ActiveSelection())
 
-def generateFields1(filename):
+def generateFields(filename, which):
     # loading the replay
     try:
         # skipping non-replay files in the directory
@@ -34,82 +37,24 @@ def generateFields1(filename):
         # loading the replay
         try:
             r = sc2reader.load_replay(pathname)
+            if any(v != (0, {}) for v in r.plugin_result.values()):
+                print(pathname, r.plugin_result)
         except:
-            print(filename + " cannot load using sc2reader due to an internal ValueError")
-            raise RuntimeError()
+            print(filename, "cannot load using sc2reader due to an internal ValueError")
+            traceback.print_exc()
+            raise
 
-        team1_times, team2_times = scouting_detector.scouting_times(r, 1)
+        team1_times, team2_times = scouting_detector.scouting_times(r, which)
         team1_rank, team1_rel_rank, team2_rank, team2_rel_rank = scouting_stats.ranking_stats(r)
 
         fields = [game_id, team1_rank, team1_times, team2_rank, team2_times]
         return fields
 
+    except KeyboardInterrupt:
+        raise
     except:
         return
 
-def generateFields2(filename):
-    # loading the replay
-    try:
-        # skipping non-replay files in the directory
-        if filename[-9:] != "SC2Replay":
-            raise RuntimeError()
-
-        # extracting the game id and adding the correct tag
-        # pathname = "practice_replays/" + filename
-        pathname = "/Accounts/awb/pattern-analysis/starcraft/replays/" + filename
-        game_id = filename.split("_")[1].split(".")[0]
-        if filename.startswith("ggg"):
-            game_id = "ggg-" + game_id
-        elif filename.startswith("spawningtool"):
-            game_id = "st-" + game_id
-
-        # loading the replay
-        try:
-            r = sc2reader.load_replay(pathname)
-        except:
-            print(filename + " cannot load using sc2reader due to an internal ValueError")
-            raise RuntimeError()
-
-        team1_times, team2_times = scouting_detector.scouting_times(r, 2)
-        team1_rank, team1_rel_rank, team2_rank, team2_rel_rank = scouting_stats.ranking_stats(r)
-
-        fields = [game_id, team1_rank, team1_times, team2_rank, team2_times]
-        return fields
-
-    except:
-        return
-
-def generateFields3(filename):
-    # loading the replay
-    try:
-        # skipping non-replay files in the directory
-        if filename[-9:] != "SC2Replay":
-            raise RuntimeError()
-
-        # extracting the game id and adding the correct tag
-        # pathname = "practice_replays/" + filename
-        pathname = "/Accounts/awb/pattern-analysis/starcraft/replays/" + filename
-        game_id = filename.split("_")[1].split(".")[0]
-        if filename.startswith("ggg"):
-            game_id = "ggg-" + game_id
-        elif filename.startswith("spawningtool"):
-            game_id = "st-" + game_id
-
-        # loading the replay
-        try:
-            r = sc2reader.load_replay(pathname)
-        except:
-            print(filename + " cannot load using sc2reader due to an internal ValueError")
-            raise RuntimeError()
-
-        team1_times, team2_times = scouting_detector.scouting_times(r, 3)
-        team1_rank, team1_rel_rank, team2_rank, team2_rel_rank = scouting_stats.ranking_stats(r)
-
-        fields = [game_id, team1_rank, team1_times, team2_rank, team2_times]
-        return fields
-
-    except:
-        return
 
 def writeToCsv(which, filename):
     files = []
@@ -118,13 +63,8 @@ def writeToCsv(which, filename):
         files.append(line.strip())
     games.close()
 
-    pool = Pool(20)
-    if which == 1:
-        results = pool.map(generateFields1, files)
-    elif which == 2:
-        results = pool.map(generateFields2, files)
-    elif which == 3:
-        results = pool.map(generateFields3, files)
+    pool = Pool(min(cpu_count(), 20))
+    pool.map(partial(generateFields, which=which), files)
     pool.close()
     pool.join()
 
@@ -145,6 +85,15 @@ def writeToCsv(which, filename):
 
 
 if __name__ == "__main__":
+    sc2reader.engine.register_plugin(APMTracker())
+    sc2reader.engine.register_plugin(SelectionTracker())
+    sc2reader.engine.register_plugin(ActiveSelection())
+    bt = BaseTracker()
+#     bt.logger.setLevel(logging.ERROR)
+#     bt.logger.addHandler(logging.StreamHandler(sys.stdout))
+    sc2reader.engine.register_plugin(bt)
+#     sc2reader.log_utils.add_log_handler(logging.StreamHandler(sys.stdout), "INFO")
+
     t1 = time.time()
     writeToCsv(1, "scouting_time_fraction.csv")
     writeToCsv(2, "scouting_time_frames1.csv")
