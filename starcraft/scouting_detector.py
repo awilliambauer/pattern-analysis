@@ -688,12 +688,8 @@ def scoutBetweenBattles(scouting_dict, battles, frames):
             # we care whether they scouted, during each peacetime, but not how many times
             nums_between.append(min(1, count))
 
-    avg_between = statistics.mean(nums_between)
-    if avg_between >= 0.7:
-        # at least one instance of scouting for 70% of peacetime periods
-        return 1
-    else:
-        return 0
+    # at least one instance of scouting for 70% of peacetime periods
+    return 1 if len(nums_between) > 0 and statistics.mean(nums_between) >= 0.7 else 0
 
 
 def avg_interval_before_battle(scouting_frames, battles, scale):
