@@ -74,8 +74,11 @@ class BaseTracker(object):
 
     def handleInitGame(self, event, replay):
         self.resource_locs = None
-        replay.load_map()
-        self.map_dim = (replay.map.map_info.width + replay.map.map_info.height) / 2
+        try:
+            replay.load_map()
+            self.map_dim = (replay.map.map_info.width + replay.map.map_info.height) / 2
+        except:
+            self.map_dim = 150  # go with a reasonable if map can't be loaded
         self.under_construction = {}
         self.building_locs = {}
         self.lookup = {}
