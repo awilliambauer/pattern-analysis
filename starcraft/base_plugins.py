@@ -5,6 +5,9 @@ Carleton College
 August 2020
 """
 
+import os
+os.environ["OMP_NUM_THREADS"] = "1"  # keep sklearn from spawning a bunch of threads
+
 import traceback
 from sklearn.cluster import AffinityPropagation
 import numpy as np

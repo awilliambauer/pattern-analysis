@@ -61,7 +61,13 @@ def generateFields(filename):
         return
 
 
-def writeToCsv():
+if __name__ == "__main__":
+    sc2reader.engine.register_plugin(APMTracker())
+    sc2reader.engine.register_plugin(SelectionTracker())
+    sc2reader.engine.register_plugin(ActiveSelection())
+    sc2reader.engine.register_plugin(BaseTracker())
+
+    t1 = time.time()
     files = []
     games = open("valid_game_ids.txt", 'r')
     for line in games:
@@ -74,10 +80,8 @@ def writeToCsv():
                                          "BetweenBattles", "Win"])
         events_out.writeheader()
 
-        pool = Pool(min(cpu_count(), 20))
-        results = pool.map(generateFields, files)
-        pool.close()
-        pool.join()
+        with Pool(min(cpu_count(), 20)) as pool:
+            results = pool.map(generateFields, files)
 
         for fields in results:
             if fields: # generateFields will return None for invalid replays
@@ -90,14 +94,5 @@ def writeToCsv():
                                     "Category": fields[12], "InitialScouting": fields[13],
                                     "BaseScouting": fields[14], "NewAreas": fields[15],
                                     "BetweenBattles": fields[16], "Win": fields[17]})
-
-if __name__ == "__main__":
-    sc2reader.engine.register_plugin(APMTracker())
-    sc2reader.engine.register_plugin(SelectionTracker())
-    sc2reader.engine.register_plugin(ActiveSelection())
-    sc2reader.engine.register_plugin(BaseTracker())
-
-    t1 = time.time()
-    writeToCsv()
     deltatime = time.time()-t1
     print("Run time: ", "{:2d}".format(int(deltatime//60)), "minutes and", "{:05.2f}".format(deltatime%60), "seconds")
