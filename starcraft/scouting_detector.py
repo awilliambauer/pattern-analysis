@@ -1,6 +1,6 @@
 # Alison Cameron
 # June 2020
-# A program to detect scouting behavior of players in StarCraft 2
+# A script to detect scouting behavior and various metrics of players in StarCraft 2
 
 import sc2reader
 import math
@@ -64,23 +64,23 @@ def buildEventLists(tracker_events, game_events):
     sorted_events = sorted(events, key=lambda e: e.frame)
     return sorted_events
 
-
 def initializeScoutingDictionaries(frames):
+    '''initializeScoutingDictionaries takes in the total frames in a game and
+    returns a dictionary initialized in the proper format to be used by
+    buildScoutingDictionaries'''
     dicts = {1: {}, 2: {}}
     for i in range(1, 3):
         for j in range(1, frames+1):
             dicts[i][j] = ["", []]
     return dicts
 
-
 def buildScoutingDictionaries(replay, events, objects, frames):
     '''buildScoutingDictionaries returns dictionaries for each player where the
-    keys are the frame and the value is the state of scouting. "No scouting"
-    indicates the team/player is not looking at any bases, "Scouting themself"
-    indicates the team/player is looking at their own base, and
-    "Scouting opponent" indicates the team/player is looking at their opponent's
-    base. buildScoutingDictionaries takes in a list of filtered events returned
-    by buildEventLists.'''
+    keys are the frame and the keys are a list of tags indicating what the player
+    is viewing. Tags such as battles and harassing are added later by using
+    integrateEngagements. This function takes in a previously loaded replay object,
+    a list of events returned by buildEventLists, a list of objects obtained by
+    replay.objects.values(), as well as the total frames in the game.'''
 
     team1 = 1
     team2 = 2
@@ -193,11 +193,12 @@ def buildScoutingDictionaries(replay, events, objects, frames):
 
     return scouting_states[1], scouting_states[2]
 
-
 def withinDistance(location, list, distance):
     '''withinDistance returns true if the input location is within a
     certain range of any location in the list. The location is a tuple
-    and the list is a list of locations as tuples.'''
+    and the list is a dictionary of unit ids mapped to locations as tuples.
+    The distance is dependent on the user but a reasonable input is within
+    0-200 (the general size of a sc2 map)'''
     loc_x, loc_y = location[0], location [1]
     keys = list.keys()
     for key in keys:
@@ -208,11 +209,10 @@ def withinDistance(location, list, distance):
             return True
     return False
 
-
 def updatePrevScoutStates(scouting_dict, frame, prev_frame, prev_state):
-    '''updatePrevScoutStates updates the input scouting dictionary from
-    the prev_frame to frame with prev_state and returns the scouting
-    dictionary back.'''
+    '''updatePrevScoutStates takes in a scouting dictonary, and returns the
+    same dictionary, but with the tag 'prev_state' added to all frames in
+    between prev_frame and frame'''
     if(prev_frame >= frame):
         return scouting_dict
 
@@ -223,8 +223,19 @@ def updatePrevScoutStates(scouting_dict, frame, prev_frame, prev_state):
         i += 1
     return scouting_dict
 
-
 def checkFirstInstance(scouting_dict, scale):
+    '''checkFirstInstance is intended to avoid false positive scouting tags
+    in the early game.
+    Because it is possible for a player to 'scout' their opponent without
+    actually looking at their base (a player can order units around the map
+    and only view the mini-map), we added a sending units tag as a possible
+    first instance of scouting. checkFirstInstance finds these tags and verifies
+    that there does not already exist an instance of scouting within the next 45
+    seconds, and if an instance does exist, checkFirstInstance eradicates this
+    false positive scouting tag.
+    checkFirstInstance takes in a scouting dictionary, as well as the scale -
+    which indicates game speed in frames per second. It returns the updated and
+    verified scouting dictionary'''
     frame_jump45 = 45*int(scale)
     send_units = "Sending units to the opponent's base"
     keys = scouting_dict.keys()
@@ -250,8 +261,10 @@ def checkFirstInstance(scouting_dict, scale):
     # No ordering of units, return original dictionary
     return scouting_dict
 
-
 def isScouting(frame_list):
+    '''isScouting returns True if the combination of tags for a frame indicates
+    that the player is scouting, and False if otherwise. isScouting takes in
+    a list of tags that can be obtained by accessing scouting_dictionary[frame]'''
     state = frame_list[0]
     events = frame_list[1]
     # viewing opponent but not harassing or engaged in battle
@@ -263,8 +276,12 @@ def isScouting(frame_list):
     else:
         return False
 
-
 def removeEmptyFrames(scouting_dict, frames):
+    '''removeEmptyFrames deletes frames from a scouting dictionary
+    that contain no information. Often times the total frames of a game
+    are slightly longer than the frames for which there is camera and game
+    information. This function takes in a scouting dictionary and the
+    total frames in a game, and returns the updated scouting dictionary.'''
     frame = frames
     initial_list = ["", []]
     state = scouting_dict[frame]
@@ -274,7 +291,6 @@ def removeEmptyFrames(scouting_dict, frames):
         state = scouting_dict[frame]
     return scouting_dict
 
-
 def toTime(scouting_dict, frames, seconds):
     '''Creates and returns time-formatted dictionary of the time of game when
     a player's scouting state changes. Takes in a scouting dictionary, the total
@@ -282,7 +298,6 @@ def toTime(scouting_dict, frames, seconds):
     useful for verification and testing.'''
     length = len(scouting_dict.keys())
     time_dict = {}
-
 
     state = scouting_dict[1]
     stateStr = state[0]
@@ -313,7 +328,6 @@ def toTime(scouting_dict, frames, seconds):
         frame += 1
     return time_dict
 
-
 def printTime(time_dict):
     '''Used to neatly print a time dictionary returned by toTime.'''
     keys = time_dict.keys()
@@ -322,12 +336,11 @@ def printTime(time_dict):
         print(" -> ", end = "")
         print(time_dict[key])
 
-
 def scouting_stats(scouting_dict):
-    '''scouting_stats calculates the number of frames that a player
-    spends scouting their opponent and the number of times they initiate scouting.
-    It takes in a scouting dictionary returned by buildScoutingDictionaries
-    or integrateBattles and returns the number of times and the number of frames.'''
+    '''scouting_stats calculates the number of times a player initiates scouting
+    and the total number of frames they spend scouting their opponent.
+    It takes in a scouting dictionary returned by final_scouting_states
+    and returns the number of instances and the total number of frames.'''
     num_times = 0
     total_frames = 0
     scouting_frames = 0
@@ -356,47 +369,59 @@ def scouting_stats(scouting_dict):
             cur_scouting = False
         frame += 1
 
-    # calculating rates based on counts
+    # calculating rates based on counts, currently not useful information so we don't return
     scouting_fraction = scouting_frames/total_frames
     scouting_rate = num_times/total_frames
 
     return num_times, scouting_frames
 
-
-def integrateEngagements(scouting_dict, engagements, scale, replacement):
+def integrateEngagements(scouting_dict, engagements, scale, addition):
     '''integrateEngagements is used to cross-check a scouting dictionary with a
     list of engagements(battles or harassing). More specifically, it is used to
     avoid false positives of "scouting" an opponent during engagements.
     integrateEngagements takes in a scouting dictionary returned by
     buildScoutingDictionaries, a list of engagements returned by
-    battle_detector.buildBattleList, and a string indicating what the false
-    positives should be replaced by. It returns the updated scouting dictionary.'''
+    battle_detector.buildBattleList, the game speed in frames per second, and a
+    string indicating what tag should be added to the list of tags for each
+    frame during the period of engagements. It also adds this tag to 20 seconds
+    before each engagement, as well as 20 after.
+
+    For example, integrateEngagements(team1_scouting, battles, 22, "In Battle")
+    will add the tag "In Battle" to 20 seconds before each battle in the list
+    of battles, as well as 20 seconds after. This will prevent false positives
+    for scouting, which are detected by isScouting.
+
+    It returns the updated scouting dictionary.'''
 
     BUFFER = int(20 * scale)
 
     # TODO make list of tags a set so we can get away with not caring about duplicates
     for frame in scouting_dict:
         if battle_detector.duringBattle(frame, engagements):
-            scouting_dict[frame][1].append(replacement)
+            scouting_dict[frame][1].append(addition)
             # extend engagement tag BUFFER frames before it starts
             # TODO differentiate between these "fake" pre-engagement tags and the actual period of engagement
             if not battle_detector.duringBattle(frame - 1, engagements):
                 for f in range(frame - BUFFER, frame):
                     if f in scouting_dict:
-                        scouting_dict[f][1].append(replacement)
+                        scouting_dict[f][1].append(addition)
             # extend engagement tag BUFFER frames after it ends
             if not battle_detector.duringBattle(frame + 1, engagements):
                 for f in range(frame + 1, frame + BUFFER + 1):
                     if f in scouting_dict:
-                        scouting_dict[f][1].append(replacement)
+                        scouting_dict[f][1].append(addition)
 
     return scouting_dict
 
-
 def categorize_player(scouting_frames, battles, harassing, total_frames):
     '''categorize_player is used to sort players based on their scouting
-    behavior. The categories are numerical (1-4) and are returned by this
-    function. The following is a summary of each category.
+    behavior. It takes in the frames in which scouting begins (returned by
+    scouting_timeframe_list1), a list of battles and instances of
+    harassing (returned by battle_detector.buildBattleList), and the total
+    frames in the game. categorize_player incorporates all contact with the
+    opponent, because a player can learn about their opponent through battles
+    and harassing, and not just scouting. The categories are numerical (1-4)
+    and are returned by this function. The following is a summary of each category.
 
     1. No scouting - there are no scouting tags in a player's dictionary
 
@@ -406,12 +431,12 @@ def categorize_player(scouting_frames, battles, harassing, total_frames):
     3. Sporadic scouters - a player scouts past the first 25% of the game,
     but the time intervals between instances of scouting are inconsistent.
     Intervals are considered inconsistent if the standard deviation is
-    greater than or equal to half of the mean of all intervals.
+    greater than or equal to a third of the mean of all intervals.
 
     4. Consistent scouters - a player scouts past the first 25% of the game,
     and the time intervals between instances of scouting are consistent.
     Intervals are considered consistent if the standard deviation is less
-    than half of the mean.'''
+    than a third of the mean.'''
 
     # No scouting, return the 1st category
     if len(scouting_frames) == 0:
@@ -456,7 +481,7 @@ def categorize_player(scouting_frames, battles, harassing, total_frames):
 
             if cur_engagement+1 < len(engagements):
                 cur_engagement += 1
-                
+
             frame = engagement[1]
 
         else:
@@ -483,13 +508,11 @@ def categorize_player(scouting_frames, battles, harassing, total_frames):
 
     return category
 
-
 def avg_interval(scouting_dict, scale):
     '''avg_interval returns the average time interval (in seconds) between
         periods of scouting. It takes in a completes scouting dictionary
         returned by final_scouting_states(replay) as well as the scale,
-        which is used to convert frames to seconds. The scale can be accessed
-        by sc2reader.contants.GAME_SPEED_FACTOR[replay.expansion][replay.speed].'''
+        which is in frames per seconds.'''
     new_scale = 16*scale
     intervals = []
     keys = scouting_dict.keys()
@@ -524,12 +547,11 @@ def avg_interval(scouting_dict, scale):
         mean_interval = (statistics.mean(intervals))/new_scale
         return mean_interval
 
-
 def scouting_timefrac_list(scouting_dict, frames):
     '''scouting_timefrac_list returns a list of instances where scouting
-        occurs as fractions of the total gametime. It takes in a completed
+        begins as fractions of the total gametime. It takes in a completed
         scouting dictionary returned by final_scouting_states(replay), as
-        well as the total number of frames in the game (r.frames).'''
+        well as the total number of frames in the game.'''
     time_fracs = []
     keys = scouting_dict.keys()
     cur_scouting = False
@@ -562,8 +584,12 @@ def scouting_timeframe_list1(scouting_dict):
             cur_scouting = False
     return time_frames
 
-
 def hasInitialScouting(scouting_dict, frames, battles):
+    '''hasInitialScouting returns 1 (indicating True) if a player scouts
+    for the first time in the first 25% of the game and before the first
+    battle, and 0 (indicating False) otherwise. It takes in a scouting
+    dictionary returned by final_scouting_states, the total frames in a
+    game, and a list of battles returned by battle_detector.buildBattleList.'''
     keys = scouting_dict.keys()
     if len(battles) == 0:
         first_battle_start = frames
@@ -577,8 +603,12 @@ def hasInitialScouting(scouting_dict, frames, battles):
     # False
     return 0
 
-
 def scoutsMainBase(scouting_dict):
+    '''scoutsMainBase returns 1 (indicating True) if a player scouts their
+    opponent's main base more than 50% of the times they scout, and
+    0 (indicating False) if a player scouts expansion bases more than 50%
+    of the time. It takes in a complete scouting dictionary returned
+    by final_scouting_states.'''
     keys = scouting_dict.keys()
     mainbase_ct = 0
     scouting_ct = 0
@@ -606,8 +636,13 @@ def scoutsMainBase(scouting_dict):
         # False
         return 0
 
-
 def scoutNewAreas(scouting_dict):
+    '''scoutNewAreas returns 1 (indicating True) if a player consistently
+    scouts new locations on the map, and 0 (indicating False) otherwise.
+    Scouting new areas is considered consistent if the average distance between
+    areas of scouting is greater than or equal to 20 units. The typical map is
+    about 200 by 200 units. scoutNewAreas takes in a complete scouting dictionary
+    returned by final_scouting_states.'''
     locations = []
     keys = scouting_dict.keys()
     new_instance = True
@@ -617,7 +652,7 @@ def scoutNewAreas(scouting_dict):
             new_instance = False
             locations.append(state[2])
 
-    #1 or less instances of scouting, the player does not scout new areas consistently
+    #1 or less instances of scouting, return a flag indicating that this measure is invalid
     if len(locations) <= 1:
         return -1
 
@@ -641,8 +676,13 @@ def scoutNewAreas(scouting_dict):
         # False
         return 0
 
-
 def scoutBetweenBattles(scouting_dict, battles, frames):
+    '''scoutBetweenBattles returns 1 (indicating True) if a player has
+    at least 1 instance of scouting for 70% of the time periods between
+    battles, and 0 (indicating False) if otherwise. It takes in a complete
+    scouting dictionary returned by final_scouting_states, a list of
+    battles returned by battle_detector.buildBattleList, and the total
+    number of frames in a game.'''
     num_battles = len(battles)
 
     # not enough battles for a player to scout between them, return a flag
@@ -674,7 +714,6 @@ def scoutBetweenBattles(scouting_dict, battles, frames):
                 if s_key >= p_key[0] and s_key <= p_key[1]:
                     # adding to the count of the correct peacetime
                     peacetime_dict[p_key] += 1
-                    # breaking out of inner loop
                     break
         else:
             #If the scouting state changes or it is no longer during peacetime, then reset to a new instance
@@ -691,8 +730,14 @@ def scoutBetweenBattles(scouting_dict, battles, frames):
     # at least one instance of scouting for 70% of peacetime periods
     return 1 if len(nums_between) > 0 and statistics.mean(nums_between) >= 0.7 else 0
 
-
 def avg_interval_before_battle(scouting_frames, battles, scale):
+    '''avg_interval_before_battle returns the average length (in seconds)
+    between instances of scouting and a battle, if they are within 1 minute
+    of each other. This function is a start to the exploration of
+    responses to scouting. It takes in a list of frames where scouting started,
+    returned by scouting_time_frames1, a list of battles returned by
+    battle_detector.buildBattleList, and the scale as game speed in frames per
+    second.'''
     frame_jump60 = 60*int(scale)
     num_battles = len(battles)
     intervals = []
@@ -743,13 +788,14 @@ def avg_interval_before_battle(scouting_frames, battles, scale):
     avg = statistics.mean(non_zero_intervals)
     return avg
 
-
 def final_scouting_states(replay):
     '''final_scouting_states is the backbone of scouting_detector.py. It does
         all of the error checking needed, as well as combines all functions to
         create completed scouting dictionaries - to then be used by other functions.
         It takes in a previously loaded replay object from sc2reader and returns
-        completed scouting dictionaries for each player.'''
+        completed scouting dictionaries for each player. This function is also
+        critical in understanding the order in which scouting dictionaries
+        must be built by using various functions in this file.'''
     r = replay
 
     if r.winner is None:
@@ -795,11 +841,7 @@ def final_scouting_states(replay):
     team1_scouting_states = removeEmptyFrames(team1_scouting_states, frames)
     team2_scouting_states = removeEmptyFrames(team2_scouting_states, frames)
 
-    # battleTimes = battle_detector.toTime(battles, frames, r.length.seconds)
-    # battle_detector.printTime(battleTimes)
-
     return team1_scouting_states, team2_scouting_states
-
 
 def scouting_freq_and_cat(replay):
     '''scouting_freq_and_cat takes in a previously loaded replay
@@ -820,8 +862,13 @@ def scouting_freq_and_cat(replay):
         team1_freq = team1_num_times / seconds
         team2_freq = team2_num_times / seconds
 
-        team1_cat = categorize_player(team1_scouting_states, frames)
-        team2_cat = categorize_player(team2_scouting_states, frames)
+        team1_frames = scouting_timeframe_list1(team1_scouting_states)
+        team2_frames = scouting_timeframe_list1(team2_scouting_states)
+
+        battles, harassing = battle_detector.buildBattleList(r)
+
+        team1_cat = categorize_player(team1_frames, battles, harassing, frames)
+        team2_cat = categorize_player(team2_frames, battles, harassing, frames)
 
         return team1_freq, team1_cat, team2_freq, team2_cat, r.winner.number
 
@@ -829,8 +876,13 @@ def scouting_freq_and_cat(replay):
         print(replay.filename, "contains errors within scouting_detector")
         raise
 
-
 def scouting_analysis(replay):
+    '''scouting_analysis takes in a previously loaded replay and returns a
+    dictionary that contains verious metrics of scouting for each player.
+    These metrics include the scouting category, whether or not they
+    execute an initial scouting, whether they mostly scout their opponent's
+    main base, whether they consistently scout new areas of the map, and
+    whether they consistently scout between battles.'''
     r = replay
     try:
         team1_scouting_states, team2_scouting_states = final_scouting_states(r)
@@ -862,7 +914,6 @@ def scouting_analysis(replay):
         print(replay.filename, "contains errors within scouting_detector")
         raise
 
-
 def scouting_times(replay, which):
     '''scouting_times takes in a previously loaded replay from sc2reader as
         well as an integer (either 1 or 2) indicating which type of time list
@@ -890,11 +941,10 @@ def scouting_times(replay, which):
         print(replay.filename, "contains errors within scouting_detector")
         raise
 
-
 def scouting_interval(replay):
-    # scouting_interval takes in a previously loaded replay from sc2reader
-        # and returns the average time (in seconds) between periods of scouting
-        # for each player.'''
+    '''scouting_interval takes in a previously loaded replay from sc2reader
+    and returns the average time (in seconds) between periods of scouting
+    for each player.'''
     r = replay
     try:
         factors = sc2reader.constants.GAME_SPEED_FACTOR
@@ -913,8 +963,10 @@ def scouting_interval(replay):
         print(replay.filename, "contains errors within scouting_detector")
         raise
 
-
 def scouting_response(replay):
+    '''scouting_response takes in a previously loaded replay and returns the
+    average interval in between scouting and battles for each player. This is
+    a start on exploring responses to scouting.'''
     r = replay
     try:
         factors = sc2reader.constants.GAME_SPEED_FACTOR
@@ -936,12 +988,11 @@ def scouting_response(replay):
     except:
         raise
 
-
 def print_verification(replay):
-    # print_verification takes in a previously loaded replay from sc2reader
-        # and prints out information useful for verification. More specifically,
-        # it prints out the game time at which scouting states switch for each
-        # team/player'''
+    '''print_verification takes in a previously loaded replay from sc2reader
+    and prints out information useful for verification. More specifically,
+    it prints out the game time at which scouting states switch for each
+    team/player'''
     r = replay
 
     try:
