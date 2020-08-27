@@ -26,7 +26,7 @@ def generateFields(filename, which):
             raise RuntimeError()
 
         # extracting the game id and adding the correct tag
-        # pathname = "practice_replays/" + filename
+        #pathname = "practice_replays/" + filename
         pathname = "/Accounts/awb/pattern-analysis/starcraft/replays/" + filename
         game_id = filename.split("_")[1].split(".")[0]
         if filename.startswith("ggg"):
@@ -41,7 +41,6 @@ def generateFields(filename, which):
                 print(pathname, r.plugin_result)
         except:
             print(filename, "cannot load using sc2reader due to an internal ValueError")
-            traceback.print_exc()
             raise
 
         team1_times, team2_times = scouting_detector.scouting_times(r, which)
@@ -64,7 +63,7 @@ def writeToCsv(which, filename):
     games.close()
 
     pool = Pool(min(cpu_count(), 20))
-    pool.map(partial(generateFields, which=which), files)
+    results = pool.map(partial(generateFields, which=which), files)
     pool.close()
     pool.join()
 
