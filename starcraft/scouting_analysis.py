@@ -1,3 +1,8 @@
+# A script to write information about players' scouting behavior is StarCraft 2
+# to a CSV
+# Alison Cameron
+# August 2020
+
 import sc2reader
 import csv
 import os
@@ -15,6 +20,9 @@ import traceback
 
 
 def generateFields(filename):
+    '''generateFields takes in a filename of a replay, loads it and gathers necessary
+    statistics, and returns the statistics in a tuple. It is to be used to write
+    these stats to a csv.'''
     try:
         # skipping non-replay files in the directory
         if filename[-9:] != "SC2Replay":
@@ -60,15 +68,15 @@ def generateFields(filename):
     except:
         return
 
-
-if __name__ == "__main__":
-    sc2reader.engine.register_plugin(APMTracker())
-    sc2reader.engine.register_plugin(SelectionTracker())
-    sc2reader.engine.register_plugin(ActiveSelection())
-    sc2reader.engine.register_plugin(BaseTracker())
-
-    t1 = time.time()
+def writeToCsv():
+    '''writeToCsv gathers information about all valid replays and writes
+    that information to a csv for analysis in R. This file in particular
+    contains information about each player's category of scouting, if they
+    complete an initial scouting, if they consistently scout between battles,
+    and other similar metrics.'''
     files = []
+    # valid_game_ids.txt musst be produced first by running scouting_stats.py
+    # with the command line argument -w
     games = open("valid_game_ids.txt", 'r')
     for line in games:
         files.append(line.strip())
@@ -94,5 +102,14 @@ if __name__ == "__main__":
                                     "Category": fields[12], "InitialScouting": fields[13],
                                     "BaseScouting": fields[14], "NewAreas": fields[15],
                                     "BetweenBattles": fields[16], "Win": fields[17]})
+
+if __name__ == "__main__":
+    sc2reader.engine.register_plugin(APMTracker())
+    sc2reader.engine.register_plugin(SelectionTracker())
+    sc2reader.engine.register_plugin(ActiveSelection())
+    sc2reader.engine.register_plugin(BaseTracker())
+
+    t1 = time.time()
+    writeToCsv()
     deltatime = time.time()-t1
     print("Run time: ", "{:2d}".format(int(deltatime//60)), "minutes and", "{:05.2f}".format(deltatime%60), "seconds")

@@ -15,6 +15,7 @@ library(dplyr)
 
 ### Reading data
 ```{r}
+# csv produced by running scouting_analysis.py
 analysis <- read.csv("scouting_analysis.csv")
 ```
 
@@ -36,6 +37,7 @@ novice_rows = which(analysis$Expertise == 1)
 prof_rows = which(analysis$Expertise == 2)
 expert_rows = which(analysis$Expertise == 3)
 
+# these numbers are obtained from the terminal output when running data_diagnosis.match_counter("scouting_analysis.csv")
 bronze_games <- 936
 silver_games <- 7169
 gold_games <- 11860
@@ -62,6 +64,7 @@ expert_col <- "#884dff"
 ```
 
 ```{r}
+# these values correspond to the terminal output when running data_diagnosis.scouting_analysis(). the following are the values for rank.
 Rank <- c("1-Bronze", "2-Silver", "3-Gold", "4-Platinum", "5-Diamond", "6-Master", "7-Grandmaster")
 InitialScouting <- c(0.5865384615384616, 0.6688520016738736, 0.7545531197301855, 0.8181778246353892, 0.8281439407058497, 0.8476681509257089, 0.8710852148579752)
 Expansions <- c(0.7307692307692307, 0.7307853257079091, 0.7736087689713322, 0.7953347390616763, 0.7944100024244104, 0.7606046402624795, 0.7330662782228696)
@@ -70,6 +73,7 @@ BetweenBattles <- c(0.13568376068376067, 0.1481378155949226, 0.14595278246205734
 
 perc_rank <- data.frame(Rank, InitialScouting, Expansions, NewAreas, BetweenBattles)
 
+# these values correspond to the terminal output when running data_diagnosis.scouting_analysis(). the following are the values for expertise.
 Expertise <- c("1-Novice", "2-Proficient", "3-Expert")
 InitialScouting <- c(0.6906539755477148, 0.8167573048207208, 0.8698446705945367)
 Expansions <- c(0.7412816936079429, 0.7897962945893631, 0.7496875557936082)

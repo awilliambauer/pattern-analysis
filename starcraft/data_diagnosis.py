@@ -1,4 +1,6 @@
 # A script to gather summary statistics of StarCraft 2 data
+# Alison Cameron
+# July 2020
 
 import csv
 import time
@@ -10,9 +12,10 @@ sys.path.append("../") # to enable importing from plot_util.py
 
 from plot_util import make_boxplot
 
-
 def read_scouting_stats():
-    '''Creates boxplots and calculates other values for all data in scouting_stats.py'''
+    '''read scouting_stats creates boxplots by rank and by loss/win,
+    and calculates statistics for each value in scouting_stats.py It returns
+    a dictionary of the number of unique user ids by rank as well.'''
     rank_uid_counter = {1: Counter(), 2: Counter(), 3: Counter(), 4: Counter(),
                         5: Counter(), 6: Counter(), 7: Counter()}
     total_rows = 0
@@ -187,7 +190,6 @@ def read_scouting_stats():
 
     return rank_uid_counter
 
-
 def read_event_counts():
     '''Creates boxplots for control group selections for gold and grandmaster ranks,
         as well as boxplots for control group selection ratio for each rank'''
@@ -231,6 +233,9 @@ def read_event_counts():
     make_boxplot(ratio_bxplt_data, rank_categories, "Ratio of Set and Add Counts to Get Counts", "CGRatioByRank.png")
 
 def uid_stats(counter):
+    '''Collects and prints statistics about unique player ids,
+    as well as information about how many players had only one game or
+    multiple games.'''
     num_unique = len(counter)
     keys = counter.keys()
     total_games = 0
@@ -245,27 +250,31 @@ def uid_stats(counter):
         elif games > 1:
             mult_games += 1
 
-    avg_games = total_games/num_unique
-    one_perc = int((one_game/num_unique)*100)
-    mult_perc = int((mult_games/num_unique)*100)
+    if num_unique != 0:
+        avg_games = total_games/num_unique
+        one_perc = int((one_game/num_unique)*100)
+        mult_perc = int((mult_games/num_unique)*100)
 
-    print("Number of unique uid's:", num_unique)
-    print("Average number of games per player:", avg_games)
-    print("Number of players with only one game:", one_game, "or {:2d}% of players".format(one_perc))
-    print("Number of players with multiple games:", mult_games, "or {:2d}% of players".format(mult_perc))
+        print("Number of unique uid's:", num_unique)
+        print("Average number of games per player:", avg_games)
+        print("Number of players with only one game:", one_game, "or {:2d}% of players".format(one_perc))
+        print("Number of players with multiple games:", mult_games, "or {:2d}% of players".format(mult_perc))
 
 def match_counter(filename):
-    unique_ids = [[], [], [], [], [], [], []]
+    '''Collects and prints statistics about the number of matches
+    at each rank'''
+    unique_ids = [set(), set(), set(), set(), set(), set(), set()]
     with open(filename, 'r') as my_csv:
         reader = csv.DictReader(my_csv)
         for row in reader:
-            game_id, rank = row["GameID"], row["Rank"]
+            game_id, uid, rank = row["GameID"], row["UID"], row["Rank"]
             if rank == "nan":
                 continue
             else:
                 intRank = int(rank)
 
-            unique_ids[intRank-1].append(game_id)
+            game_and_user = game_id + uid
+            unique_ids[intRank-1].add(game_and_user)
     print("---{}---".format(filename))
     print("Bronze unique ids:", len(unique_ids[0]))
     print("Silver unique ids:", len(unique_ids[1]))
@@ -276,6 +285,8 @@ def match_counter(filename):
     print("Grandmaster unique ids:", len(unique_ids[6]))
 
 def read_intervals():
+    '''Reads statistics and creates boxplots for information about the average
+    length in between periods of scouting'''
     interval_data = [[], [], [], [], [], [], []]
     rank_categories = ["Bronze", "Silver", "Gold", "Platinum", "Diamond", "Master", "Grandmaster"]
     with open("intervals.csv", 'r') as my_csv:
@@ -292,6 +303,8 @@ def read_intervals():
     make_boxplot([interval_data[6]], ["Grandmaster"], "Average Length (in seconds) Between Scouting Periods", "IntervalsGrandmaster.png")
 
 def main1():
+    '''Collects and prints statistics about the number of players
+    at each rank'''
     t1 = time.time()
     uid_counter = read_scouting_stats()
     read_event_counts()
@@ -313,10 +326,15 @@ def main1():
     print("Run time: ", "{:2d}".format(int(deltatime//60)), "minutes and", "{:05.2f}".format(deltatime%60), "seconds")
 
 def main2():
+    '''Counts the number of matches for scouting_time_fraction.csv
+    and scouting_time_frames1.csv'''
     match_counter("scouting_time_fraction.csv")
     match_counter("scouting_time_frames1.csv")
 
 def scouting_analysis():
+    '''scouting_analysis reads and prints information to be used by ScoutingAnalysis.Rmd
+    to create histograms. It calculates the percentage of players that exhibit a
+    certain trait for each rank and level of expertise.'''
     matches_rank = [0, 0, 0, 0, 0, 0, 0]
     stats_dict_rank = {"initial": [0, 0, 0, 0, 0, 0, 0], "base": [0, 0, 0, 0, 0, 0, 0],
                     "new": [0, 0, 0, 0, 0, 0, 0], "between": [0, 0, 0, 0, 0, 0, 0]}

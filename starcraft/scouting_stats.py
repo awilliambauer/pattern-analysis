@@ -1,4 +1,6 @@
-# Refined version of scouting_stats.py with multiprocessing
+# Used to write statistics about player behavior in StarCraft 2 to a csv
+# Alison Cameron
+# July 2020
 
 import sc2reader
 import csv
@@ -13,20 +15,21 @@ import control_groups
 from collections import Counter
 from sc2reader.engine.plugins import SelectionTracker, APMTracker
 from selection_plugin import ActiveSelection
+from base_plugins import BaseTracker
 import traceback
 
 
 def generateFields(filename):
-    '''generateFields takes in a filename of a replay to load, and returns
-    a large tuple of values and statistics from that replay to be
-    written to a csv'''
+    '''generateFields takes in a filename of a replay, loads it and gathers necessary
+    statistics, and returns the statistics in a tuple. It is to be used to write
+    these stats to a csv.'''
     try:
         # skipping non-replay files in the directory
         if filename[-9:] != "SC2Replay":
             raise RuntimeError()
 
         # extracting the game id and adding the correct tag
-        # pathname = "practice_replays/" + filename
+        #pathname = "practice_replays/" + filename
         pathname = "/Accounts/awb/pattern-analysis/starcraft/replays/" + filename
         game_id = filename.split("_")[1].split(".")[0]
         if filename.startswith("ggg"):

@@ -1,4 +1,6 @@
-# tracking battles/engagements
+# A script to track battles and instances of harassing in StarCraft 2
+# Alison Cameron
+# July 2020
 
 import sc2reader
 from collections import defaultdict
@@ -6,11 +8,16 @@ import os
 
 def buildBattleList(replay):
     '''buildBattleList takes in a replay object previously loaded by sc2reader
-    and returns a list of battles, where each battle is a tuple containing
-    the frame that the battle began and the frame that the battle ended.
+    and returns a list of battles and instances of harassing, where each of
+    these conflicts is a tuple containing the frame that the battle began,
+    the frame that the battle ended, and the location of the battle.
 
     An encounter between teams/players is considered a battle if greater than 10%
-    of either team's army value is destroyed.'''
+    of either team's army value is destroyed.
+    An encounter between teams/players is considered harassment if less than 10%
+    of either team's army value is destroyed, but at least 4 units were destroyed -
+    of which one must be a non-defensive building OR at least half of the units
+    must be workers.'''
     # unable to compute battles for pre 2.0.7
     if replay.build < 25446:
         return 0
@@ -130,12 +137,18 @@ def buildBattleList(replay):
     return new_battles, new_harassing
 
 def initializeDictionary(list):
+    '''initializeDictionary returns a dictionary where the items in the list
+    are keys and the values are empty lists. This is used to aid buildBattleList.'''
     dict = {}
     for item in list:
         dict[item] = []
     return dict
 
 def averageLocations(list, dict):
+    '''averageLocations is used to aid buildBattleList by averaging
+    a list of locations for each battle in a dictionary. It returns
+    a list of conflicts where each conflict is a tuple of the format
+    (start frame, end frame, (location - x, location -y))'''
     new_list = []
     for item in list:
         locations = dict[item]

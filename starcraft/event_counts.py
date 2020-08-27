@@ -1,4 +1,7 @@
-# A CSV of event counts for StarCraft 2 replays
+# Used to produce a csv of information about control group usage for
+# players in StarCraft 2
+# Alison Cameron
+# July 2020
 
 import sc2reader
 import csv
@@ -6,6 +9,9 @@ import math
 from multiprocessing import Pool
 
 def event_counts(replay):
+    '''event_counts takes in a previously loaded replay and returns the number
+    of times each player creates a control group, adds units to a control group,
+    selects a control group, and the total of all those actions for each player.'''
     sets = {1: 0, 2: 0}
     adds = {1: 0, 2: 0}
     gets = {1: 0, 2: 0}
@@ -28,8 +34,10 @@ def event_counts(replay):
     team1_all, team2_all = totals[1], totals[2]
     return team1_set, team1_add, team1_get, team1_all, team2_set, team2_add, team2_get, team2_all
 
-
 def generateFields(filename):
+    '''generateFields takes in a filename of a replay, loads it and gathers necessary
+    statistics, and returns the statistics in a tuple. It is to be used to write
+    these stats to a csv.'''
     #loading the replay
     try:
         if filename[-9:] != "SC2Replay":
@@ -71,7 +79,12 @@ def generateFields(filename):
         return
 
 def writeToCsv():
+    '''writeToCsv gathers information about all valid replays and writes
+    that information to a csv for analysis in R. This file in particular
+    contains information about a player's control group usage.'''
     files = []
+    # valid_game_ids.txt musst be produced first by running scouting_stats.py
+    # with the command line argument -w
     games = open("valid_game_ids.txt", 'r')
     for line in games:
         files.append(line.strip())

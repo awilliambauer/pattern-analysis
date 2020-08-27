@@ -1,12 +1,17 @@
 # A script to read in a csv with data from StarCraft 2 and sort players
 # into novice, proficient, and expert categories as well as average all
 # available statistics for each player
+# Alison Cameron
+# July 2020
 
 import csv
 import time
 from collections import defaultdict
 
 def readCSV():
+    '''readCSV reads scouting_stats.csv and returns a dictionary where the keys
+    are each player's unique user ID, and the values are lists containing
+    all of their stats held in scouting_stats.csv.'''
     uid_dict = defaultdict()
     # for each uid in uid_dict, there is a list of 6 lists
     # list 0: rank, list 1: scouting frequency,
@@ -34,6 +39,9 @@ def readCSV():
     return uid_dict
 
 def writeToCsv(uid_dict):
+    '''writeToCsv takes in the user id dictionary returned by readCSV,
+    averages all statistics for each player, and writes their averages
+    to a new csv.'''
     with open("player_avgs.csv", 'w', newline = '') as my_csv:
         avgs_out = csv.DictWriter(my_csv, fieldnames = ["UID", "Expertise",
                                     "ScoutingFrequency", "APS", "CPS",
@@ -61,13 +69,9 @@ def writeToCsv(uid_dict):
                                 "CPS": avgs[3], "PeaceRate": avgs[4], "BattleRate": avgs[5]})
 
 
-
-def main():
+if __name__ == "__main__":
     t1 = time.time()
     uid_dict = readCSV()
     writeToCsv(uid_dict)
     deltatime = time.time()-t1
     print("Run time: ", "{:2d}".format(int(deltatime//60)), "minutes and", "{:05.2f}".format(deltatime%60), "seconds")
-
-if __name__ == "__main__":
-    main()

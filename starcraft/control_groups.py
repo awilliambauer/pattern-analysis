@@ -1,5 +1,7 @@
 # A program to calculate statistics on control group usage for players
 # in StarCraft 2
+# Alison Cameron
+# July 2020
 
 import sc2reader
 import battle_detector
