@@ -39,8 +39,8 @@ expert_rows = which(analysis$Expertise == 3)
 
 # these numbers are obtained from the terminal output when running data_diagnosis.match_counter("scouting_analysis.csv")
 bronze_games <- 936
-silver_games <- 7169
-gold_games <- 11860
+silver_games <- 7167
+gold_games <- 11858
 plat_games <- 22764
 diam_games <- 28873
 mast_games <- 8534
@@ -91,33 +91,46 @@ expertise_cols <- c("1-Novice"=novice_col, "2-Proficient"=prof_col,"3-Expert"=ex
 ### Distribution of Scouting Categories for each rank, normalized by % of Matches
 ```{r}
 bronze_cats <- ggplot(analysis[bronze_rows,], aes(x = Category)) +
-                geom_histogram(aes(y=(..count..)/(bronze_games )), color=bronze_col, fill=bronze_col,
-                binwidth = 1, alpha = 0.4) + labs(y="% of Matches", x = "Scouting Category") + 
-                coord_cartesian(ylim =c(0, 1),xlim = c(1,4))+ scale_y_continuous(labels=scales::percent)
+                geom_bar(aes(y=(..count..)/(bronze_games )), color=bronze_col, fill=bronze_col,
+                alpha = 0.4) + labs(y="% of Matches", x = "Scouting Category") + 
+                coord_cartesian(ylim =c(0, 1),xlim = c(0.5,4.5))+scale_y_continuous(labels=scales::percent)+
+                scale_x_continuous(name = "Bronze", breaks = c(1, 2, 3, 4), labels = c("1", "2", "3", "4"))
+
 silver_cats <- ggplot(analysis[silver_rows,], aes(x = Category)) +
-                geom_histogram(aes(y=(..count..)/(silver_games )), color=silver_col, fill=silver_col,
-                binwidth = 1, alpha = 0.4) + labs(y=" ", x = "Scouting Category") + 
-                coord_cartesian(ylim =c(0, 1),xlim = c(1,4))+ scale_y_continuous(labels=scales::percent)
+                geom_bar(aes(y=(..count..)/(silver_games )), color=silver_col, fill=silver_col,
+                alpha = 0.4) + labs(y=" ", x = "Scouting Category") + 
+                coord_cartesian(ylim =c(0, 1),xlim = c(0.5,4.5))+ scale_y_continuous(labels=scales::percent)+
+                scale_x_continuous(name = "Silver", breaks = c(1, 2, 3, 4), labels = c("1", "2", "3", "4"))
+
 gold_cats <- ggplot(analysis[gold_rows,], aes(x = Category)) +
-                geom_histogram(aes(y=(..count..)/(gold_games )), color=gold_col, fill=gold_col,
-                binwidth = 1, alpha = 0.4) + labs(y=" ", x = "Scouting Category") + 
-                coord_cartesian(ylim =c(0, 1),xlim = c(1,4))+ scale_y_continuous(labels=scales::percent)
+                geom_bar(aes(y=(..count..)/(gold_games )), color=gold_col, fill=gold_col,
+                alpha = 0.4) + labs(y=" ", x = "Scouting Category") + 
+                coord_cartesian(ylim =c(0, 1),xlim = c(0.5,4.5))+ scale_y_continuous(labels=scales::percent)+
+                scale_x_continuous(name = "Gold", breaks = c(1, 2, 3, 4), labels = c("1", "2", "3", "4"))
+
 plat_cats <- ggplot(analysis[plat_rows,], aes(x = Category)) +
-                geom_histogram(aes(y=(..count..)/(plat_games )), color=plat_col, fill=plat_col,
-                binwidth = 1, alpha = 0.4) + labs(y="% of Matches", x = "Scouting Category") + 
-                coord_cartesian(ylim =c(0, 1),xlim = c(1,4))+ scale_y_continuous(labels=scales::percent)
+                geom_bar(aes(y=(..count..)/(plat_games )), color=plat_col, fill=plat_col,
+                alpha = 0.4) + labs(y="% of Matches", x = "Scouting Category") + 
+                coord_cartesian(ylim =c(0, 1),xlim = c(0.5,4.5))+ scale_y_continuous(labels=scales::percent)+
+                scale_x_continuous(name = "Platinum", breaks = c(1, 2, 3, 4), labels = c("1", "2", "3", "4"))
+
 diam_cats <- ggplot(analysis[diam_rows,], aes(x = Category)) +
-                geom_histogram(aes(y=(..count..)/(diam_games )), color=diam_col, fill=diam_col,
-                binwidth = 1, alpha = 0.4) + labs(y=" ", x = "Scouting Category") + 
-                coord_cartesian(ylim =c(0, 1),xlim = c(1,4))+ scale_y_continuous(labels=scales::percent)
+                geom_bar(aes(y=(..count..)/(diam_games )), color=diam_col, fill=diam_col,
+                alpha = 0.4) + labs(y=" ", x = "Scouting Category") + 
+                coord_cartesian(ylim =c(0, 1),xlim = c(0.5,4.5))+ scale_y_continuous(labels=scales::percent)+
+                scale_x_continuous(name = "Diamond", breaks = c(1, 2, 3, 4), labels = c("1", "2", "3", "4"))
+
 mast_cats <- ggplot(analysis[mast_rows,], aes(x = Category)) +
-                geom_histogram(aes(y=(..count..)/(mast_games )), color=mast_col, fill=mast_col,
-                binwidth = 1, alpha = 0.4) + labs(y=" ", x = "Scouting Category") + 
-                coord_cartesian(ylim =c(0, 1),xlim = c(1,4))+ scale_y_continuous(labels=scales::percent)
+                geom_bar(aes(y=(..count..)/(mast_games )), color=mast_col, fill=mast_col,
+                alpha = 0.4) + labs(y=" ", x = "Scouting Category") + 
+                coord_cartesian(ylim =c(0, 1),xlim = c(0.5,4.5))+ scale_y_continuous(labels=scales::percent)+
+                scale_x_continuous(name = "Master", breaks = c(1, 2, 3, 4), labels = c("1", "2", "3", "4"))
+
 gmast_cats <- ggplot(analysis[gmast_rows,], aes(x = Category)) +
-                geom_histogram(aes(y=(..count..)/(gmast_games )), color=gmast_col, fill=gmast_col,
-                binwidth = 1, alpha = 0.4) + labs(y="% of Matches", x = "Scouting Category") + 
-                coord_cartesian(ylim =c(0, 1),xlim = c(1,4))+ scale_y_continuous(labels=scales::percent)
+                geom_bar(aes(y=(..count..)/(gmast_games )), color=gmast_col, fill=gmast_col,
+                alpha = 0.4) + labs(y="% of Matches", x = "Scouting Category") + 
+                coord_cartesian(ylim =c(0, 1),xlim = c(0.5,4.5))+ scale_y_continuous(labels=scales::percent)+
+                scale_x_continuous(name = "Grandmaster", breaks = c(1, 2, 3, 4), labels = c("1", "2", "3", "4"))
 
 title <- textGrob("Percentage of Matches in each Scouting Category for each Rank",
                    gp=gpar(fontsize=11,font=3))
@@ -128,17 +141,21 @@ grid.arrange(bronze_cats, silver_cats, gold_cats, plat_cats, diam_cats, mast_cat
 ### Scouting categories per Expertise
 ```{r}
 novice_cats <- ggplot(analysis[novice_rows,], aes(x = Category)) +
-                geom_histogram(aes(y=(..count..)/(novice_games )), color=novice_col, fill=novice_col,
-                binwidth = 1, alpha = 0.4) + labs(y="% of Matches", x = "Scouting Category") + 
-                coord_cartesian(ylim =c(0, 1),xlim = c(1,4))+ scale_y_continuous(labels=scales::percent)
+                geom_bar(aes(y=(..count..)/(novice_games )), color=novice_col, fill=novice_col,
+                alpha = 0.4) + labs(y="% of Matches", x = "Scouting Category") + 
+                coord_cartesian(ylim =c(0, 1),xlim = c(0.5,4.5))+ scale_y_continuous(labels=scales::percent)+
+                scale_x_continuous(name = "Novice", breaks = c(1, 2, 3, 4), labels = c("1", "2", "3", "4"))
 prof_cats <- ggplot(analysis[prof_rows,], aes(x = Category)) +
-                geom_histogram(aes(y=(..count..)/(prof_games )), color=prof_col, fill=prof_col,
-                binwidth = 1, alpha = 0.4) + labs(y=" ", x = "Scouting Category") + 
-                coord_cartesian(ylim =c(0, 1),xlim = c(1,4))+ scale_y_continuous(labels=scales::percent)
+                geom_bar(aes(y=(..count..)/(prof_games )), color=prof_col, fill=prof_col,
+                alpha = 0.4) + labs(y=" ", x = "Scouting Category") + 
+                coord_cartesian(ylim =c(0, 1),xlim = c(0.5,4.5))+ scale_y_continuous(labels=scales::percent)+
+                scale_x_continuous(name = "Proficient", breaks = c(1, 2, 3, 4), 
+                labels = c("1", "2", "3", "4"))
 expert_cats <- ggplot(analysis[expert_rows,], aes(x = Category)) +
-                geom_histogram(aes(y=(..count..)/(expert_games )), color=expert_col, fill=expert_col,
-                binwidth = 1, alpha = 0.4) + labs(y=" ", x = "Scouting Category") + 
-                coord_cartesian(ylim =c(0, 1),xlim = c(1,4))+ scale_y_continuous(labels=scales::percent)
+                geom_bar(aes(y=(..count..)/(expert_games )), color=expert_col, fill=expert_col,
+                alpha = 0.4) + labs(y=" ", x = "Scouting Category") + 
+                coord_cartesian(ylim =c(0, 1),xlim = c(0.5,4.5))+ scale_y_continuous(labels=scales::percent)+
+                scale_x_continuous(name = "Expert", breaks = c(1, 2, 3, 4), labels = c("1", "2", "3", "4"))
 
 title2 <- textGrob("Percentage of Matches in each Scouting Category for each Level of Expertise",
                    gp=gpar(fontsize=11,font=3))
