@@ -205,6 +205,9 @@ class SubSeriesLookup(NamedTuple):
     series: np.ndarray
     idx_lookup: Dict[Hashable, Tuple[int, int]]
 
+class SubclusterSeries(NamedTuple):
+    labels: List[str]
+    series: np.ndarray
 
 # type aliases
 SubClusters = Dict[int, Dict[int, Dict[int, np.ndarray]]]

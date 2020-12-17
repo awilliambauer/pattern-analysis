@@ -513,7 +513,8 @@ def compute_subpattern_times(k: int, subs: Tuple[int, int], data: pd.DataFrame, 
 
 def get_predicted_lookups(all_series: np.ndarray, krange: Iterable[int], model_lookup: Dict[int, dict],
                           sub_models: Dict[int, Dict[int, Dict[int, dict]]],
-                          mrf_lookup: Dict[int, Dict[int, np.ndarray]], puz_idx_lookup: dict, noise: np.ndarray):
+                          mrf_lookup: Dict[int, Dict[int, np.ndarray]], puz_idx_lookup: dict, noise: np.ndarray) \
+        -> Tuple[Dict[int, np.ndarray], Dict[int, Dict[int, SubSeriesLookup]], Dict[int, Dict[int, Dict[int, np.ndarray]]]]:
     """
 
     :param all_series:

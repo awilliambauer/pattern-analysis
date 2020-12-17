@@ -1,6 +1,6 @@
 import os
 from sklearn.ensemble import GradientBoostingRegressor
-from sklearn.inspection import plot_partial_dependence
+from sklearn.inspection import plot_partial_dependence, permutation_importance
 from sklearn.linear_model import Ridge
 from sklearn.model_selection import cross_val_score, ShuffleSplit, ParameterGrid, GroupShuffleSplit
 from sklearn.feature_selection import RFECV
@@ -21,6 +21,9 @@ from collections import Counter
 from copy import deepcopy
 from functools import partial
 from multiprocessing import Pool
+import sys
+sys.path.append("../")
+
 from plot_util import make_boxplot
 
 
@@ -198,6 +201,14 @@ def diagnose_patterns(team):
     return set(solo_pts).difference(set(evol_pts)), set(evol_pts).difference(set(solo_pts)), set(solo_pts).intersection(set(evol_pts))
 
 
+def total_actions(team):
+    total = 0
+    for node in get_collab_nodes(team):
+        for pt, c in node["pattern_count"].items():
+            total += c
+    return total
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog='team_models.py')
     parser.add_argument("--render-teams", action="store_true")
@@ -214,11 +225,12 @@ if __name__ == "__main__":
                    "2003856", "2003876", "2003881", "2003893", "2003900", "2003903", "2003912", "2003918"]
 
     print("loading data... ", end="")
-    with open("data/user_teams_v3.json") as fp:
+    data_dir = "/mathcs1/awb/data_files"
+    with open(data_dir + "/user_teams_v3.json") as fp:
         all_teams = [json.loads(line) for line in fp]
     teams = [t for t in all_teams]# if t['pid'] in target_pids]
 
-    with open("data/user_metadata_v4.csv") as fp:
+    with open(data_dir + "/user_metadata_v4.csv") as fp:
         user_metas = {(r['uid'], r['pid']): r for r in csv.DictReader(fp)}
         for v in user_metas.values():
             v['time'] = int(v['time'])
@@ -231,7 +243,7 @@ if __name__ == "__main__":
             v['perf'] = float(v['perf'])
             v['solo_perf'] = float(v['solo_perf']) if v['solo_perf'] != "" else np.nan
 
-    with open("data/puz_metadata_v4.csv") as fp:
+    with open(data_dir + "/puz_metadata_v4.csv") as fp:
         puz_infos = {r['pid']: {'start':     int(r['start']),
                                 'end':       int(r['end']),
                                 'baseline':  float(r['baseline']),
@@ -239,14 +251,14 @@ if __name__ == "__main__":
                                 'best_solo': float(r['best_solo'])
                                } for r in csv.DictReader(fp)}
 
-    with open("data/user_patterns_v1.csv") as fp:
+    with open(data_dir + "/user_patterns_v1.csv") as fp:
         reader = csv.DictReader(fp)
         pattern_count_lookup = {}
         for r in reader:
             pattern_count_lookup[(r['uid'], r['pid'])] = {pt: float(c) for pt, c in r.items() if pt != 'uid' and pt != 'pid'}
     print("done")
 
-    train_idx, test_idx = next(GroupShuffleSplit(1, 0.2, random_state=seed).split(teams, groups=[t['pid'] for t in teams]))
+    train_idx, test_idx = next(GroupShuffleSplit(1, test_size=0.2, random_state=seed).split(teams, groups=[t['pid'] for t in teams]))
     test_teams = [teams[i] for i in test_idx]
     teams = [teams[i] for i in train_idx]
     print("split data into {} training teams and {} test teams".format(len(teams), len(test_teams)))
@@ -287,7 +299,7 @@ if __name__ == "__main__":
                              node_color=[d["color"] for n, d in G.nodes(data=True)], font_size=6)
         print()
         fig.tight_layout()
-        fig.savefig("collab_viz/complex_linked_teams.png")
+        fig.savefig("team_model_output/complex_linked_teams.png")
         print("done")
 
     if args.ontology_report:
@@ -296,9 +308,9 @@ if __name__ == "__main__":
         teamtype_labels = {"minimal": "Minimal", "line": "Line", "one_branch": "One Branch", "one_branch_itr": "One Branch Iterative",
                            "n_branch": "N Branch", "n_branch_itr": "N Branch Iterative", "rich": "Rich", "rich_itr": "Rich Iterative"}
         make_boxplot([[get_team_perf(t) for t in ts] for ts in ontology.values()], [teamtype_labels[teamtype] for teamtype in ontology],
-                     "performance", "collab_viz/ontology_perfs.png", ylims=(0.5, 1.02))
+                     "performance", "team_model_output/ontology_perfs.png", ylims=(0.5, 1.02))
         make_boxplot([[len([t for t in ts if ontology_lookup[(t['uid'], t['pid'])] == teamtype]) / len(ts) for ts in teams_by_pid.values()] for teamtype in ontology],
-                     [teamtype_labels[teamtype] for teamtype in ontology], "proportion of teams", "collab_viz/ontology_variation.png", ylims=(-0.05, 1))
+                     [teamtype_labels[teamtype] for teamtype in ontology], "proportion of teams", "team_model_output/ontology_variation.png", ylims=(-0.05, 1))
 
     solo_pts, evol_pts, both_pts = zip(*[diagnose_patterns(team) for team in all_linked_teams.values()])
     solo_count = Counter(sum([list(x) for x in solo_pts], []))
@@ -307,13 +319,14 @@ if __name__ == "__main__":
 
     if args.feature_file and os.path.exists(args.feature_file):
         print("loading features from {}".format(args.feature_file))
-        features = pd.read_csv(args.feature_file)
+        features_tagged = pd.read_csv(args.feature_file, index_col=0)
     else:
         print("computing features for {} teams".format(len(all_linked_teams)))
         acc = []
         for i, ((uid, pid), team) in enumerate(all_linked_teams.items()):
             print("team {}\r".format(i), end="")
             d = {"uid": uid, "pid": pid}
+            d["actions"] = total_actions(team)
             d["perf"] = get_team_perf(team, user_metas)
             d["size"] = len(get_uids_tuple(team))
             d["depth"] = get_team_depth(team)
@@ -324,7 +337,7 @@ if __name__ == "__main__":
             d["prior_collab"] = get_prior_score(team, all_linked_teams.values())
             puz_info = puz_infos[team["pid"]]
             d["starting_perf"] = min(0, team['energy'] - puz_info["baseline"]) / (puz_info["best"] - puz_info["baseline"])
-            d["improve"] = d["perf"] - d["starting_perf"]
+            # d["improve"] = d["perf"] - d["starting_perf"] # <- definitely seems like a bug...
             d["improve_norm"] = (d["perf"] - d["starting_perf"]) / (1 - d["starting_perf"])
             # for each soloist iteration with timing info, count the number of direct evolves of the previous share that began before the next share, then sum
             d["feedback"] = sum(len([c for c in node["parent"]["children"] if c != node and c["start"] < node["end"]])
@@ -357,7 +370,7 @@ if __name__ == "__main__":
         outcomes = ["perf", "improve_norm"]
         features = features_tagged.drop(["uid", "pid"], axis=1)
         model_scores = {}
-        with Pool(50, maxtasksperchild=4) as pool:
+        with Pool() as pool:
             cv = ShuffleSplit(n_splits=5, test_size=0.3, random_state=seed)
             for outcome in outcomes:
                 print("finding best model for", outcome)
@@ -384,11 +397,11 @@ if __name__ == "__main__":
             # labels = np.array(["Breadth", "Connections with Other Teams", "Depth", "Feedback", "Start of Collaboration",
             #                   "Number of Evolutions", "Measure of Prior Collaboration", "Team Size", "Quality of Initial Soloist Solution"])
             starting_perf_idx = X_sel.columns.get_loc("starting_perf")
-            fig, axes = plot_partial_dependence(best_model, X_sel, [i for i in range(X_sel.shape[1]) if i != starting_perf_idx], X_sel.columns,
-                                                grid_resolution=50, percentiles=(0.05, 0.95), figsize=(20, 5 * ((X_sel.shape[1] - 1) // 3 + 1)),
-                                                line_kw={"linewidth": 5})
+            fig, ax = plt.subplots(figsize=(20, 5 * ((X_sel.shape[1] - 1) // 3 + 1)))
+            plot_partial_dependence(best_model, X_sel, [i for i in range(X_sel.shape[1]) if i != starting_perf_idx], feature_names=X_sel.columns,
+                                    grid_resolution=50, percentiles=(0.05, 0.95), line_kw={"linewidth": 5}, ax=ax, n_jobs=-1)
             fig.tight_layout()
-            fig.savefig("collab_viz/team_structure_PDP_{}.png".format(outcome))
+            fig.savefig("team_model_output/team_structure_PDP_{}.png".format(outcome))
             plt.close(fig)
 
             # Plot feature importance
@@ -403,5 +416,17 @@ if __name__ == "__main__":
             ax.set_yticklabels(X_sel.columns[sorted_idx])
             ax.set_xlabel('Relative Importance')
             ax.set_title('Variable Importance')
-            fig.savefig("collab_viz/feature_importance_{}.png".format(outcome))
+            fig.savefig("team_model_output/feature_importance_{}.png".format(outcome))
+            plt.close(fig)
+
+            result = permutation_importance(best_model, X_sel, y, n_repeats=10, random_state=seed, n_jobs=-1)
+            sorted_idx = result.importances_mean.argsort()
+
+            fig, ax = plt.subplots(figsize=(10, 10))
+            ax.boxplot(result.importances[sorted_idx].T,
+                       vert=False, labels=X_sel.columns[sorted_idx])
+            ax.set_title("Permutation Importances (train set)")
+            ax.set_xlabel("Relative Importance");
+            fig.tight_layout()
+            fig.savefig("team_model_output/feature_importance_{}_permutation.png".format(outcome))
             plt.close(fig)
