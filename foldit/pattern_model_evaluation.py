@@ -42,8 +42,13 @@ def score_candidate(X, y, cv):
     selector.fit(X, y)
     X_sel = selector.transform(X)
     # score for this candidate is CV score fitting on X_sel
-    return (np.mean(cross_val_score(GradientBoostingRegressor(loss="huber"), X_sel, y, cv=cv)),
-                    selector.get_support())
+    return np.mean(cross_val_score(GradientBoostingRegressor(loss="huber"), X_sel, y, cv=cv))
+
+
+def generate_candidates(k, sub_ks, pattern_lookups, cids, cur_sub_k_idx):
+    return [c for c in product(*[list(product([cid], sub_ks[cid][:cur_sub_k_idx[cid] + 1]))
+                                 for cid in cids])
+            if all(sub_k in pattern_lookups[k][cid] for cid, sub_k in c)]
 
 
 def find_best_predictive_model(model_dir: str, data: pd.DataFrame,
@@ -64,7 +69,13 @@ def find_best_predictive_model(model_dir: str, data: pd.DataFrame,
 
     NEW APPROACH
     1. compute base model scores (no subpatterns)
-    2.
+    2. add all cids to active list
+    3. for each sub_k
+        3a. generate all possible new candidates involving active cids and current sub_k
+        3b. score new candidates
+        3c. average scores for candidates evolving each active cids and current sub_k, compare to average for previous
+            sub_k
+        3d. set active list to those cids for which current average exceeds previous
     """
 
 
@@ -74,54 +85,74 @@ def find_best_predictive_model(model_dir: str, data: pd.DataFrame,
     cv = ShuffleSplit(n_splits=3, test_size=0.3, random_state=304)
     scores_lookup = {}
     for k in pattern_lookups:
-        scores = {}  # candidate tuple -> CV score, selected features mask
+        scores = {}  # candidate tuple -> CV score
         cids = {p.cid for p in pattern_lookups[k]["base"]}
-        candidates = [c for c in product(*[list(product([cid], [0] + list(subclusters[k][cid].keys())))
-                                           for cid in cids])
-                      if all(sub_k in pattern_lookups[k][cid] for cid, sub_k in c)]
-        with Pool() as pool:
-            for candidate in candidates:
+        sub_ks = {cid: [0] + sorted(pattern_lookups[k][cid].keys()) for cid in cids}
+        active_cids = list(cids)
+        cur_sub_k_idx = {cid: 1 for cid in cids}
+        with Pool(50) as pool:
+            round = 0
+            while (len(active_cids) > 0):
+                round += 1
+                pool_count = 0
+                pooled = []
+                candidates = generate_candidates(k, sub_ks, pattern_lookups, cids, cur_sub_k_idx)
+                print("k =", k, "round", round)
+                print("active_cid =", active_cids, "-", len(candidates), "candidates")
+                for candidate in candidates:
+                    if candidate not in scores:
+                        print("candidate", candidate)
+                        for (cid, sub_k) in candidate:
 
-                print("candidate", candidate)
-                for (cid, sub_k) in candidate:
+                            if sub_k != 0 and (k, (cid, sub_k)) not in subcluster_series_lookup:
+                                all_subclusters = cluster_lookup[k].astype(np.str)
+                                labels = ["{}{}".format(cid, string.ascii_uppercase[x]) for x in range(sub_k)]
+                                cs = subclusters[k][cid][sub_k]
+                                for (_, _, start_idx), (s, e) in subseries_lookups[k][cid].idx_lookup.items():
+                                    all_subclusters[start_idx: start_idx + (min(e, len(cs)) - s)] = [labels[c] for c in cs[s:e]]
+                                subcluster_series_lookup[(k, (cid, sub_k))] = SubclusterSeries(labels, all_subclusters)
 
-                    if sub_k != 0 and (k, (cid, sub_k)) not in subcluster_series_lookup:
-                        print("subcluster serires", cid, sub_k)
-                        all_subclusters = cluster_lookup[k].astype(np.str)
-                        labels = ["{}{}".format(cid, string.ascii_uppercase[x]) for x in range(sub_k)]
-                        cs = subclusters[k][cid][sub_k]
-                        for (_, _, start_idx), (s, e) in subseries_lookups[k][cid].idx_lookup.items():
-                            all_subclusters[start_idx: start_idx + (min(e, len(cs)) - s)] = [labels[c] for c in cs[s:e]]
-                        subcluster_series_lookup[(k, (cid, sub_k))] = SubclusterSeries(labels, all_subclusters)
+                            if (k, (cid, sub_k)) not in action_counts:
+                                f = partial(compute_pattern_actions, k=k, cid=cid, sub_k=sub_k, cluster_lookup=cluster_lookup,
+                                            subcluster_series=subcluster_series_lookup.get((k, (cid, sub_k)), None),
+                                            puz_idx_lookup=puz_idx_lookup)
+                                action_counts[(k, (cid, sub_k))] = data.apply(f, axis=1)
 
-                    if (k, (cid, sub_k)) not in action_counts:
-                        print("action counts", cid, sub_k)
-                        f = partial(compute_pattern_actions, k=k, cid=cid, sub_k=sub_k, cluster_lookup=cluster_lookup,
-                                    subcluster_series=subcluster_series_lookup.get((k, (cid, sub_k)), None),
-                                    puz_idx_lookup=puz_idx_lookup)
-                        action_counts[(k, (cid, sub_k))] = data.apply(f, axis=1)
+                        features = pd.concat([data.drop(IGNORE_COLUMNS + ["time", "actions"], axis=1)] +
+                                             [action_counts[(k, (cid, sub_k))] for (cid, sub_k) in candidate],
+                                             axis=1)
+                        X = features.drop(["perf"], axis=1).values
+                        y = features["perf"].values.ravel()
+                        pooled.append((candidate, pool.apply_async(score_candidate, (X, y, cv))))
+                        pool_count += 1
 
-                features = pd.concat([data.drop(IGNORE_COLUMNS + ["time", "actions"], axis=1)] +
-                                     [action_counts[(k, (cid, sub_k))] for (cid, sub_k) in candidate],
-                                     axis=1)
-                X = features.drop(["perf"], axis=1).values
-                y = features["perf"].values.ravel()
-                scores[candidate] = pool.apply_async(score_candidate, (X, y, cv))
-            print("scoring k =", k, "candidates... ")
-            i = 0
-            for candidate, x in scores.items():
-                scores[candidate] = x.get()
-                i += 1
-                print("{} out of {}\r".format(i, len(scores)), end="")
+                print("scoring k =", k, "round", round, "candidates...")
+                i = 0
+                for candidate, x in pooled:
+                    i += 1
+                    print("{} out of {}\r".format(i, pool_count), end="")
+                    scores[candidate] = x.get()
+                print()
+                for cid in active_cids[:]:
+                    prev_subk = sub_ks[cid][cur_sub_k_idx[cid] - 1]
+                    cur_subk = sub_ks[cid][cur_sub_k_idx[cid]]
+                    prev_scores = [score for c, score in scores.items() if (cid, prev_subk) in c]
+                    cur_scores = [score for c, score in scores.items() if (cid, cur_subk) in c]
+                    if np.mean(prev_scores) >= np.mean(cur_scores):
+                        active_cids.remove(cid)
+                        cur_sub_k_idx[cid] -= 1
+                cur_sub_k_idx = {cid: (idx + 1 if cid in active_cids else idx) for cid, idx in cur_sub_k_idx.items()}
+                active_cids = [cid for cid in active_cids if len(sub_ks[cid]) > cur_sub_k_idx[cid]]
+
             print("done\n\n\n")
             scores_lookup[k] = scores
-            with open("{}/eval/{}_scores.pickle".format(model_dir, k), "wb") as fp:
+            with open("{}/eval/k{}_scores.pickle".format(model_dir, k), "wb") as fp:
                 pickle.dump(scores, fp)
 
     best_k = best_candidate = None
     best_score = 0
     for k, scores in scores_lookup.items():
-        for candidate, (score, support) in scores.items():
+        for candidate, score in scores.items():
             if score > best_score:
                 best_score = score
                 best_k = k
@@ -278,7 +309,7 @@ if __name__ == "__main__":
         models = {#"ridge": Ridge,
                   "ensemble": GradientBoostingRegressor}
         model_params = {"ridge": {"random_state": [seed], "alpha": [0.1, 0.5, 1, 5, 10], "normalize": [True, False]},
-                        "ensemble": {"random_state": [seed], "learning_rate": [0.01, 0.02, 0.05, 0.1], "subsample": [0.3, 0.5, 0.7],
+                        "ensemble": {"random_state": [seed], "learning_rate": [0.01, 0.02, 0.05, 0.1],
                                      "n_estimators": [100, 500, 1000], "n_iter_no_change": [100]}}
         # std_base = deepcopy(model_params["ensemble"])
         # std_base["loss"] = ["ls", "lad"]
