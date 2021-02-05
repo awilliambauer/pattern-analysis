@@ -81,7 +81,6 @@ def find_best_predictive_model(model_dir: str, data: pd.DataFrame,
                       if all(sub_k in pattern_lookups[k][cid] for cid, sub_k in c)]
         with Pool() as pool:
             for candidate in candidates:
-
                 print("candidate", candidate)
                 for (cid, sub_k) in candidate:
 
@@ -238,8 +237,10 @@ if __name__ == "__main__":
                                                                            action_counts)
         with open(model_dir + "/eval/best_model.txt", 'w') as fp:
             fp.write(str((best_k, best_candidate)) + "\n")
+
         with open(model_dir + "/eval/action_counts.pickle", "wb") as fp:
             pickle.dump(action_counts, fp)
+
         print("selected model:", best_k, best_candidate)
 
         ps = sum([[(get_pattern_label(p, cid, sub_k), p) for p in pattern_lookups[best_k][cid][sub_k]] for cid, sub_k in best_candidate], [])
@@ -261,7 +262,7 @@ if __name__ == "__main__":
         results = results.merge(pd.DataFrame(data=acc), on=["uid", "pid"])
         #results["distinct_patterns"] = results.apply(lambda r: len(pattern_use_lookup[(r.uid, r.pid)]), axis=1)
         #results["action_count_all"] = results.apply(lambda r: user_metas[(r.uid, r.pid)]["action_count_all"], axis=1)
-        results["action_count_relevant"] = results.apply(lambda r: user_metas[(r.uid, r.pid)]["action_count_relevant"], axis=1)
+        # results["action_count_relevant"] = results.apply(lambda r: user_metas[(r.uid, r.pid)]["action_count_relevant"], axis=1)
         #results["action_count_best"] = results.apply(lambda r: user_metas[(r.uid, r.pid)]["action_count_best"], axis=1)
         #results["best_energy_time"] = results.apply(lambda r: user_metas[(r.uid, r.pid)]["best_energy_time"], axis=1)
         #results["action_rate_all"] = results.apply(lambda r: r.action_count_all / r.time, axis=1)
