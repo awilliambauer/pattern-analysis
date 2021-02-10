@@ -64,12 +64,15 @@ if __name__ == "__main__":
         with open(f"{results_path}/puz_idx_lookup.pickle", 'wb') as fp:
             pickle.dump(puz_idx_lookup, fp)
 
-    if any(all(os.path.exists(f"{results_path}/{uid}/clusters_k{k}.txt") for k in krange)
-           for uid in series_lookup) and not config.overwrite:
-        logging.warning(f"results found at {results_path} and overwrite not set, skipping first-pass TICC")
-    else:
-        logging.debug("Running TICC")
-        run_TICC(series_lookup, results_path, krange)
+    uids_to_run = []
+    for uid in series_lookup:
+        if all(os.path.exists(f"{results_path}/{uid}/clusters_k{k}.txt") for k in krange) and not config.overwrite:
+            logging.warning(f"results found at {results_path}/{uid} and overwrite not set, skipping first-pass TICC")
+        else:
+            uids_to_run.append(uid)
+
+    logging.debug(f"Running TICC for {uids_to_run}")
+    run_TICC({uid: series_lookup[uid] for uid in uids_to_run}, results_path, krange)
 
     logging.debug("Loading TICC output")
     cluster_lookup, mrf_lookup, model_lookup, bic_lookup = load_TICC_output(results_path, list(series_lookup.keys()),
@@ -90,15 +93,12 @@ if __name__ == "__main__":
             else:
                 logging.debug(f"k = {k} model fails to handle noise for uid = {uid}")
 
-    if any(all(os.path.exists(f"{results_path}/{uid}/subpatterns/k{k}") for k in config.sub_krange)
-           for uid in series_lookup) and not config.overwrite:
-        logging.warning(f"results found at {results_path}/.../subpatterns and overwrite not set, skipping recursive TICC")
-    else:
-        for uid in series_lookup:
+    for uid in series_lookup:
+        if all(os.path.exists(f"{results_path}/{uid}/subpatterns/k{k}") for k in config.sub_krange) and not config.overwrite:
+            logging.warning(f"results found at {results_path}/{uid}/subpatterns and overwrite not set, skipping recursive TICC")
+        else:
             logging.debug(f"Running recursive TICC for {uid}")
             run_sub_TICC(subseries_lookups[uid], results_path, uid, config.sub_krange)
 
     logging.debug("Loading recursive TICC output")
-    sub_lookup = {}
-    for uid in series_lookup:
-        sub_lookup[uid] = load_sub_lookup(f"{results_path}/{uid}", subseries_lookups[uid], config.sub_krange)
+    sub_lookup = load_sub_lookup(results_path, list(series_lookup.keys()), subseries_lookups, config.sub_krange)

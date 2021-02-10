@@ -98,7 +98,7 @@ def run_TICC(series_lookup: Dict[str, np.ndarray], datapath: str, krange: Iterab
     """
     if not os.path.exists(datapath):
         raise ValueError("datapath {} does not exist".format(datapath))
-    with ProcessPoolExecutor(min(len(series_lookup), os.cpu_count() // num_proc)) as pool:
+    with ProcessPoolExecutor(min(len(series_lookup), os.cpu_count() // num_proc) - 4) as pool:
         for k in krange:
             logging.debug(f"\n{k} clusters")
             tasks = []
@@ -173,7 +173,7 @@ def run_sub_TICC(subseries_lookups: dict, datapath: str, uid: str, sub_krange: l
     for k in subseries_lookups:
         os.makedirs(f"{results_dir}/k{k}", exist_ok=True)
 
-    with ProcessPoolExecutor(min(len(subseries_lookups), os.cpu_count() // num_proc)) as pool:
+    with ProcessPoolExecutor(min(len(subseries_lookups), os.cpu_count() // num_proc) - 4) as pool:
         pool.map(partial(run_TICC, krange=sub_krange, save_model=save_model, skip_series_fn=skip_series_fn,
                          window_size=window_size, num_proc=num_proc),
                  [{f"cid{cid}": lookup.series for cid, lookup in subseries_lookups[k].items()} for k in subseries_lookups],
@@ -242,25 +242,31 @@ def load_TICC_output(datapath: str, uids: List[str], krange: Iterable[int]) -> T
     return cluster_lookup, mrf_lookup, model_lookup, bic_lookup
 
 
-def load_sub_lookup(datapath: str, subseries_lookup: dict, sub_krange: Iterable[int]) -> SubLookup:
+def load_sub_lookup(datapath: str, users: list, subseries_lookup: dict, sub_krange: Iterable[int]) -> SubLookup:
     """
     loads the output of run_sub_TICC
     :param datapath:
+    :param users:
     :param subseries_lookup:
     :param sub_krange:
     :return:
     """
-    clusters = {} # Dict[int, Dict[int, Dict[int, np.ndarray]]] (k to cid to sub_k to cluster labels)
-    mrfs = {}     # Dict[int, Dict[int, Dict[int, Dict[int, np.ndarray]]]] (k to cid to sub_k to mrf dictionary (cluster label to mrf))
-    models = {}   # Dict[int, Dict[int, Dict[int, Dict]]] (k to cid to sub_k to dict of ticc model parameters)
-    bics = {}     # Dict[int, Dict[int, Dict[int, float]]] (k to cid to sub_k to bic)
-    for k in subseries_lookup:
-        dp = "{}/subpatterns/k{}".format(datapath, k)
-        cs, ms, mods, bs = load_TICC_output(dp, ["cid{}".format(cid) for cid in subseries_lookup[k]], sub_krange)
-        clusters[k] = {int(k.replace("cid", "")): v for k, v in cs.items()}
-        mrfs[k] = {int(k.replace("cid", "")): v for k, v in ms.items()}
-        models[k] = {int(k.replace("cid", "")): v for k, v in mods.items()}
-        bics[k] = {int(k.replace("cid", "")): v for k, v in bs.items()}
+    clusters = {} # Dict[str, Dict[int, Dict[int, Dict[int, np.ndarray]]]] (user to k to cid to sub_k to cluster labels)
+    mrfs = {}     # Dict[str, Dict[int, Dict[int, Dict[int, Dict[int, np.ndarray]]]]] (user to k to cid to sub_k to mrf dictionary (cluster label to mrf))
+    models = {}   # Dict[str, Dict[int, Dict[int, Dict[int, Dict]]]] (user to k to cid to sub_k to dict of ticc model parameters)
+    bics = {}     # Dict[str, Dict[int, Dict[int, Dict[int, float]]]] (user to k to cid to sub_k to bic)                                                   
+    for user in users:
+        clusters[user] = {};
+        mrfs[user] = {};
+        models[user] = {};
+        bics[user] = {};
+        for k in subseries_lookup[user]:
+            dp = f"{datapath}/{user}/subpatterns/k{k}"
+            cs, ms, mods, bs = load_TICC_output(dp, [f"cid{cid}" for cid in subseries_lookup[user][k]], sub_krange)
+            clusters[user][k] = {int(k.replace("cid", "")): v for k, v in cs.items()}
+            mrfs[user][k] = {int(k.replace("cid", "")): v for k, v in ms.items()}
+            models[user][k] = {int(k.replace("cid", "")): v for k, v in mods.items()}
+            bics[user][k] = {int(k.replace("cid", "")): v for k, v in bs.items()}
     return SubLookup(clusters, mrfs, models, bics)
 
 
@@ -521,10 +527,10 @@ def compute_subpattern_times(k: int, subs: Tuple[int, int], data: pd.DataFrame, 
     return data.merge(pd.DataFrame(data=sub_cluster_times), on=['pid', 'uid'])
 
 
-def get_predicted_lookups(all_series: np.ndarray, krange: Iterable[int], model_lookup: Dict[int, dict],
+def get_predicted_lookups(all_series: np.ndarray, k: int, model_lookup: Dict[int, dict],
                           sub_models: Dict[int, Dict[int, Dict[int, dict]]],
                           mrf_lookup: Dict[int, Dict[int, np.ndarray]], puz_idx_lookup: dict, noise: np.ndarray) \
-        -> Tuple[Dict[int, np.ndarray], Dict[int, Dict[int, SubSeriesLookup]], Dict[int, Dict[int, Dict[int, np.ndarray]]]]:
+        -> Tuple[np.ndarray, Dict[int, SubSeriesLookup], Dict[int, Dict[int, np.ndarray]]]:
     """
 
     :param all_series:
@@ -536,25 +542,17 @@ def get_predicted_lookups(all_series: np.ndarray, krange: Iterable[int], model_l
     :param noise:
     :return:
     """
-    cluster_lookup = {}
+    clusters = predict_from_saved_model(all_series, model_lookup[k])
+    patterns = get_patterns(mrf_lookup[k], clusters, puz_idx_lookup)
+    subseries = make_subseries_lookup(k, patterns, mrf_lookup[k], all_series, noise)
     sub_clusters = {}
-    subseries_lookup = {}
-    for k in krange:
-        print("predicting k =", k)
-        cluster_lookup[k] = predict_from_saved_model(all_series, model_lookup[k])
-        patterns = get_patterns(mrf_lookup[k], cluster_lookup[k], puz_idx_lookup)
-        subseries_lookup[k] = make_subseries_lookup(k, patterns, mrf_lookup[k], all_series, noise)
-        sub_cs = {}
-        for cid in sub_models[k]:
-            if cid in subseries_lookup[k]:
-                sub_cs[cid] = {}
-                for sub_k in sub_models[k][cid]:
-                    print("    cid =", cid, "({})".format(sub_k))
-                    sub_cs[cid][sub_k] = predict_from_saved_model(subseries_lookup[k][cid].series,
-                                                                  sub_models[k][cid][sub_k])
-        sub_clusters[k] = sub_cs
-
-    return cluster_lookup, subseries_lookup, sub_clusters
+    for cid in sub_models[k]:
+        if cid in subseries:
+            sub_clusters[cid] = {}
+            for sub_k in sub_models[k][cid]:
+                sub_clusters[cid][sub_k] = predict_from_saved_model(subseries[cid].series,
+                                                                    sub_models[k][cid][sub_k])
+    return clusters, subseries, sub_clusters
 
 
 def make_selection_lookups(all_series: np.ndarray, pattern_lookups: Dict[int, PatternLookup],

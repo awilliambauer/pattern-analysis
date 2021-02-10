@@ -1,29 +1,30 @@
 {
-  "name": "user_models",
-  "debug": true,
-  "overwrite": false,
-  "noplot": true,
-  "results_dir": "./results",
-  "pids": [
-    "2003433",
-    "2002294",
-    "2003195"
-  ],
-  "test_pids": [
-    "2003287",
-    "2002196"
-  ],
-  "evolver": false,
-  "krange": [
-    3,
-    4,
-    5,
-    6,
-    7
-  ],
-  "sub_krange": [
-    3,
-    4,
-    5
-  ]
+    "name": "user_models",
+    "debug": true,
+    "overwrite": false,
+    "noplot": true,
+    "user": true,
+    "results_dir": "./results",
+    "pids": [
+	"2003433",
+	"2002294",
+	"2003195"
+    ],
+    "test_pids": [
+	"2003287",
+	"2002196"
+    ],
+    "evolver": false,
+    "krange": [
+	3,
+	4,
+	5,
+	6,
+	7
+    ],
+    "sub_krange": [
+	3,
+	4,
+	5
+    ]
 }

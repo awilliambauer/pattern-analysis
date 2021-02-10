@@ -194,10 +194,10 @@ class SubPatternInstance(NamedTuple):
 
 
 class SubLookup(NamedTuple):
-    clusters: Dict[int, Dict[int, Dict[int, np.ndarray]]] # (k to cid to sub_k to cluster labels)
-    mrfs: Dict[int, Dict[int, Dict[int, Dict[int, np.ndarray]]]] # (k to cid to sub_k to mrf dictionary (cluster label to mrf))
-    models: Dict[int, Dict[int, Dict[int, Dict]]] # (k to cid to sub_k to dict of ticc model parameters)
-    bics: Dict[int, Dict[int, Dict[int, float]]] # (k to cid to sub_k to bic)
+    clusters: Dict[str, Dict[int, Dict[int, Dict[int, np.ndarray]]]] # (user to k to cid to sub_k to cluster labels)                                   
+    mrfs: Dict[str, Dict[int, Dict[int, Dict[int, Dict[int, np.ndarray]]]]] # (user to k to cid to sub_k to mrf dictionary (cluster label to mrf)) 
+    models: Dict[str, Dict[int, Dict[int, Dict[int, Dict]]]] # (user to k to cid to sub_k to dict of ticc model parameters)                          
+    bics: Dict[str, Dict[int, Dict[int, Dict[int, float]]]] # (user to k to cid to sub_k to bic)                                                   
 
 
 class SubSeriesLookup(NamedTuple):
