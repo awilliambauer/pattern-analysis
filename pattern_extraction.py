@@ -98,12 +98,12 @@ def run_TICC(series_lookup: Dict[str, np.ndarray], datapath: str, krange: Iterab
     """
     if not os.path.exists(datapath):
         raise ValueError("datapath {} does not exist".format(datapath))
-    with ProcessPoolExecutor(min(len(series_lookup), os.cpu_count() // num_proc) - 4) as pool:
+    with ProcessPoolExecutor(min(len(series_lookup), os.cpu_count() // num_proc - 2)) as pool:
         for k in krange:
             logging.debug(f"\n{k} clusters")
             tasks = []
             for uid, series in series_lookup.items():
-                if skip_series_fn and skip_series_fn(series, k):
+                if (skip_series_fn and skip_series_fn(series, k)) or len(series) < k:
                     logging.info("SKIPPED {} for k = {}".format(uid, k))
                 else:
                     tasks.append((uid, pool.submit(fit_TICC, series, k, window_size, num_proc)))
@@ -173,16 +173,15 @@ def run_sub_TICC(subseries_lookups: dict, datapath: str, uid: str, sub_krange: l
     for k in subseries_lookups:
         os.makedirs(f"{results_dir}/k{k}", exist_ok=True)
 
-    with ProcessPoolExecutor(min(len(subseries_lookups), os.cpu_count() // num_proc) - 4) as pool:
-        pool.map(partial(run_TICC, krange=sub_krange, save_model=save_model, skip_series_fn=skip_series_fn,
-                         window_size=window_size, num_proc=num_proc),
-                 [{f"cid{cid}": lookup.series for cid, lookup in subseries_lookups[k].items()} for k in subseries_lookups],
-                 [f"{results_dir}/k{k}" for k in subseries_lookups])
-    # for k in subseries_lookups:
-    #     logging.debug(f"running TICC to get subpatterns for k={k}")
-    #     os.makedirs(results_dir + "/k{}".format(k), exist_ok=True)
-    #     run_TICC({f"cid{cid}": lookup["series"] for cid, lookup in subseries_lookups[k].items()},
-    #              f"{results_dir}/k{k}", sub_krange, save_model, skip_series_fn, window_size, num_proc)
+    # with ProcessPoolExecutor(4) as pool:
+    #     pool.map(partial(run_TICC, krange=sub_krange, save_model=save_model, skip_series_fn=skip_series_fn,
+    #                      window_size=window_size, num_proc=num_proc),
+    #              [{f"cid{cid}": lookup.series for cid, lookup in subseries_lookups[k].items()} for k in subseries_lookups],
+    #              [f"{results_dir}/k{k}" for k in subseries_lookups])
+    for k in subseries_lookups:
+        logging.debug(f"running TICC to get subpatterns for k={k} on uid={uid}")
+        run_TICC({f"cid{cid}": lookup.series for cid, lookup in subseries_lookups[k].items()},
+                 f"{results_dir}/k{k}", sub_krange, save_model, skip_series_fn, window_size, num_proc)
 
 
 def is_null_cluster(mrf: np.ndarray) -> bool:
@@ -256,6 +255,10 @@ def load_sub_lookup(datapath: str, users: list, subseries_lookup: dict, sub_kran
     models = {}   # Dict[str, Dict[int, Dict[int, Dict[int, Dict]]]] (user to k to cid to sub_k to dict of ticc model parameters)
     bics = {}     # Dict[str, Dict[int, Dict[int, Dict[int, float]]]] (user to k to cid to sub_k to bic)                                                   
     for user in users:
+        # probably better to have empty entries than no entries in terms of avoid special-case code down the line
+        # if len(subseries_lookups[user]) == 0:
+        #     logging.debug(f"No noise-handling model for uid = {user}, skipping loading sub lookup")
+        #     continue
         clusters[user] = {};
         mrfs[user] = {};
         models[user] = {};

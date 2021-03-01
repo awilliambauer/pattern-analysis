@@ -71,8 +71,9 @@ if __name__ == "__main__":
         else:
             uids_to_run.append(uid)
 
-    logging.debug(f"Running TICC for {uids_to_run}")
-    run_TICC({uid: series_lookup[uid] for uid in uids_to_run}, results_path, krange)
+    if len(uids_to_run) > 0:
+        logging.debug(f"Running TICC for {uids_to_run}")
+        run_TICC({uid: series_lookup[uid] for uid in uids_to_run}, results_path, krange)
 
     logging.debug("Loading TICC output")
     cluster_lookup, mrf_lookup, model_lookup, bic_lookup = load_TICC_output(results_path, list(series_lookup.keys()),
@@ -96,9 +97,11 @@ if __name__ == "__main__":
     for uid in series_lookup:
         if all(os.path.exists(f"{results_path}/{uid}/subpatterns/k{k}") for k in config.sub_krange) and not config.overwrite:
             logging.warning(f"results found at {results_path}/{uid}/subpatterns and overwrite not set, skipping recursive TICC")
+        elif len(subseries_lookups[uid]) == 0:
+            logging.debug(f"No noise-handling model for uid = {uid}, skipping recursive TICC")
         else:
             logging.debug(f"Running recursive TICC for {uid}")
-            run_sub_TICC(subseries_lookups[uid], results_path, uid, config.sub_krange)
+            run_sub_TICC(subseries_lookups[uid], results_path, uid, config.sub_krange, num_proc=2)
 
     logging.debug("Loading recursive TICC output")
     sub_lookup = load_sub_lookup(results_path, list(series_lookup.keys()), subseries_lookups, config.sub_krange)
