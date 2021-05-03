@@ -208,7 +208,7 @@ def writeToCsv(write, debug, start, end):
                                         "Win":fields[31]})
         # running with multiprocessing
         else:
-            pool = Pool(min(cpu_count(), 20))
+            pool = Pool(min(cpu_count(), 10))
             results = pool.map(generateFields, files)
             pool.close()
             pool.join()

@@ -88,7 +88,7 @@ def writeToCsv():
                                          "BetweenBattles", "Win"])
         events_out.writeheader()
 
-        with Pool(min(cpu_count(), 20)) as pool:
+        with Pool(min(cpu_count(), 10)) as pool:
             results = pool.map(generateFields, files)
 
         for fields in results:

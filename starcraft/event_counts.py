@@ -95,7 +95,7 @@ def writeToCsv():
                                     "SetCGCount", "AddCGCount", "GetCGCount",
                                     "TotalCount", "Win"])
         events_out.writeheader()
-        pool = Pool(20)
+        pool = Pool(10)
         results = pool.map(generateFields, files)
         pool.close()
         pool.join()
