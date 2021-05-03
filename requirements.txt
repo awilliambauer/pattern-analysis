@@ -13,3 +13,4 @@ tables
 statsmodels
 mpyq
 sshtunnel
+pydot

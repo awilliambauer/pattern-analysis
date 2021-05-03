@@ -58,7 +58,7 @@ def combine_user_series(series_lookup: Dict[Hashable, np.ndarray], noise: np.nda
 
 
 def fit_TICC(series: np.ndarray, k: int, window_size=1, num_proc=4,
-             ticc_instance=None) -> Tuple[np.ndarray, Dict[int, np.ndarray], float]:
+             ticc_instance=None) -> Tuple[np.ndarray, Dict[int, np.ndarray], float, dict]:
     """
 
     :param series:
@@ -73,9 +73,14 @@ def fit_TICC(series: np.ndarray, k: int, window_size=1, num_proc=4,
     else:
         ticc = ticc_instance
     clusters, mrfs, bic = ticc.fit(series)
+    ticc_props = {"trained_model": ticc.trained_model,
+                  "window_size": ticc.window_size,
+                  "num_blocks": ticc.num_blocks,
+                  "number_of_clusters": ticc.number_of_clusters,
+                  "switch_penalty": ticc.switch_penalty}
     if ticc_instance is None:  # clean up ticc solver if this isn't a reused instance
         ticc.pool.close()
-    return clusters, mrfs, bic
+    return clusters, mrfs, bic, ticc_props
 
 
 def run_TICC(series_lookup: Dict[str, np.ndarray], datapath: str, krange: Iterable[int],
@@ -93,21 +98,19 @@ def run_TICC(series_lookup: Dict[str, np.ndarray], datapath: str, krange: Iterab
     """
     if not os.path.exists(datapath):
         raise ValueError("datapath {} does not exist".format(datapath))
-    for k in krange:
-        logging.debug(f"\n{k} clusters")
-        ticc = TICC(window_size=window_size, number_of_clusters=k, compute_BIC=True, num_proc=num_proc)
-        for uid, series in series_lookup.items():
-            if skip_series_fn and skip_series_fn(series, k):
-                logging.info("SKIPPED {} for k = {}".format(uid, k))
-            else:
+    with ProcessPoolExecutor(min(len(series_lookup), os.cpu_count() // num_proc - 2)) as pool:
+        for k in krange:
+            logging.debug(f"\n{k} clusters")
+            tasks = []
+            for uid, series in series_lookup.items():
+                if (skip_series_fn and skip_series_fn(series, k)) or len(series) < k:
+                    logging.info("SKIPPED {} for k = {}".format(uid, k))
+                else:
+                    tasks.append((uid, pool.submit(fit_TICC, series, k, window_size, num_proc)))
+            for uid, task in tasks:
                 logging.debug(uid)
-                clusters, mrfs, bic = fit_TICC(series, k, ticc_instance=ticc)
-                # order clusters by sum of absolute value of edge weights
-                # mrfs_ordered = {k: mrf for k, mrf in zip(mrfs.keys(), sorted(mrfs.values(), key=lambda x: abs(
-                #     x[mrf_indices]).sum()))}
-                # inverse = {mrf.tostring(): k for k, mrf in mrfs_ordered.items()}
-                # cluster_remapping = {k: inverse[v.tostring()] for k, v in mrfs.items()}
-                # clusters_remapped = np.array([cluster_remapping[x] for x in clusters])
+                clusters, mrfs, bic, ticc_props = task.result()
+
                 os.makedirs(f"{datapath}/{uid}", exist_ok=True)
                 # noinspection PyTypeChecker
                 np.savetxt(f"{datapath}/{uid}/clusters_k{k}.txt", clusters)
@@ -115,18 +118,10 @@ def run_TICC(series_lookup: Dict[str, np.ndarray], datapath: str, krange: Iterab
                     pickle.dump(mrfs, pkl)
                 if save_model:
                     with open(f"{datapath}/{uid}/ticc_model_k{k}.pickle", 'wb') as pkl:
-                        d = {
-                            "trained_model": ticc.trained_model,
-                            "window_size": ticc.window_size,
-                            "num_blocks": ticc.num_blocks,
-                            "number_of_clusters": ticc.number_of_clusters,
-                            "switch_penalty": ticc.switch_penalty
-                        }
-                        pickle.dump(d, pkl)
+                        pickle.dump(ticc_props, pkl)
                 # if the user doesn't remove bics.csv in between multiple runs, there will be duplicate entries
                 with open(f"{datapath}/{uid}/bics.csv", 'a') as bic_out:
                     bic_out.write(f"{k},{bic}\n")
-        ticc.pool.close()
 
 
 def make_subseries_lookup(k: int, patterns: List[PatternInstance], mrfs: Dict[int, np.ndarray],
@@ -178,15 +173,15 @@ def run_sub_TICC(subseries_lookups: dict, datapath: str, uid: str, sub_krange: l
     for k in subseries_lookups:
         os.makedirs(f"{results_dir}/k{k}", exist_ok=True)
 
-    with ProcessPoolExecutor(min(len(subseries_lookups), os.cpu_count() // num_proc)) as pool:
-        pool.map(partial(run_TICC, krange=sub_krange, save_model=save_model, skip_series_fn=skip_series_fn, window_size=window_size, num_proc=num_proc),
-                 [{f"cid{cid}": lookup.series for cid, lookup in subseries_lookups[k].items()} for k in subseries_lookups],
-                 [f"{results_dir}/k{k}" for k in subseries_lookups])
-    # for k in subseries_lookups:
-    #     logging.debug(f"running TICC to get subpatterns for k={k}")
-    #     os.makedirs(results_dir + "/k{}".format(k), exist_ok=True)
-    #     run_TICC({f"cid{cid}": lookup["series"] for cid, lookup in subseries_lookups[k].items()},
-    #              f"{results_dir}/k{k}", sub_krange, save_model, skip_series_fn, window_size, num_proc)
+    # with ProcessPoolExecutor(4) as pool:
+    #     pool.map(partial(run_TICC, krange=sub_krange, save_model=save_model, skip_series_fn=skip_series_fn,
+    #                      window_size=window_size, num_proc=num_proc),
+    #              [{f"cid{cid}": lookup.series for cid, lookup in subseries_lookups[k].items()} for k in subseries_lookups],
+    #              [f"{results_dir}/k{k}" for k in subseries_lookups])
+    for k in subseries_lookups:
+        logging.debug(f"running TICC to get subpatterns for k={k} on uid={uid}")
+        run_TICC({f"cid{cid}": lookup.series for cid, lookup in subseries_lookups[k].items()},
+                 f"{results_dir}/k{k}", sub_krange, save_model, skip_series_fn, window_size, num_proc)
 
 
 def is_null_cluster(mrf: np.ndarray) -> bool:
@@ -246,26 +241,50 @@ def load_TICC_output(datapath: str, uids: List[str], krange: Iterable[int]) -> T
     return cluster_lookup, mrf_lookup, model_lookup, bic_lookup
 
 
-def load_sub_lookup(datapath: str, subseries_lookup: dict, sub_krange: Iterable[int]) -> SubLookup:
+def load_sub_lookup(datapath: str, users: list, subseries_lookup: dict, sub_krange: Iterable[int]) -> SubLookup:
     """
     loads the output of run_sub_TICC
     :param datapath:
+    :param users:
     :param subseries_lookup:
     :param sub_krange:
     :return:
     """
-    clusters = {} # Dict[int, Dict[int, Dict[int, np.ndarray]]] (k to cid to sub_k to cluster labels)
-    mrfs = {}     # Dict[int, Dict[int, Dict[int, Dict[int, np.ndarray]]]] (k to cid to sub_k to mrf dictionary (cluster label to mrf))
-    models = {}   # Dict[int, Dict[int, Dict[int, Dict]]] (k to cid to sub_k to dict of ticc model parameters)
-    bics = {}     # Dict[int, Dict[int, Dict[int, float]]] (k to cid to sub_k to bic)
-    for k in subseries_lookup:
-        dp = "{}/subpatterns/k{}".format(datapath, k)
-        cs, ms, mods, bs = load_TICC_output(dp, ["cid{}".format(cid) for cid in subseries_lookup[k]], sub_krange)
-        clusters[k] = {int(k.replace("cid", "")): v for k, v in cs.items()}
-        mrfs[k] = {int(k.replace("cid", "")): v for k, v in ms.items()}
-        models[k] = {int(k.replace("cid", "")): v for k, v in mods.items()}
-        bics[k] = {int(k.replace("cid", "")): v for k, v in bs.items()}
+    clusters = {} # Dict[str, Dict[int, Dict[int, Dict[int, np.ndarray]]]] (user to k to cid to sub_k to cluster labels)
+    mrfs = {}     # Dict[str, Dict[int, Dict[int, Dict[int, Dict[int, np.ndarray]]]]] (user to k to cid to sub_k to mrf dictionary (cluster label to mrf))
+    models = {}   # Dict[str, Dict[int, Dict[int, Dict[int, Dict]]]] (user to k to cid to sub_k to dict of ticc model parameters)
+    bics = {}     # Dict[str, Dict[int, Dict[int, Dict[int, float]]]] (user to k to cid to sub_k to bic)                                                   
+    for user in users:
+        # probably better to have empty entries than no entries in terms of avoid special-case code down the line
+        # if len(subseries_lookups[user]) == 0:
+        #     logging.debug(f"No noise-handling model for uid = {user}, skipping loading sub lookup")
+        #     continue
+        clusters[user] = {};
+        mrfs[user] = {};
+        models[user] = {};
+        bics[user] = {};
+        for k in subseries_lookup[user]:
+            dp = f"{datapath}/{user}/subpatterns/k{k}"
+            cs, ms, mods, bs = load_TICC_output(dp, [f"cid{cid}" for cid in subseries_lookup[user][k]], sub_krange)
+            clusters[user][k] = {int(k.replace("cid", "")): v for k, v in cs.items()}
+            mrfs[user][k] = {int(k.replace("cid", "")): v for k, v in ms.items()}
+            models[user][k] = {int(k.replace("cid", "")): v for k, v in mods.items()}
+            bics[user][k] = {int(k.replace("cid", "")): v for k, v in bs.items()}
     return SubLookup(clusters, mrfs, models, bics)
+
+
+def handles_noise(series: np.ndarray, null_cids: List[int], clusters: np.ndarray, noise: np.ndarray) -> bool:
+    """
+    check whether a given pattern model correctly assigns noise (and only noise) to null clusters
+    :param series: one user's series
+    :param null_cids: the cluster ids for all null clusters
+    :param clusters: the cluster assignments for the user's series
+    :param noise: the noise value used in the series
+    :return: true if the cluster assignment handles noise correctly
+    """
+    return len(null_cids) > 0 and \
+           all((clusters[i] in null_cids if (series[i] == noise).all() else clusters[i] not in null_cids)
+               for i in range(len(series)))
 
 
 def select_TICC_model(cluster_lookup: Dict[str, Dict[int, np.ndarray]],
@@ -364,7 +383,7 @@ def get_patterns(mrfs: Dict[int, np.ndarray], clusters: np.ndarray, puz_idx_look
         if clusters[0] == cid:
             starts = [0] + starts
         for start in starts:
-            key, ran = next((key, range(*r)) for key, r in puz_idx_lookup.items() if start in range(*r))
+            key = next(key for key, r in puz_idx_lookup.items() if start in range(*r))
             uid = key[0]
             pid = key[1]
             end = next(i for i, c in enumerate(clusters[start:], start) if c != cid or i + 1 == len(clusters))
@@ -511,9 +530,10 @@ def compute_subpattern_times(k: int, subs: Tuple[int, int], data: pd.DataFrame, 
     return data.merge(pd.DataFrame(data=sub_cluster_times), on=['pid', 'uid'])
 
 
-def get_predicted_lookups(all_series: np.ndarray, krange: Iterable[int], model_lookup: Dict[int, dict],
+def get_predicted_lookups(all_series: np.ndarray, k: int, model_lookup: Dict[int, dict],
                           sub_models: Dict[int, Dict[int, Dict[int, dict]]],
-                          mrf_lookup: Dict[int, Dict[int, np.ndarray]], puz_idx_lookup: dict, noise: np.ndarray):
+                          mrf_lookup: Dict[int, Dict[int, np.ndarray]], puz_idx_lookup: dict, noise: np.ndarray) \
+        -> Tuple[np.ndarray, Dict[int, SubSeriesLookup], Dict[int, Dict[int, np.ndarray]]]:
     """
 
     :param all_series:
@@ -525,25 +545,17 @@ def get_predicted_lookups(all_series: np.ndarray, krange: Iterable[int], model_l
     :param noise:
     :return:
     """
-    cluster_lookup = {}
+    clusters = predict_from_saved_model(all_series, model_lookup[k])
+    patterns = get_patterns(mrf_lookup[k], clusters, puz_idx_lookup)
+    subseries = make_subseries_lookup(k, patterns, mrf_lookup[k], all_series, noise)
     sub_clusters = {}
-    subseries_lookup = {}
-    for k in krange:
-        print("predicting k =", k)
-        cluster_lookup[k] = predict_from_saved_model(all_series, model_lookup[k])
-        patterns = get_patterns(mrf_lookup[k], cluster_lookup[k], puz_idx_lookup)
-        subseries_lookup[k] = make_subseries_lookup(k, patterns, mrf_lookup[k], all_series, noise)
-        sub_cs = {}
-        for cid in sub_models[k]:
-            if cid in subseries_lookup[k]:
-                sub_cs[cid] = {}
-                for sub_k in sub_models[k][cid]:
-                    print("    cid =", cid, "({})".format(sub_k))
-                    sub_cs[cid][sub_k] = predict_from_saved_model(subseries_lookup[k][cid].series,
-                                                                  sub_models[k][cid][sub_k])
-        sub_clusters[k] = sub_cs
-
-    return cluster_lookup, subseries_lookup, sub_clusters
+    for cid in sub_models[k]:
+        if cid in subseries:
+            sub_clusters[cid] = {}
+            for sub_k in sub_models[k][cid]:
+                sub_clusters[cid][sub_k] = predict_from_saved_model(subseries[cid].series,
+                                                                    sub_models[k][cid][sub_k])
+    return clusters, subseries, sub_clusters
 
 
 def make_selection_lookups(all_series: np.ndarray, pattern_lookups: Dict[int, PatternLookup],

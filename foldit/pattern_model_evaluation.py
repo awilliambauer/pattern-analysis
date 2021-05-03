@@ -1,7 +1,3 @@
-from foldit.foldit_data import load_extend_data, make_series
-from pattern_extraction import *
-from foldit.check_models import load_sub_lookup, predict_from_saved_model
-from util import get_pattern_label
 import argparse
 from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.model_selection import cross_val_score, ShuffleSplit, ParameterGrid
@@ -12,98 +8,178 @@ import pandas as pd
 import json
 import os
 import string
-import matplotlib
+import sys
+import csv
+from itertools import product, groupby
+from functools import partial
 from multiprocessing import Pool
-from statsmodels import robust
-from operator import itemgetter
-matplotlib.use("Agg")
+from concurrent.futures import ProcessPoolExecutor
+from typing import Dict, Tuple
+
+sys.path.append("../")
+from foldit_data import load_extend_data, make_series
+from util import PatternLookup, SubClusters, SubclusterSeries, SubSeriesLookup
+from check_models import load_sub_lookup
+from pattern_extraction import combine_user_series, get_predicted_lookups, get_pattern_lookups, score_param, load_TICC_output, get_pattern_label
+
+IGNORE_COLUMNS = ['energies', 'evol_lines', 'first_pdb', 'frontier_pdbs', 'frontier_tmscores', 'lines',
+                  'pid', 'timestamps', 'uid', 'upload_rate', 'upload_ratio', 'deltas', 'relevant_sids']
 
 
-def compute_pattern_times(k: int, subs: tuple, data: pd.DataFrame, cluster_lookup: Dict[int, np.ndarray],
-                          mrf_lookup: Dict[int, Dict[int, np.ndarray]], puz_idx_lookup: dict) -> pd.DataFrame:
-    cluster_times = []
-    print("computing pattern times")
-    for _, r in data.iterrows():
-        if r.relevant_sids is None or (r.uid, r.pid) not in puz_idx_lookup:
-            continue
-        deltas = sorted([d for d in r.deltas if d.sid in r.relevant_sids], key=lambda x: x.timestamp)
-        ts = np.array([d.timestamp for d in deltas])
-        actions = np.array([sum(d.action_diff.values()) for d in deltas])
-        if actions.sum() == 0:
-            print("SKIPPING {} {}, no actions recorded".format(r.uid, r.pid))
-            continue
-        result_dict = {'uid': r.uid, 'pid': r.pid}
-        valid = True
+def compute_pattern_actions(r: pd.Series, k: int, cid: int, sub_k: int,
+                            cluster_lookup: Dict[int, np.ndarray],
+                            subcluster_series: SubclusterSeries,
+                            puz_idx_lookup:  Dict[Tuple[str, str], Tuple[int, int]]) -> pd.Series:
+    if sub_k == 0:
         puz_cs = cluster_lookup[k][slice(*puz_idx_lookup[(r.uid, r.pid)])]
-        if len(ts) != len(puz_cs):
-            print("SKIPPING {} {}, k={}, mismatch between number of timestamps and cluster data".format(r.uid, r.pid, k))
-            valid = False
-            continue
-        for ci, sub_k in subs:
-            if sub_k == 0:
-                #result_dict["pattern_{}_time".format(ci)] = time_played(ts[puz_cs == ci])
-                #result_dict["pattern_{}_ratio".format(ci)] = result_dict["pattern_{}_time".format(ci)] / r.relevant_time
-                result_dict["pattern_{}_action".format(ci)] = sum(actions[puz_cs == ci])
-                #result_dict["pattern_{}_action_ratio".format(ci)] = result_dict["pattern_{}_action".format(ci)] / actions.sum()
-        if valid:
-            cluster_times.append(result_dict)
-    return data.merge(pd.DataFrame(data=cluster_times), on=['pid', 'uid'])
+        return pd.Series(sum(r.actions[puz_cs == cid]), index=["pattern_{}_actions".format(cid)])
+    else:
+        puz_cs = subcluster_series.series[slice(*puz_idx_lookup[(r.uid, r.pid)])]
+        return pd.Series([sum(r.actions[puz_cs == scid]) for scid in subcluster_series.labels],
+                         index=["pattern_{}_actions".format(l) for l in subcluster_series.labels])
+
+def score_candidate(X, y, cv):
+    selector = RFECV(GradientBoostingRegressor(loss="huber"), step=1, cv=cv)
+    selector.fit(X, y)
+    X_sel = selector.transform(X)
+    # score for this candidate is CV score fitting on X_sel
+    return np.mean(cross_val_score(GradientBoostingRegressor(loss="huber"), X_sel, y, cv=cv))
 
 
-def compute_subpattern_times(k: int, subs: tuple, data: pd.DataFrame, cluster_lookup: dict, subclusters: dict,
-                             subseries_lookup: dict, puz_idx_lookup: dict) -> pd.DataFrame:
-    results = {}
-    print("generating timestamps")
-    for _, r in data.iterrows():
-        if r.relevant_sids is None or (r.uid, r.pid) not in puz_idx_lookup:
-            continue
-        deltas = sorted([d for d in r.deltas if d.sid in r.relevant_sids], key=lambda x: x.timestamp)
-        ts = np.array([d.timestamp for d in deltas])
-        actions = np.array([sum(d.action_diff.values()) for d in deltas])
-        if actions.sum() == 0:
-            print("SKIPPING {} {}, no actions recorded".format(r.uid, r.pid))
-            continue
-        results[(r.uid, r.pid)] = {"times": {'uid': r.uid, 'pid': r.pid}, "ts": ts, "actions": actions, "valid": True}
-    print("computing subpattern times")
-    all_clusters = cluster_lookup[k]
-    for cid, sub_k in subs:
-        if sub_k == 0:
-            continue
-        all_subclusters = all_clusters.astype(np.str)
-        labels = ["{}{}".format(cid, string.ascii_uppercase[x]) for x in range(sub_k)]
-        cs = subclusters[k][cid][sub_k]
-        for (_, _, start_idx), (s, e) in subseries_lookup[k][cid]['idx_lookup'].items():
-            all_subclusters[start_idx: start_idx + (min(e, len(cs)) - s)] = [labels[c] for c in cs[s:e]]
-        for uid, pid in results:
-            puz_cs = all_subclusters[slice(*puz_idx_lookup[(uid, pid)])]
-            ts = results[(uid, pid)]["ts"]
-            actions = results[(uid, pid)]["actions"]
-            if len(ts) != len(puz_cs):
-                results[(uid, pid)]["valid"] = False
-                continue
-            for scid in labels:
-                #results[(uid, pid)]["times"]["subpattern_{}_time".format(scid)] = time_played(ts[puz_cs == scid])
-                #results[(uid, pid)]["times"]["subpattern_{}_ratio".format(scid)] = results[(uid, pid)]["times"]["subpattern_{}_time".format(scid)] / r.relevant_time
-                results[(uid, pid)]["times"]["pattern_{}_action".format(scid)] = sum(actions[puz_cs == scid])
-                #results[(uid, pid)]["times"]["subpattern_{}_action_ratio".format(scid)] = results[(uid, pid)]["times"]["subpattern_{}_action".format(scid)] / actions.sum()
-    subcluster_times = [v["times"] for v in results.values() if v["valid"]]
-    return data.merge(pd.DataFrame(data=subcluster_times), on=['pid', 'uid'])
+def generate_candidates(k, sub_ks, pattern_lookups, cids, cur_sub_k_idx):
+    return [c for c in product(*[list(product([cid], sub_ks[cid][:cur_sub_k_idx[cid] + 1]))
+                                 for cid in cids])
+            if all(sub_k in pattern_lookups[k][cid] for cid, sub_k in c)]
+
+
+def find_best_predictive_model(model_dir: str, user: str, data: pd.DataFrame,
+                               puz_idx_lookup:  Dict[Tuple[str, str], Tuple[int, int]],
+                               pattern_lookups: Dict[int, PatternLookup],
+                               cluster_lookup: Dict[int, np.ndarray],
+                               subseries_lookups: Dict[int, Dict[int, SubSeriesLookup]],
+                               subclusters: SubClusters,
+                               action_counts) -> Tuple:
+    """
+    BRUTE FORCE APPROACH, memory needs are too high
+    1. for each candidate (choice of k and sub-ks)
+        1a. compute the action count for each pattern/subpattern
+            (build data structure like existing lookups for whole suite of action counts)
+            (gradually assemble, computing new counts as needed)
+        1b. score model using those action count features -> candidate score
+    2. return the best-scoring candidate
+
+    NEW APPROACH
+    1. compute base model scores (no subpatterns)
+    2. add all cids to active list
+    3. for each sub_k
+        3a. generate all possible new candidates involving active cids and current sub_k
+        3b. score new candidates
+        3c. average scores for candidates evolving each active cids and current sub_k, compare to average for previous
+            sub_k
+        3d. set active list to those cids for which current average exceeds previous
+    """
+
+
+    # action_counts: (k, (cid, sub_k)) -> pd.DataFrame (single column for base pattern, column per subpattern otherwise)
+    subcluster_series_lookup = {} # (k, (cid, sub_k)) -> SubclusterSeries
+
+    cv = ShuffleSplit(n_splits=3, test_size=0.3, random_state=304)
+    scores_lookup = {}
+    for k in pattern_lookups[user]:
+        scores = {}  # candidate tuple -> CV score
+        cids = {p.cid for p in pattern_lookups[user][k]["base"]}
+        sub_ks = {cid: sorted(pattern_lookups[user][k][cid].keys()) for cid in cids}
+        active_cids = list(cids)
+        cur_sub_k_idx = {cid: (1 if len(sub_ks[cid]) > 1 else 0) for cid in cids}
+        with Pool(25) as pool:
+            round = 0
+            while (len(active_cids) > 0):
+                round += 1
+                pool_count = 0
+                pooled = []
+                candidates = generate_candidates(k, sub_ks, pattern_lookups[user], cids, cur_sub_k_idx)
+                print("k =", k, "round", round)
+                print("active_cid =", active_cids, ":", len([c for c in candidates if c not in scores]), "candidates")
+                for candidate in candidates:
+                    if candidate not in scores:
+                        print("candidate", candidate)
+                        for (cid, sub_k) in candidate:
+
+                            if sub_k != 0 and (k, (cid, sub_k)) not in subcluster_series_lookup:
+                                all_subclusters = cluster_lookup[user][k].astype(np.str)
+                                labels = ["{}{}".format(cid, string.ascii_uppercase[x]) for x in range(sub_k)]
+                                cs = subclusters[user][k][cid][sub_k]
+                                for (_, _, start_idx), (s, e) in subseries_lookups[user][k][cid].idx_lookup.items():
+                                    all_subclusters[start_idx: start_idx + (min(e, len(cs)) - s)] = [labels[c] for c in cs[s:e]]
+                                subcluster_series_lookup[(k, (cid, sub_k))] = SubclusterSeries(labels, all_subclusters)
+
+                            if (k, (cid, sub_k)) not in action_counts:
+                                f = partial(compute_pattern_actions, k=k, cid=cid, sub_k=sub_k, cluster_lookup=cluster_lookup[user],
+                                            subcluster_series=subcluster_series_lookup.get((k, (cid, sub_k)), None),
+                                            puz_idx_lookup=puz_idx_lookup)
+                                action_counts[(k, (cid, sub_k))] = data.apply(f, axis=1)
+
+                        features = pd.concat([data.drop(IGNORE_COLUMNS + ["time", "actions"], axis=1)] +
+                                             [action_counts[(k, (cid, sub_k))] for (cid, sub_k) in candidate],
+                                             axis=1)
+                        X = features.drop(["perf"], axis=1).values
+                        y = features["perf"].values.ravel()
+                        pooled.append((candidate, pool.apply_async(score_candidate, (X, y, cv))))
+                        pool_count += 1
+
+                print("scoring k =", k, "round", round, "candidates...")
+                i = 0
+                for candidate, x in pooled:
+                    i += 1
+                    print("{} out of {}\r".format(i, pool_count), end="")
+                    scores[candidate] = x.get()
+                print()
+                for cid in active_cids[:]:
+                    prev_subk = sub_ks[cid][cur_sub_k_idx[cid] - 1]
+                    cur_subk = sub_ks[cid][cur_sub_k_idx[cid]]
+                    prev_scores = [score for c, score in scores.items() if (cid, prev_subk) in c]
+                    cur_scores = [score for c, score in scores.items() if (cid, cur_subk) in c]
+                    if np.mean(prev_scores) >= np.mean(cur_scores):
+                        active_cids.remove(cid)
+                        cur_sub_k_idx[cid] -= 1
+                cur_sub_k_idx = {cid: (idx + 1 if cid in active_cids else idx) for cid, idx in cur_sub_k_idx.items()}
+                active_cids = [cid for cid in active_cids if len(sub_ks[cid]) > cur_sub_k_idx[cid]]
+
+            print("done\n\n\n")
+            scores_lookup[k] = scores
+            with open(f"{model_dir}/eval/{user}_k{k}_scores.pickle", "wb") as fp:
+                pickle.dump(scores, fp)
+
+    best_k = best_candidate = None
+    best_score = 0
+    for k, scores in scores_lookup.items():
+        for candidate, score in scores.items():
+            if score > best_score:
+                best_score = score
+                best_k = k
+                best_candidate = candidate
+    return best_k, best_candidate, scores_lookup
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog='pattern_model_evaluation.py')
-    parser.add_argument("model_dirs", nargs="+")
+    parser.add_argument("model_dir")
+    parser.add_argument("config")
     args = parser.parse_args()
-    assert all(os.path.exists(model_dir) for model_dir in args.model_dirs)
+    assert os.path.exists(args.model_dir)
+    assert os.path.exists(args.config)
+    with open(args.config) as fp:
+        config = json.load(fp)
 
-    print("loading data", end="...")
-    pids = ["2003433", "2003642", "2003195", "2003313", "2003287", "2002475", "2002294", "2002196", "2002141", "2002110"]
+
+    print("loading raw data", end="...")
+    # pids = ["2003433", "2003642", "2003195", "2003313", "2003287", "2002475", "2002294", "2002196", "2002141", "2002110"]
     soln_lookup = {}
     parent_lookup = {}
     child_lookup = {}
-    data, puz_metas = load_extend_data(pids, soln_lookup, parent_lookup, child_lookup, False, 600)
+    data, puz_metas = load_extend_data(config["pids"] + config["test_pids"], soln_lookup, parent_lookup, child_lookup, False, 600)
 
-    with open("data/user_metadata_v4.csv") as fp:
+    with open("../data/foldit/user_metadata_v4.csv") as fp:
         user_metas = {(r['uid'], r['pid']): r for r in csv.DictReader(fp)}
         for v in user_metas.values():
             v['time'] = int(v['time'])
@@ -117,7 +193,7 @@ if __name__ == "__main__":
             v['solo_perf'] = float(v['solo_perf']) if v['solo_perf'] != "" else np.nan
     user_meta_lookup = {uid: list(metas) for uid, metas in groupby(sorted(user_metas.values(), key=lambda m: m['uid']), lambda m: m['uid'])}
 
-    with open("data/puz_metadata_v4.csv") as fp:
+    with open("../data/foldit/puz_metadata_v4.csv") as fp:
         puz_infos = {r['pid']: {'start':     int(r['start']),
                                 'end':       int(r['end']),
                                 'baseline':  float(r['baseline']),
@@ -126,66 +202,117 @@ if __name__ == "__main__":
                                } for r in csv.DictReader(fp)}
     print("done")
 
-    for model_dir in args.model_dirs:
-        print("evaluating model at", model_dir)
-        noise = np.loadtxt(model_dir + "/noise_values.txt")
-        puz_idx_lookup, series_lookup, _ = make_series(data, noise=noise)
+    print("evaluating model at", args.model_dir)
+    print("loading model data", end="...")
+    noise = np.loadtxt(args.model_dir + "/noise_values.txt")
+    puz_idx_lookup, series_lookup, _ = make_series(data, noise=noise)
+    if "user" not in config:
         idx_lookup, all_series = combine_user_series(series_lookup, noise)
         puz_idx_lookup = {(uid, pid): (s + idx_lookup[uid][0], e + idx_lookup[uid][0])
                           for (uid, pid), (s, e) in puz_idx_lookup.items()}
+        series_lookup["all"] = all_series
 
-        with open(model_dir + "/config.json") as fp:
-            config = json.load(fp)
-        krange = config["krange"]
-        _, mrf_lookup, model_lookup, _ = load_TICC_output(model_dir, ["all"], krange)
-        dummy_subseries_lookup = {int(d.strip("k")): [int(c.strip("cid")) for c in os.listdir(model_dir + "/all/subpatterns/" + d)]
-                                  for d in os.listdir(model_dir + "/all/subpatterns") if d.startswith("k")}
-        sub_lookup = load_sub_lookup(model_dir + "/all", dummy_subseries_lookup, [3, 6, 9, 12])
+    krange = config["krange"]
+    users = [d for d in os.listdir(args.model_dir) if os.path.isdir(f"{args.model_dir}/{d}")] if "user" in config else ["all"]
 
+    _, mrf_lookup, model_lookup, _ = load_TICC_output(args.model_dir, users, krange)
+    dummy_subseries_lookup = {user: {int(d.strip("k")): [int(c.strip("cid")) for c in os.listdir(f"{args.model_dir}/{user}/subpatterns/{d}")]
+                                     for d in os.listdir(f"{args.model_dir}/{user}/subpatterns") if d.startswith("k")} for user in users}
+    sub_lookup = load_sub_lookup(args.model_dir, users, dummy_subseries_lookup, config["sub_krange"])
+
+    if os.path.exists(args.model_dir + "/eval/cluster_lookup.pickle"):
+        with open(args.model_dir + "/eval/cluster_lookup.pickle", "rb") as fp:
+            cluster_lookup = pickle.load(fp)
+        with open(args.model_dir + "/eval/subseries_lookup.pickle", "rb") as fp:
+            subseries_lookups = pickle.load(fp)
+        with open(args.model_dir + "/eval/sub_clusters.pickle", "rb") as fp:
+            subclusters = pickle.load(fp)
+        with open(args.model_dir + "/eval/pattern_lookup.pickle", "rb") as fp:
+            pattern_lookups = pickle.load(fp)
+    else:
         # predict patterns on full data for all candidate models
-        if os.path.exists(model_dir + "/eval/cluster_lookup.pickle"):
-            with open(model_dir + "/eval/cluster_lookup.pickle", "rb") as fp:
-                cluster_lookup = pickle.load(fp)
-            with open(model_dir + "/eval/subseries_lookup.pickle", "rb") as fp:
-                subseries_lookup = pickle.load(fp)
-            with open(model_dir + "/eval/sub_clusters.pickle", "rb") as fp:
-                sub_clusters = pickle.load(fp)
-            with open(model_dir + "/eval/pattern_lookup.pickle", "rb") as fp:
-                pattern_lookup = pickle.load(fp)
-        else:
-            cluster_lookup, subseries_lookup, sub_clusters = get_predicted_lookups(all_series, krange, model_lookup["all"],
-                                                                                   sub_lookup["models"], mrf_lookup["all"],
-                                                                                   puz_idx_lookup, noise)
-            pattern_lookup = get_pattern_lookups(krange, sub_clusters, sub_lookup["mrfs"], subseries_lookup, cluster_lookup,
-                                                 mrf_lookup["all"], puz_idx_lookup)
-            os.makedirs(model_dir + "/eval", exist_ok=True)
-            with open(model_dir + "/eval/cluster_lookup.pickle", "wb") as fp:
-                pickle.dump(cluster_lookup, fp)
-            with open(model_dir + "/eval/subseries_lookup.pickle", "wb") as fp:
-                pickle.dump(subseries_lookup, fp)
-            with open(model_dir + "/eval/sub_clusters.pickle", "wb") as fp:
-                pickle.dump(sub_clusters, fp)
-            with open(model_dir + "/eval/pattern_lookup.pickle", "wb") as fp:
-                pickle.dump(pattern_lookup, fp)
+        print("generating patterns on full data", end="...")
+        cluster_lookup    = {}
+        subseries_lookups = {}
+        subclusters       = {}
+        pattern_lookups   = {}
+        with ProcessPoolExecutor(len(krange)) as pool:
+            for user in users:
+                pooled = []
+                for k in krange:
+                    pooled.append((k, pool.submit(get_predicted_lookups, series_lookup[user], k, model_lookup[user],
+                                                  sub_lookup.models[user], mrf_lookup[user], puz_idx_lookup, noise)))
+                cl = {}
+                sl = {}
+                scs = {}
+                for k, task in pooled:
+                    clusters, subseries, subcs = task.result()
+                    cl[k] = clusters
+                    sl[k] = subseries
+                    scs[k] = subcs
+                cluster_lookup[user] = cl;
+                subseries_lookups[user] = sl;
+                subclusters[user] = scs;            
+                pattern_lookups[user] = get_pattern_lookups(krange, subclusters[user], sub_lookup.mrfs[user], subseries_lookups[user],
+                                                            cluster_lookup[user], mrf_lookup[user], puz_idx_lookup)
+        os.makedirs(args.model_dir + "/eval", exist_ok=True)
+        with open(args.model_dir + "/eval/cluster_lookup.pickle", "wb") as fp:
+            pickle.dump(cluster_lookup, fp)
+        with open(args.model_dir + "/eval/subseries_lookup.pickle", "wb") as fp:
+            pickle.dump(subseries_lookups, fp)
+        with open(args.model_dir + "/eval/sub_clusters.pickle", "wb") as fp:
+            pickle.dump(subclusters, fp)
+        with open(args.model_dir + "/eval/pattern_lookup.pickle", "wb") as fp:
+            pickle.dump(pattern_lookups, fp)
+    print("done")
+    # select model
+    print("generating action count series", end="...")
+    rows = []
+    for _, r in data.iterrows():
+        if r.relevant_sids is None or (r.uid, r.pid) not in puz_idx_lookup:
+            continue
+        deltas = sorted([d for d in r.deltas if d.sid in r.relevant_sids], key=lambda x: x.timestamp)
+        actions = np.array([sum(d.action_diff.values()) for d in deltas])
+        if actions.sum() == 0:
+            # logging.debug("SKIPPING {} {}, no actions recorded".format(r.uid, r.pid))
+            continue
+        rows.append({'uid': r.uid, 'pid': r.pid, "actions": actions})
+    data = data.merge(pd.DataFrame(data=rows), on=["pid", "uid"])
+    assert len(rows) == len(data)  # check that data consists of only rows with an actions column
 
-        # select model by minimum dispersion for predicted patterns
-        best_k, best_subs = find_best_dispersion_model(all_series, pattern_lookup, subseries_lookup, sub_clusters, sub_lookup["mrfs"])
-        with open(model_dir + "/eval/best_model.txt", 'w') as fp:
-            fp.write(str((best_k, best_subs)) + "\n")
-        print("selected model:", best_k, best_subs)
+    data["experience"] = data.apply(lambda r: len([x for x in user_meta_lookup[r.uid]
+                                                   if puz_infos[x['pid']]["end"] < puz_infos[r.pid]["start"]]), axis=1)
+    data["median_prior_perf"] = data.apply(lambda r: np.median([float(x['perf']) for x in user_meta_lookup[r.uid]
+                                                                if puz_infos[x['pid']]["end"] < puz_infos[r.pid]["start"]]), axis=1)
+    data.median_prior_perf.fillna(data.median_prior_perf.median(), inplace=True)
+    print("done")
 
-        ps = sum([[(get_pattern_label(p, cid, sub_k), p) for p in pattern_lookup[best_k][cid][sub_k]] for cid, sub_k in best_subs], [])
+    scores_lookup = {}
+    for user in users:
+        print("finding most predictive model for", user)
+        action_counts = {}
+        best_k, best_candidate, scores = find_best_predictive_model(args.model_dir, user, data, puz_idx_lookup, pattern_lookups,
+                                                                    cluster_lookup, subseries_lookups, subclusters,
+                                                                    action_counts)
+        scores_lookup[user] = scores
+        with open(f"{args.model_dir}/eval/{user}_best_model.txt", 'w') as fp:
+            fp.write(str((best_k, best_candidate)) + "\n")
+            
+        with open(f"{args.model_dir}/eval/{user}_action_counts.pickle", "wb") as fp:
+            pickle.dump(action_counts, fp)
+
+        print("selected model:", best_k, best_candidate)
+    
+        ps = sum([[(get_pattern_label(p, cid, sub_k), p) for p in pattern_lookups[best_k][cid][sub_k]] for cid, sub_k in best_candidate], [])
         ps_uid_pid = {tag: sorted(xs) for tag, xs in groupby(sorted(ps, key=lambda p: (p[1].uid, p[1].pid)), lambda p: (p[1].uid, p[1].pid))}
         pattern_use_lookup = {tag: {pt for pt, _ in xs} for tag, xs in ps_uid_pid.items()}
         pts = {pt for pt, p in ps}
-
-        # compute pattern features using selected model
-        results = compute_pattern_times(best_k, best_subs, data, cluster_lookup, mrf_lookup["all"], puz_idx_lookup)
-        results = compute_subpattern_times(best_k, best_subs, results, cluster_lookup, sub_clusters, subseries_lookup,
-                                           puz_idx_lookup)
-
+    
+        # collect pattern features using selected model
+        results = pd.concat([data] + [action_counts[(best_k, (cid, sub_k))] for (cid, sub_k) in best_candidate], axis=1)
+    
         pattern_features = ["pattern_{}".format(pt) for pt in pts]
-        
+    
         acc = []
         for (uid, pid), use in pattern_use_lookup.items():
             r = {"uid": uid, "pid": pid}
@@ -195,30 +322,25 @@ if __name__ == "__main__":
         results = results.merge(pd.DataFrame(data=acc), on=["uid", "pid"])
         #results["distinct_patterns"] = results.apply(lambda r: len(pattern_use_lookup[(r.uid, r.pid)]), axis=1)
         #results["action_count_all"] = results.apply(lambda r: user_metas[(r.uid, r.pid)]["action_count_all"], axis=1)
-        results["action_count_relevant"] = results.apply(lambda r: user_metas[(r.uid, r.pid)]["action_count_relevant"], axis=1)
+        # results["action_count_relevant"] = results.apply(lambda r: user_metas[(r.uid, r.pid)]["action_count_relevant"], axis=1)
         #results["action_count_best"] = results.apply(lambda r: user_metas[(r.uid, r.pid)]["action_count_best"], axis=1)
         #results["best_energy_time"] = results.apply(lambda r: user_metas[(r.uid, r.pid)]["best_energy_time"], axis=1)
         #results["action_rate_all"] = results.apply(lambda r: r.action_count_all / r.time, axis=1)
         #results["action_rate_relevant"] = results.apply(lambda r: r.action_count_relevant / r.relevant_time, axis=1)
-        results["experience"] = results.apply(lambda r: len([x for x in user_meta_lookup[r.uid]
-                                                            if puz_infos[x['pid']]["end"] < puz_infos[r.pid]["start"]]), axis=1)
-        results["median_prior_perf"] = results.apply(lambda r: np.median([float(x['perf']) for x in user_meta_lookup[r.uid]
-                                                                         if puz_infos[x['pid']]["end"] < puz_infos[r.pid]["start"]]), axis=1)
-        results.median_prior_perf.fillna(results.median_prior_perf.median(), inplace=True)
-
+    
+    
         # find best model, compare to baseline
-        ignore_columns = ['energies', 'evol_lines', 'first_pdb', 'frontier_pdbs', 'frontier_tmscores', 'lines', 'pid',
-                          'timestamps', 'uid', 'upload_rate', 'upload_ratio', 'deltas', 'relevant_sids']
-        features = results.drop(ignore_columns, axis=1)
-
+    
+        features = results.drop(IGNORE_COLUMNS, axis=1)
+    
         baseline_features = ["action_count_relevant", "median_prior_perf", "experience"]
-
+    
         seed = 13*17*31
         models = {#"ridge": Ridge,
                   "ensemble": GradientBoostingRegressor}
         model_params = {"ridge": {"random_state": [seed], "alpha": [0.1, 0.5, 1, 5, 10], "normalize": [True, False]},
-                        "ensemble": {"random_state": [seed], "learning_rate": [0.01, 0.02, 0.05, 0.1], "subsample": [0.3, 0.5, 0.7],
-                                     "n_estimators": [1000], "n_iter_no_change": [200]}}
+                        "ensemble": {"random_state": [seed], "learning_rate": [0.01, 0.02, 0.05, 0.1],
+                                     "n_estimators": [100, 500, 1000], "n_iter_no_change": [100]}}
         # std_base = deepcopy(model_params["ensemble"])
         # std_base["loss"] = ["ls", "lad"]
         # huber_base = deepcopy(model_params["ensemble"])
@@ -227,8 +349,8 @@ if __name__ == "__main__":
         # model_params["ensemble"] = [std_base, huber_base]
         model_params["ensemble"]["loss"] = ["huber"]
         model_params["ensemble"]["alpha"] = [0.85, 0.9, 0.95, 0.99]
-
-        with Pool(50, maxtasksperchild=4) as pool:
+    
+        with Pool(25, maxtasksperchild=4) as pool:
             cv = ShuffleSplit(n_splits=3, test_size=0.3, random_state=seed)
             print("fitting baseline")
             scores = {}
@@ -243,9 +365,9 @@ if __name__ == "__main__":
             baseline_scores = scores
             print("baseline")
             print(max(scores["ensemble"], key=lambda x: x[0][0]))
-
+    
             model_scores = {}
-            for ftype in ["action", "use"]:
+            for ftype in ["actions", "use"]:
                 print("fitting pattern {} models".format(ftype))
                 candidate_features = ["median_prior_perf", "experience"] + ["{}_{}".format(f, ftype) for f in pattern_features]
                 if ftype == "use":
@@ -262,8 +384,8 @@ if __name__ == "__main__":
                 model_scores[ftype] = scores
                 print("best {} model".format(ftype))
                 print(max(scores["ensemble"], key=lambda x: x[0][0]))
-
-        with open(model_dir + "/eval/baseline_scores.pickle", 'wb') as fp:
+    
+        with open(f"{args.model_dir}/eval/{user}_baseline_scores.pickle", 'wb') as fp:
             pickle.dump(baseline_scores, fp)
-        with open(model_dir + "/eval/model_scores.pickle", 'wb') as fp:
+        with open(f"{args.model_dir}/eval/{user}_model_scores.pickle", 'wb') as fp:
             pickle.dump(model_scores, fp)

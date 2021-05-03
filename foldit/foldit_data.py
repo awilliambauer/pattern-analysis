@@ -221,7 +221,7 @@ def make_action_series(deltas: List[SnapshotDelta]) -> np.ndarray:
 
 
 def make_series(data: pd.DataFrame, noise=None, default_noise_duration=200,
-                min_snapshots=10) -> Tuple[Dict[Tuple[str, str], Tuple[int, int]], Dict[str, np.ndarray], np.ndarray]:
+                min_snapshots=10, min_puzzles=1) -> Tuple[Dict[Tuple[str, str], Tuple[int, int]], Dict[str, np.ndarray], np.ndarray]:
     """
     Construct an time series of action counts for each Foldit user in data using the 14 actions or action groups listed
     below
@@ -235,6 +235,8 @@ def make_series(data: pd.DataFrame, noise=None, default_noise_duration=200,
     series = {}
     puz_idx_lookup = {}
     for uid, rows in data.groupby('uid'):
+        if len(rows) < min_puzzles:
+            continue
         s = []
         i = 1
         for _, r in rows.sort_values('pid').iterrows():
