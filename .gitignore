@@ -23,4 +23,8 @@ foldit/results
 tmp_data
 starcraft/*.csv
 starcraft/replays/
+starcraft/results
+starcraft/old_results
+data/
+starcraft/sample_replays
 .ipynb_checkpoints
