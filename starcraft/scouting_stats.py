@@ -5,6 +5,8 @@
 import sc2reader
 import csv
 import os
+import random
+from itertools import repeat
 import sys
 import scouting_detector
 from multiprocessing import Pool, cpu_count
@@ -16,10 +18,15 @@ from collections import Counter
 from sc2reader.engine.plugins import SelectionTracker, APMTracker
 from selection_plugin import ActiveSelection
 from base_plugins import BaseTracker
+from map_path_generation import load_path_data
 import traceback
 
 
-def generateFields(filename):
+def map_pretty_name_to_file(map_name: str):
+    return map_name.replace(" ", "").replace("'", "").strip()
+
+
+def generateFields(filename, ):
     '''generateFields takes in a filename of a replay, loads it and gathers necessary
     statistics, and returns the statistics in a tuple. It is to be used to write
     these stats to a csv.'''
@@ -29,8 +36,8 @@ def generateFields(filename):
             raise RuntimeError()
 
         # extracting the game id and adding the correct tag
-        #pathname = "practice_replays/" + filename
-        pathname = "/Accounts/awb/pattern-analysis/starcraft/replays/" + filename
+        # pathname = "practice_replays/" + filename
+        pathname = "/Accounts/leisherz/pattern-analysis/starcraft/sample_replays/" + filename
         game_id = filename.split("_")[1].split(".")[0]
         if filename.startswith("ggg"):
             game_id = "ggg-" + game_id
@@ -50,14 +57,17 @@ def generateFields(filename):
             raise RuntimeError()
 
         # checking the map
-        if not(r.map_name in map_counter.keys()):
+        if not (r.map_name in map_counter.keys()):
             print(filename + " is not played on an official Blizzard map")
             raise RuntimeError()
+
+        # somewhere here we want to have map a* data loaded and available
 
         # collecting stats and values
         team1_freq, team1_cat, team2_freq, team2_cat, winner = scouting_detector.scouting_freq_and_cat(r)
         team1_rank, team1_rel_rank, team2_rank, team2_rel_rank = ranking_stats(r)
-        team1_cps, team1_peace_rate, team1_battle_rate, team2_cps, team2_peace_rate, team2_battle_rate = control_groups.control_group_stats(r)
+        team1_cps, team1_peace_rate, team1_battle_rate, team2_cps, team2_peace_rate, team2_battle_rate = control_groups.control_group_stats(
+            r)
         team1_rel_freq = team1_freq - team2_freq
         team2_rel_freq = team2_freq - team1_freq
 
@@ -78,27 +88,28 @@ def generateFields(filename):
         # creating the fields based on who won
         if winner == 1:
             fields = (game_id, team1_uid, team1_cat, team1_rank, team1_rel_rank,
-                        team1_freq, team1_rel_freq, team1_aps, team1_rel_aps,
-                        team1_cps, team1_rel_cps, team1_peace_rate, team1_rel_pr,
-                        team1_battle_rate, team1_rel_br, 1,
+                      team1_freq, team1_rel_freq, team1_aps, team1_rel_aps,
+                      team1_cps, team1_rel_cps, team1_peace_rate, team1_rel_pr,
+                      team1_battle_rate, team1_rel_br, 1,
                       game_id, team2_uid, team2_cat, team2_rank, team2_rel_rank,
-                        team2_freq, team2_rel_freq, team2_aps, team2_rel_aps,
-                        team2_cps, team2_rel_cps, team2_peace_rate, team2_rel_pr,
-                        team2_battle_rate, team2_rel_br, 0,
+                      team2_freq, team2_rel_freq, team2_aps, team2_rel_aps,
+                      team2_cps, team2_rel_cps, team2_peace_rate, team2_rel_pr,
+                      team2_battle_rate, team2_rel_br, 0,
                       r.map_name)
         elif winner == 2:
             fields = (game_id, team1_uid, team1_cat, team1_rank, team1_rel_rank,
-                        team1_freq, team1_rel_freq, team1_aps, team1_rel_aps,
-                        team1_cps, team1_rel_cps, team1_peace_rate, team1_rel_pr,
-                        team1_battle_rate, team1_rel_br, 0,
+                      team1_freq, team1_rel_freq, team1_aps, team1_rel_aps,
+                      team1_cps, team1_rel_cps, team1_peace_rate, team1_rel_pr,
+                      team1_battle_rate, team1_rel_br, 0,
                       game_id, team2_uid, team1_cat, team2_rank, team2_rel_rank,
-                        team2_freq, team2_rel_freq, team2_aps, team2_rel_aps,
-                        team2_cps, team2_rel_cps, team2_peace_rate, team2_rel_pr,
-                        team2_battle_rate, team2_rel_br, 1,
+                      team2_freq, team2_rel_freq, team2_aps, team2_rel_aps,
+                      team2_cps, team2_rel_cps, team2_peace_rate, team2_rel_pr,
+                      team2_battle_rate, team2_rel_br, 1,
                       r.map_name)
         return fields
     except:
         return
+
 
 def ranking_stats(replay):
     '''ranking_stats takes in a previously loaded replay and returns each player's
@@ -123,6 +134,7 @@ def ranking_stats(replay):
 
     return p1_rank, p1_rel, p2_rank, p2_rel
 
+
 def initializeCounter():
     '''Adds all valid blizzard maps to the map counter. Requires
     blizzard_maps.txt to be in the same directory as this file.'''
@@ -131,10 +143,12 @@ def initializeCounter():
         map = line.strip()
         map_counter[map] = 0
 
+
 map_counter = Counter()
 initializeCounter()
 
-def writeToCsv(write, debug, start, end):
+
+def writeToCsv(replay_locations, map_data_location, write, debug, start, end):
     '''Write to csv takes in command line arguments write, debug, start, and end,
     and will create a csv with values and statistics for every replay
     in the replay directory.
@@ -145,31 +159,51 @@ def writeToCsv(write, debug, start, end):
     thus saving time.
 
     If debug is true, the replays will be processed in order and one at a time,
-    from the start to end (input values intended to be indeces). If debug is
+    from the start to end (input values intended to be indices). If debug is
     false, the replays will be handled using multiprocessing.'''
-
+    maps = {}  # dict of map names to list of replay files on that map
+    players = {}
     # obtain a list of filenames from either the directory or a text file
     if write:
         # files = os.listdir("practice_replays")
-        files = os.listdir("/Accounts/awb/pattern-analysis/starcraft/replays")
+        files = os.listdir(replay_locations)
         valid_games = []
     else:
         files = []
         games = open("valid_game_ids.txt", 'r')
         for line in games:
             files.append(line.strip())
-        games.close()
+        with open("replays_info.csv", "r") as replays_info:
+            reader = csv.DictReader(replays_info)
+            for row in reader:
+                if row["Map"] not in maps.keys():
+                    maps[row["Map"]] = []
+                maps[row["Map"]].append(row["ReplayID"])
+                if row["UID1"] not in players:
+                    players[row["UID1"]] = []
+                if row["UID2"] not in players:
+                    players[row["UID2"]] = []
+                players[row["UID1"]].append(row["ReplayID"])
+                players[row["UID2"]].append(row["ReplayID"])
 
+        games.close()
+    maps_with_paths_generated = []
+    for path_data in os.listdir(map_data_location):
+        if path_data[:-5] not in maps_with_paths_generated:
+            maps_with_paths_generated.append(path_data[:-5].strip())
+            print(path_data[:-5])
     # open the csv and begin to write to it
-    with open("scouting_stats.csv", 'w', newline = '') as fp:
+    with open("scouting_stats.csv", 'w', newline='') as fp:
         events_out = csv.DictWriter(fp, fieldnames=["GameID", "UID", "ScoutingCategory",
-                                    "Rank", "RelRank", "ScoutingFrequency",
-                                    "RelScoutingFrequency", "APS", "RelAPS",
-                                    "CPS", "RelCPS", "PeaceRate", "RelPeaceRate",
-                                    "BattleRate", "RelBattleRate", "Win"])
+                                                    "Rank", "RelRank", "ScoutingFrequency",
+                                                    "RelScoutingFrequency", "APS", "RelAPS",
+                                                    "CPS", "RelCPS", "PeaceRate", "RelPeaceRate",
+                                                    "BattleRate", "RelBattleRate", "Win"])
         events_out.writeheader()
         # debugging
         if debug:
+            # TODO make debugging work again
+            raise Exception("Debug feature not working right now")
             print("debugging!")
             i = start
             # processing replay files in order, from start to end
@@ -177,7 +211,7 @@ def writeToCsv(write, debug, start, end):
                 print("file #: ", i, "file name: ", filename)
                 i += 1
                 fields = generateFields(filename)
-                if fields: # generateFields will return None for invalid replays
+                if fields:  # generateFields will return None for invalid replays
                     if write:
                         # formatting filenames to add to the text file
                         if fields[0].startswith("ggg-"):
@@ -190,58 +224,66 @@ def writeToCsv(write, debug, start, end):
                     # updating the map counter
                     map_counter[fields[32]] += 1
                     # writing 1 line to the csv for each player and their respective stats
-                    events_out.writerow({"GameID":fields[0], "UID":fields[1],
-                                        "ScoutingCategory":fields[2], "Rank":fields[3],
-                                        "RelRank":fields[4], "ScoutingFrequency":fields[5],
-                                        "RelScoutingFrequency":fields[6], "APS":fields[7],
-                                        "RelAPS":fields[8], "CPS":fields[9], "RelCPS":fields[10],
-                                        "PeaceRate":fields[11], "RelPeaceRate":fields[12],
-                                        "BattleRate":fields[13], "RelBattleRate":fields[14],
-                                        "Win":fields[15]})
-                    events_out.writerow({"GameID":fields[16], "UID":fields[17],
-                                        "ScoutingCategory":fields[18], "Rank":fields[19],
-                                        "RelRank":fields[20], "ScoutingFrequency":fields[21],
-                                        "RelScoutingFrequency":fields[22], "APS":fields[23],
-                                        "RelAPS":fields[24], "CPS":fields[25], "RelCPS":fields[26],
-                                        "PeaceRate":fields[27], "RelPeaceRate":fields[28],
-                                        "BattleRate":fields[29], "RelBattleRate":fields[30],
-                                        "Win":fields[31]})
+                    events_out.writerow({"GameID": fields[0], "UID": fields[1],
+                                         "ScoutingCategory": fields[2], "Rank": fields[3],
+                                         "RelRank": fields[4], "ScoutingFrequency": fields[5],
+                                         "RelScoutingFrequency": fields[6], "APS": fields[7],
+                                         "RelAPS": fields[8], "CPS": fields[9], "RelCPS": fields[10],
+                                         "PeaceRate": fields[11], "RelPeaceRate": fields[12],
+                                         "BattleRate": fields[13], "RelBattleRate": fields[14],
+                                         "Win": fields[15]})
+                    events_out.writerow({"GameID": fields[16], "UID": fields[17],
+                                         "ScoutingCategory": fields[18], "Rank": fields[19],
+                                         "RelRank": fields[20], "ScoutingFrequency": fields[21],
+                                         "RelScoutingFrequency": fields[22], "APS": fields[23],
+                                         "RelAPS": fields[24], "CPS": fields[25], "RelCPS": fields[26],
+                                         "PeaceRate": fields[27], "RelPeaceRate": fields[28],
+                                         "BattleRate": fields[29], "RelBattleRate": fields[30],
+                                         "Win": fields[31]})
         # running with multiprocessing
         else:
-            pool = Pool(min(cpu_count(), 10))
-            results = pool.map(generateFields, files)
-            pool.close()
-            pool.join()
-            for fields in results:
-                if fields: # generateFields will return None for invalid replays
-                    if write:
-                        # formatting filenames to add to the text file
-                        if fields[0].startswith("ggg-"):
-                            filename = "gggreplays_{}.SC2Replay".format(fields[0][4:])
-                        elif fields[0].startswith("st-"):
-                            filename = "spawningtool_{}.SC2Replay".format(fields[0][3:])
-                        elif fields[0].startswith("ds-"):
-                            filename = "dropsc_{}.SC2Replay".format(fields[0][3:])
-                        valid_games.append(filename)
-                    # updating the map counter
-                    map_counter[fields[32]] += 1
-                    # writing 1 line to the csv for each player and their respective stats
-                    events_out.writerow({"GameID":fields[0], "UID":fields[1],
-                                        "ScoutingCategory":fields[2], "Rank":fields[3],
-                                        "RelRank":fields[4], "ScoutingFrequency":fields[5],
-                                        "RelScoutingFrequency":fields[6], "APS":fields[7],
-                                        "RelAPS":fields[8], "CPS":fields[9], "RelCPS":fields[10],
-                                        "PeaceRate":fields[11], "RelPeaceRate":fields[12],
-                                        "BattleRate":fields[13], "RelBattleRate":fields[14],
-                                        "Win":fields[15]})
-                    events_out.writerow({"GameID":fields[16], "UID":fields[17],
-                                        "ScoutingCategory":fields[18], "Rank":fields[19],
-                                        "RelRank":fields[20], "ScoutingFrequency":fields[21],
-                                        "RelScoutingFrequency":fields[22], "APS":fields[23],
-                                        "RelAPS":fields[24], "CPS":fields[25], "RelCPS":fields[26],
-                                        "PeaceRate":fields[27], "RelPeaceRate":fields[28],
-                                        "BattleRate":fields[29], "RelBattleRate":fields[30],
-                                        "Win":fields[31]})
+            for map, replays in maps.items():
+                if map not in maps_with_paths_generated:
+                    print("no path data exists in folder",map_data_location,"for map",map,", continuing to next map")
+                    continue
+                print("loading path data for map", map, "which has", len(replays), "replays")
+                pool = Pool(min(cpu_count(), 10))
+                map_path_data = load_path_data(map)
+                results = pool.starmap(generateFields, zip(replays, repeat(map_path_data)))
+                pool.close()
+                pool.join()
+                for fields in results:
+                    if fields:  # generateFields will return None for invalid replays
+                        if write:
+                            # formatting filenames to add to the text file
+                            if fields[0].startswith("ggg-"):
+                                filename = "gggreplays_{}.SC2Replay".format(fields[0][4:])
+                            elif fields[0].startswith("st-"):
+                                filename = "spawningtool_{}.SC2Replay".format(fields[0][3:])
+                            elif fields[0].startswith("ds-"):
+                                filename = "dropsc_{}.SC2Replay".format(fields[0][3:])
+                            valid_games.append(filename)
+                        # updating the map counter
+                        map_counter[fields[32]] += 1
+                        if map_pretty_name_to_file(fields[32]) not in maps_with_paths_generated:
+                            print("Map", map_pretty_name_to_file(fields[32]), "has not been pickled")
+                        # writing 1 line to the csv for each player and their respective stats
+                        events_out.writerow({"GameID": fields[0], "UID": fields[1],
+                                             "ScoutingCategory": fields[2], "Rank": fields[3],
+                                             "RelRank": fields[4], "ScoutingFrequency": fields[5],
+                                             "RelScoutingFrequency": fields[6], "APS": fields[7],
+                                             "RelAPS": fields[8], "CPS": fields[9], "RelCPS": fields[10],
+                                             "PeaceRate": fields[11], "RelPeaceRate": fields[12],
+                                             "BattleRate": fields[13], "RelBattleRate": fields[14],
+                                             "Win": fields[15]})
+                        events_out.writerow({"GameID": fields[16], "UID": fields[17],
+                                             "ScoutingCategory": fields[18], "Rank": fields[19],
+                                             "RelRank": fields[20], "ScoutingFrequency": fields[21],
+                                             "RelScoutingFrequency": fields[22], "APS": fields[23],
+                                             "RelAPS": fields[24], "CPS": fields[25], "RelCPS": fields[26],
+                                             "PeaceRate": fields[27], "RelPeaceRate": fields[28],
+                                             "BattleRate": fields[29], "RelBattleRate": fields[30],
+                                             "Win": fields[31]})
 
     # writing to a new text file if the command line arguments indicate to do so
     if write:
@@ -282,6 +324,8 @@ if __name__ == "__main__":
         start = 0
         end = 0
 
-    writeToCsv(args.w, args.d, start, end)
-    deltatime = time.time()-t1
-    print("Run time: ", "{:2d}".format(int(deltatime//60)), "minutes and", "{:05.2f}".format(deltatime%60), "seconds")
+    writeToCsv("/Accounts/leisherz/pattern-analysis/starcraft/sample_replays",
+               "/Accounts/leisherz/pattern-analysis/starcraft/map_path_data", args.w, args.d, start, end)
+    deltatime = time.time() - t1
+    print("Run time: ", "{:2d}".format(int(deltatime // 60)), "minutes and", "{:05.2f}".format(deltatime % 60),
+          "seconds")
