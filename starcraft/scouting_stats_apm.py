@@ -12,6 +12,7 @@ import argparse
 import time
 import math
 import control_groups
+import numpy as np
 from collections import Counter
 from sc2reader.engine.plugins import SelectionTracker, APMTracker
 from selection_plugin import ActiveSelection
@@ -74,43 +75,54 @@ def generateFields(filename):
         team2_apm = (r.players[1].avg_apm)
         team1_rel_apm = (r.players[0].avg_apm - r.players[1].avg_apm)
         team2_rel_apm = (r.players[1].avg_apm - r.players[0].avg_apm)
+        team1_var_apm = np.var(list(r.players[0].apm.values()))
+        team2_var_apm = np.var(list(r.players[1].apm.values()))
 
-        # changing actions per minute to actions per second to match other data
-        team1_aps = (r.players[0].avg_apm) / 60
-        team2_aps = (r.players[1].avg_apm) / 60
-        team1_rel_aps = (r.players[0].avg_apm - r.players[1].avg_apm) / 60
-        team2_rel_aps = (r.players[1].avg_apm - r.players[0].avg_apm) / 60
         team1_uid = r.players[0].detail_data['bnet']['uid']
         team2_uid = r.players[1].detail_data['bnet']['uid']
+
+        # list of index of unusual APM in a match
+        team1_apm_dict = r.players[0].apm
+        team2_apm_dict = r.players[1].apm
+        team1_outlier_index = ""
+        team2_outlier_index = ""
+        for key, value in team1_apm_dict.items():
+            if value >= 1000:
+                team1_outlier_index += ", " + str(key)
+
+        for key, value in team2_apm_dict.items():
+            if value >= 1000:
+                team2_outlier_index += ", " + str(key)
+
         # creating the fields based on who won
         if winner == 1:
             fields = (filename,
                         game_id, team1_uid, team1_rank, team1_rel_rank,
-                        team1_aps, team1_rel_aps,
+                        team1_var_apm,
                         team1_apm, team1_rel_apm, team1_cps, team1_rel_cps, 
                         team1_peace_rate, team1_rel_pr, team1_battle_rate, 
-                        team1_rel_br, 1,
-                      filename,
+                        team1_rel_br, 1, team1_outlier_index,
+                        filename,
                         game_id, team2_uid, team2_rank, team2_rel_rank,
-                        team2_aps, team2_rel_aps,
+                        team2_var_apm,
                         team2_apm, team2_rel_apm, team2_cps, team2_rel_cps, 
                         team2_peace_rate, team2_rel_pr, team2_battle_rate, 
-                        team2_rel_br, 0,
-                      r.map_name)
+                        team2_rel_br, 0, team2_outlier_index,
+                        r.map_name)
         elif winner == 2:
-            fields = (filename,
+                fields = (filename,
                         game_id, team1_uid, team1_rank, team1_rel_rank,
-                        team1_aps, team1_rel_aps,
+                        team1_var_apm,
                         team1_apm, team1_rel_apm, team1_cps, team1_rel_cps, 
                         team1_peace_rate, team1_rel_pr, team1_battle_rate, 
-                        team1_rel_br, 0,
-                      filename, 
+                        team1_rel_br, 0, team1_outlier_index,
+                        filename,
                         game_id, team2_uid, team2_rank, team2_rel_rank,
-                        team2_aps, team2_rel_aps,
+                        team2_var_apm,
                         team2_apm, team2_rel_apm, team2_cps, team2_rel_cps, 
                         team2_peace_rate, team2_rel_pr, team2_battle_rate, 
-                        team2_rel_br, 1,
-                      r.map_name)
+                        team2_rel_br, 1, team2_outlier_index,
+                        r.map_name)
         return fields
     except:
         return
@@ -170,20 +182,21 @@ def writeToCsv(write, debug, start, end):
         valid_games = []
     else:
         files = []
-        games = open("valid_game_ids.txt", 'r')
+        games = open("valid_game_ids_single_player.txt", 'r')
         for line in games:
             files.append(line.strip())
         games.close()
 
     # open the csv and begin to write to it
-    with open("scouting_stats_apm.csv", 'w', newline = '') as fp:
+    with open("scouting_stats_apm_sample_single_player.csv", 'w', newline = '') as fp:
         events_out = csv.DictWriter(fp, fieldnames=["Filename",
                                     "GameID", "UID",
                                     "Rank", "RelRank", 
-                                    "APS", "RelAPS",
+                                    "VarAPM",
                                     "APM", "RelAPM", 
                                     "CPS", "RelCPS", "PeaceRate", "RelPeaceRate",
-                                    "BattleRate", "RelBattleRate", "Win"])
+                                    "BattleRate", "RelBattleRate", "Win", 
+                                    "UnusualAPMatMin"])
         events_out.writeheader()
         # debugging
         if debug:
@@ -194,6 +207,7 @@ def writeToCsv(write, debug, start, end):
                 print("file #: ", i, "file name: ", filename)
                 i += 1
                 fields = generateFields(filename)
+                # print(fields)
                 if fields: # generateFields will return None for invalid replays
                     if write:
                         # formatting filenames to add to the text file
@@ -211,24 +225,22 @@ def writeToCsv(write, debug, start, end):
                                         "GameID":fields[1], "UID":fields[2],
                                         "Rank":fields[3],
                                         "RelRank":fields[4],
-                                        "APS":fields[5],
-                                        "RelAPS":fields[6], 
-                                        "APM":fields[7], "RelAPM":fields[8],
-                                        "CPS":fields[9], "RelCPS":fields[10],
-                                        "PeaceRate":fields[11], "RelPeaceRate":fields[12],
-                                        "BattleRate":fields[13], "RelBattleRate":fields[14],
-                                        "Win":fields[15]})
+                                        "VarAPM":fields[5],
+                                        "APM":fields[6], "RelAPM":fields[7],
+                                        "CPS":fields[8], "RelCPS":fields[9],
+                                        "PeaceRate":fields[10], "RelPeaceRate":fields[11],
+                                        "BattleRate":fields[12], "RelBattleRate":fields[13],
+                                        "Win":fields[14], "UnusualAPMatMin":fields[15]})
                     events_out.writerow({"Filename": fields[16],
                                         "GameID":fields[17], "UID":fields[18],
                                         "Rank":fields[19],
                                         "RelRank":fields[20], 
-                                        "APS":fields[21],
-                                        "RelAPS":fields[22], 
-                                        "APM":fields[23], "RelAPM":fields[24],
-                                        "CPS":fields[25], "RelCPS":fields[26],
-                                        "PeaceRate":fields[27], "RelPeaceRate":fields[28],
-                                        "BattleRate":fields[29], "RelBattleRate":fields[30],
-                                        "Win":fields[31]})
+                                        "VarAPM":fields[21], 
+                                        "APM":fields[22], "RelAPM":fields[23],
+                                        "CPS":fields[24], "RelCPS":fields[25],
+                                        "PeaceRate":fields[26], "RelPeaceRate":fields[27],
+                                        "BattleRate":fields[28], "RelBattleRate":fields[29],
+                                        "Win":fields[30], "UnusualAPMatMin":fields[31]})
         # running with multiprocessing
         else:
             pool = Pool(min(cpu_count(), 15))
@@ -256,28 +268,26 @@ def writeToCsv(write, debug, start, end):
                                         "GameID":fields[1], "UID":fields[2],
                                         "Rank":fields[3],
                                         "RelRank":fields[4],
-                                        "APS":fields[5],
-                                        "RelAPS":fields[6], 
-                                        "APM":fields[7], "RelAPM":fields[8],
-                                        "CPS":fields[9], "RelCPS":fields[10],
-                                        "PeaceRate":fields[11], "RelPeaceRate":fields[12],
-                                        "BattleRate":fields[13], "RelBattleRate":fields[14],
-                                        "Win":fields[15]})
+                                        "VarAPM":fields[5],
+                                        "APM":fields[6], "RelAPM":fields[7],
+                                        "CPS":fields[8], "RelCPS":fields[9],
+                                        "PeaceRate":fields[10], "RelPeaceRate":fields[11],
+                                        "BattleRate":fields[12], "RelBattleRate":fields[13],
+                                        "Win":fields[14], "UnusualAPMatMin":fields[15]})
                     events_out.writerow({"Filename": fields[16],
                                         "GameID":fields[17], "UID":fields[18],
                                         "Rank":fields[19],
                                         "RelRank":fields[20], 
-                                        "APS":fields[21],
-                                        "RelAPS":fields[22], 
-                                        "APM":fields[23], "RelAPM":fields[24],
-                                        "CPS":fields[25], "RelCPS":fields[26],
-                                        "PeaceRate":fields[27], "RelPeaceRate":fields[28],
-                                        "BattleRate":fields[29], "RelBattleRate":fields[30],
-                                        "Win":fields[31]})
+                                        "VarAPM":fields[21], 
+                                        "APM":fields[22], "RelAPM":fields[23],
+                                        "CPS":fields[24], "RelCPS":fields[25],
+                                        "PeaceRate":fields[26], "RelPeaceRate":fields[27],
+                                        "BattleRate":fields[28], "RelBattleRate":fields[29],
+                                        "Win":fields[30], "UnusualAPMatMin":fields[31]})
 
     # writing to a new text file if the command line arguments indicate to do so
     if write:
-        with open("valid_game_ids.txt", 'w') as file:
+        with open("sample_ids.txt", 'w') as file:
             for game_id in valid_games:
                 file.write(game_id + "\n")
     # print(map_counter)
