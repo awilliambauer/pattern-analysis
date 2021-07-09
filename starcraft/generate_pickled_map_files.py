@@ -48,7 +48,7 @@ class ExporterBot(sc2.BotAI):
 
     def get_pickle_file_path(self) -> str:
         folder_path = os.path.dirname(__file__)
-        subfolder_name = "pickle_data"
+        subfolder_name = "map_data"
         file_name = f"{self.map_name}.xz"
         file_path = os.path.join(folder_path, subfolder_name, file_name)
         return file_path
@@ -119,33 +119,34 @@ class ExporterBot(sc2.BotAI):
 def main():
 
     maps = [
-        "HeavyRainLE",
-        "NeoPlanetSLE",
-        "MerryGoRoundLE",
-        "KorhalCompoundLE",
-        "KorhalCarnageKnockoutLE",
-        "YeonsuLE",
-        "HabitationStationLE",
-        "FoxtrotLabsLE",
-        "DashandTerminalLE",
-        "MoonlightMadnessLE",
-        "BloodBoilLE",
-        "CodaLE",
-        "DasanStationLE",
-        "GalacticProcessLE",
-        "OvergrowthLE",
-        "DaybreakLE",
-        "NewGettysburgLE",
-        "BridgeheadLE",
-        "CloudKingdomLE",
-        "InvaderLE",
-        "OhanaLE",
-        "KingSejongStationLE",
-        #"StasisLE",
-        "DeathauraLE",
-        "PurityandIndustryLE",
-        "TurboCruise84LE",
-        "TritonLE",
+        "JagannathaLE"
+        # "HeavyRainLE",
+        # "NeoPlanetSLE",
+        # "MerryGoRoundLE",
+        # "KorhalCompoundLE",
+        # "KorhalCarnageKnockoutLE",
+        # "YeonsuLE",
+        # "HabitationStationLE",
+        # "FoxtrotLabsLE",
+        # "DashandTerminalLE",
+        # "MoonlightMadnessLE",
+        # "BloodBoilLE",
+        # "CodaLE",
+        # "DasanStationLE",
+        # "GalacticProcessLE",
+        # "OvergrowthLE",
+        # "DaybreakLE",
+        # "NewGettysburgLE",
+        # "BridgeheadLE",
+        # "CloudKingdomLE",
+        # "InvaderLE",
+        # "OhanaLE",
+        # "KingSejongStationLE",
+        # #"StasisLE",
+        # "DeathauraLE",
+        # "PurityandIndustryLE",
+        # "TurboCruise84LE",
+        # "TritonLE",
     ]
 
     for map_ in maps:

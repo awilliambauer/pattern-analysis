@@ -4,16 +4,15 @@ from multiprocessing import Pool, cpu_count
 import math
 from typing import List
 import sc2
-from sc2.player import Bot, Computer
 from sc2.position import Point3, Point2
-
+import traceback
 from loguru import logger
-
-from MapAnalyzer import MapData
 import pickle
 import lzma
 from MapAnalyzer.MapData import MapData
 from MapAnalyzer.utils import import_bot_instance
+
+import starcraft
 
 GREEN = Point3((0, 255, 0))
 RED = Point3((255, 0, 0))
@@ -192,18 +191,19 @@ def generate_paths(file):
 
         print("Generated",
               (astar_grid.shape[0] * astar_grid.shape[1] * astar_grid.shape[0] * astar_grid.shape[1] // (
-                          PATH_RESOLUTION ** 4)),
+                      PATH_RESOLUTION ** 4)),
               "paths for map", map_data.map_name)
 
     except Exception as e:
         print("Exception generating path data for map", file, e)
+        traceback.print_exc()
         return
 
 
 def create_path_data():
-    files = os.listdir("map_data")
+    files = os.listdir(starcraft.PICKLED_MAP_DATA_DIRECTORY)
     # files = files[:8]  # just limiting map count for debugging
-
+    files = ["JagannathaLE.xz"]
     pool = Pool(min(cpu_count(), 60))
     results = pool.map(generate_paths, files)
     pool.close()
@@ -221,18 +221,19 @@ class MapPathData:
         nearest_dest_x = round(dest[0] / PATH_RESOLUTION) * PATH_RESOLUTION
         nearest_dest_y = round(dest[1] / PATH_RESOLUTION) * PATH_RESOLUTION
         chunk_idx = nearest_source_y // PATH_ROW_CHUNK_SIZE
-        print(chunk_idx, (nearest_source_x, nearest_source_y), (nearest_dest_x, nearest_dest_y)) # TODO make this get a better approximation of src and dest
+        # print(chunk_idx, (nearest_source_x, nearest_source_y),
+        #       (nearest_dest_x, nearest_dest_y))  # TODO make this get a better approximation of src and dest
         return self.chunks[int(chunk_idx)][(nearest_source_x, nearest_source_y)][(nearest_dest_x, nearest_dest_y)]
 
 
 def load_path_data_chunk(path_chunk_file_name):
     print("loading chunk", path_chunk_file_name[-5:-3])
-    with lzma.open("map_path_data/" + path_chunk_file_name, "rb") as r:
+    with lzma.open(starcraft.MAP_PATH_DATA_DIRECTORY + "/" + path_chunk_file_name, "rb") as r:
         return pickle.load(r)
 
 
 def load_path_data(map_file_name):
-    files = os.listdir("map_path_data")
+    files = os.listdir(starcraft.MAP_PATH_DATA_DIRECTORY)
     chunk_file_names = []
 
     for file in files:
@@ -240,12 +241,20 @@ def load_path_data(map_file_name):
             chunk_file_names.append(file)
     if len(chunk_file_names) == 0:
         return None
-    pool = Pool(min(cpu_count(), 30))
+    pool = Pool(min(min(cpu_count(), 30), len(chunk_file_names)))
     chunks = pool.map(load_path_data_chunk, chunk_file_names)
     chunks.sort(key=lambda chunk: next(iter(chunk.keys())))
     pool.close()
     pool.join()
     return MapPathData(map_file_name, chunks)
+
+
+def get_all_path_generated_maps():
+    files = []
+    for file in os.listdir(starcraft.MAP_PATH_DATA_DIRECTORY):
+        if file.endswith("00.xz"):
+            files.append(file[:-5])
+    return files
 
 
 if __name__ == "__main__":
