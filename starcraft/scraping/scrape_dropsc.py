@@ -38,7 +38,7 @@ def download_replays(start_replay_num: int, end_replay_num: int) -> None:
     """
     assert start_replay_num > 0 and start_replay_num < end_replay_num + 1
 
-    official_maps = [x.strip() for x in open("blizzard_maps.txt").readlines()]
+    official_maps = [x.strip() for x in open("../valid_maps.txt").readlines()]
 
     for replay_num in range(start_replay_num, end_replay_num + 1):
         print()
