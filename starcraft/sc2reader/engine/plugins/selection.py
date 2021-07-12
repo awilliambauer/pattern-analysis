@@ -34,14 +34,15 @@ class SelectionTracker(object):
             person.selection_errors = 0
 
     def handleSelectionEvent(self, event, replay):
-        selection = event.player.selection[event.control_group]
-        new_selection, error = self._deselect(
-            selection, event.mask_type, event.mask_data
-        )
-        new_selection = self._select(new_selection, event.objects)
-        event.player.selection[event.control_group] = new_selection
-        if error:
-            event.player.selection_errors += 1
+        if event.player: # some selection events lack a player
+            selection = event.player.selection[event.control_group]
+            new_selection, error = self._deselect(
+                selection, event.mask_type, event.mask_data
+            )
+            new_selection = self._select(new_selection, event.objects)
+            event.player.selection[event.control_group] = new_selection
+            if error:
+                event.player.selection_errors += 1
 
     def handleGetControlGroupEvent(self, event, replay):
         selection = event.player.selection[event.control_group]
