@@ -51,16 +51,19 @@ def generateFields(filename):
             raise RuntimeError()
 
         # checking the map
-        if not(r.map_name in map_counter.keys()):
-            print(filename + " is not played on an official Blizzard map")
-            raise RuntimeError()
+        # if not(r.map_name in map_counter.keys()):
+        #     print(filename + " is not played on an official Blizzard map")
+        #     raise RuntimeError()
 
         # collecting stats and values
         winner = r.winner.number
         # team1_freq, team1_cat, team2_freq, team2_cat, winner = scouting_detector.scouting_freq_and_cat(r)
         team1_rank, team1_rel_rank, team2_rank, team2_rel_rank = ranking_stats(r)
-        team1_cps, team1_peace_rate, team1_battle_rate, team2_cps, team2_peace_rate, team2_battle_rate = control_groups.control_group_stats(r)
+        team1_cps, team1_peace_rate, team1_battle_rate, team2_cps, team2_peace_rate, team2_battle_rate, \
+        team1_peace_rb, team2_peace_rb, team1_battle_rb, team2_battle_rb, \
+        team1_cps_cg, team2_cps_cg = control_groups.control_group_stats(r)
         team1_cr_warmup, team2_cr_warmup, team1_cr_non_warmup, team2_cr_non_warmup = commandRate(r.game_events, r.real_length.total_seconds())
+        # team1_command_per_sec, team2_command_per_sec = commandPerSec(r.game_events, r.real_length.total_seconds())
         # team1_rel_freq = team1_freq - team2_freq
         # team2_rel_freq = team2_freq - team1_freq
 
@@ -104,6 +107,8 @@ def generateFields(filename):
                         team1_peace_rate, team1_rel_pr, team1_battle_rate, 
                         team1_rel_br, 1, team1_outlier_index,
                         team1_cr_warmup, team1_cr_non_warmup, 
+                        team1_cps_cg,
+                        team1_peace_rb, team1_battle_rb,
                         filename,
                         game_id, team2_uid, team2_rank, team2_rel_rank,
                         team2_var_apm,
@@ -111,15 +116,19 @@ def generateFields(filename):
                         team2_peace_rate, team2_rel_pr, team2_battle_rate, 
                         team2_rel_br, 0, team2_outlier_index,
                         team2_cr_warmup, team2_cr_non_warmup, 
+                        team2_cps_cg,
+                        team2_peace_rb, team2_battle_rb,
                         r.map_name)
         elif winner == 2:
-                fields = (filename,
+            fields = (filename,
                         game_id, team1_uid, team1_rank, team1_rel_rank,
                         team1_var_apm,
                         team1_apm, team1_rel_apm, team1_cps, team1_rel_cps, 
                         team1_peace_rate, team1_rel_pr, team1_battle_rate, 
                         team1_rel_br, 0, team1_outlier_index,
                         team1_cr_warmup, team1_cr_non_warmup, 
+                        team1_cps_cg,
+                        team1_peace_rb, team1_battle_rb,
                         filename,
                         game_id, team2_uid, team2_rank, team2_rel_rank,
                         team2_var_apm,
@@ -127,6 +136,8 @@ def generateFields(filename):
                         team2_peace_rate, team2_rel_pr, team2_battle_rate, 
                         team2_rel_br, 1, team2_outlier_index,
                         team2_cr_warmup, team2_cr_non_warmup, 
+                        team2_cps_cg,
+                        team2_peace_rb, team2_battle_rb,
                         r.map_name)
         return fields
     except:
@@ -157,7 +168,7 @@ def ranking_stats(replay):
 
 def commandRate(game_events, seconds):
     '''commandRate computes the warmup and non-warmup command rate
-    of general events in a replay'''
+    of control group related events in a replay'''
     total_length = seconds
     warmup_length = 86
     non_warmup_length = total_length - 86
@@ -167,16 +178,17 @@ def commandRate(game_events, seconds):
     p2_count_non_warmup = 0
     for event in game_events:
         time_sec = event.frame/22.4
-        if isinstance(event, sc2reader.events.game.ControlGroupEvent) and time_sec <= warmup_length:
-            if event.player.pid == 1:
-                p1_count_warmup += 1
-            elif event.player.pid == 2:
-                p2_count_warmup += 1
-        else:
-            if event.player.pid == 1:
-                p1_count_non_warmup += 1
-            elif event.player.pid == 2:
-                p2_count_non_warmup += 1
+        if isinstance(event, sc2reader.events.game.ControlGroupEvent): 
+            if time_sec <= warmup_length:
+                if event.player.pid == 1:
+                    p1_count_warmup += 1
+                elif event.player.pid == 2:
+                    p2_count_warmup += 1
+            else:
+                if event.player.pid == 1:
+                    p1_count_non_warmup += 1
+                elif event.player.pid == 2:
+                    p2_count_non_warmup += 1
     p1_cr_warmup = p1_count_warmup/warmup_length
     p2_cr_warmup = p2_count_warmup/warmup_length
     p1_cr_non_warmup = p1_count_non_warmup/non_warmup_length
@@ -184,6 +196,24 @@ def commandRate(game_events, seconds):
 
     return p1_cr_warmup, p2_cr_warmup, p1_cr_non_warmup, p2_cr_non_warmup
 
+def commandPerSec(game_events, seconds):
+    '''commandRate computes the commands per second rate 
+    of general events in a replay'''
+    total_length = seconds
+    p1_command_count = 0
+    p2_command_count = 0
+    for event in game_events:
+        if isinstance(event, sc2reader.events.game.ControlGroupEvent): 
+            if event.player.pid == 1:
+                p1_command_count += 1
+            elif event.player.pid == 2:
+                p2_command_count += 1
+    p1_command_rate = p1_command_count/total_length
+    p2_command_rate = p2_command_count/total_length
+
+    return p1_command_rate, p2_command_rate
+
+      
 def initializeCounter():
     '''Adds all valid blizzard maps to the map counter. Requires
     blizzard_maps.txt to be in the same directory as this file.'''
@@ -216,13 +246,14 @@ def writeToCsv(write, debug, start, end):
         valid_games = []
     else:
         files = []
-        games = open("valid_game_ids.txt", 'r')
+        # games = open("valid_replay_filenames.txt", 'r')
+        games = open("valid_replay_filenames.txt", 'r')
         for line in games:
             files.append(line.strip())
         games.close()
 
     # open the csv and begin to write to it
-    with open("master_of_control_stats.csv", 'w', newline = '') as fp:
+    with open("master_of_control_stats_new.csv", 'w', newline = '') as fp:
         events_out = csv.DictWriter(fp, fieldnames=["Filename",
                                     "GameID", "UID",
                                     "Rank", "RelRank", 
@@ -230,7 +261,8 @@ def writeToCsv(write, debug, start, end):
                                     "APM", "RelAPM", 
                                     "CPS", "RelCPS", "PeaceRate", "RelPeaceRate",
                                     "BattleRate", "RelBattleRate", "Win", 
-                                    "UnusualAPMatMin", "CRWarmUp", "CRNonWarmUp"])
+                                    "UnusualAPMatMin", "CRWarmUp", "CRNonWarmUp", 
+                                    "CommandPerSec", "PeaceRb", "BattleRb"])
         events_out.writeheader()
         # debugging
         if debug:
@@ -253,7 +285,7 @@ def writeToCsv(write, debug, start, end):
                             filename = "dropsc_{}.SC2Replay".format(fields[0][3:])
                         valid_games.append(filename)
                     # updating the map counter
-                    map_counter[fields[36]] += 1
+                    map_counter[fields[42]] += 1
                     # writing 1 line to the csv for each player and their respective stats
                     events_out.writerow({"Filename": fields[0],
                                         "GameID":fields[1], "UID":fields[2],
@@ -265,18 +297,22 @@ def writeToCsv(write, debug, start, end):
                                         "PeaceRate":fields[10], "RelPeaceRate":fields[11],
                                         "BattleRate":fields[12], "RelBattleRate":fields[13],
                                         "Win":fields[14], "UnusualAPMatMin":fields[15],
-                                        "CRWarmUp": fields[16], "CRNonWarmUp": fields[17]})
-                    events_out.writerow({"Filename": fields[18],
-                                        "GameID":fields[19], "UID":fields[20],
-                                        "Rank":fields[21],
-                                        "RelRank":fields[22], 
-                                        "VarAPM":fields[23], 
-                                        "APM":fields[24], "RelAPM":fields[25],
-                                        "CPS":fields[26], "RelCPS":fields[27],
-                                        "PeaceRate":fields[28], "RelPeaceRate":fields[29],
-                                        "BattleRate":fields[30], "RelBattleRate":fields[31],
-                                        "Win":fields[32], "UnusualAPMatMin":fields[33],
-                                        "CRWarmUp": fields[34], "CRNonWarmUp": fields[35]})
+                                        "CRWarmUp": fields[16], "CRNonWarmUp": fields[17],
+                                        "CommandPerSec":fields[18],
+                                        "PeaceRb":fields[19], "BattleRb": fields[20]})
+                    events_out.writerow({"Filename": fields[21],
+                                        "GameID":fields[22], "UID":fields[23],
+                                        "Rank":fields[24],
+                                        "RelRank":fields[25], 
+                                        "VarAPM":fields[26], 
+                                        "APM":fields[27], "RelAPM":fields[28],
+                                        "CPS":fields[29], "RelCPS":fields[30],
+                                        "PeaceRate":fields[31], "RelPeaceRate":fields[32],
+                                        "BattleRate":fields[33], "RelBattleRate":fields[34],
+                                        "Win":fields[35], "UnusualAPMatMin":fields[36],
+                                        "CRWarmUp": fields[37], "CRNonWarmUp": fields[38],
+                                        "CommandPerSec":fields[39],
+                                        "PeaceRb":fields[40], "BattleRb": fields[41]})
         # running with multiprocessing
         else:
             pool = Pool(min(cpu_count(), 20))
@@ -297,7 +333,7 @@ def writeToCsv(write, debug, start, end):
                             filename = "dropsc_{}.SC2Replay".format(fields[0][3:])
                         valid_games.append(filename)
                     # updating the map counter
-                    map_counter[fields[36]] += 1
+                    map_counter[fields[42]] += 1
                     # writing 1 line to the csv for each player and their respective stats
                     events_out.writerow({"Filename": fields[0],
                                         "GameID":fields[1], "UID":fields[2],
@@ -309,18 +345,22 @@ def writeToCsv(write, debug, start, end):
                                         "PeaceRate":fields[10], "RelPeaceRate":fields[11],
                                         "BattleRate":fields[12], "RelBattleRate":fields[13],
                                         "Win":fields[14], "UnusualAPMatMin":fields[15],
-                                        "CRWarmUp": fields[16], "CRNonWarmUp": fields[17]})
-                    events_out.writerow({"Filename": fields[18],
-                                        "GameID":fields[19], "UID":fields[20],
-                                        "Rank":fields[21],
-                                        "RelRank":fields[22], 
-                                        "VarAPM":fields[23], 
-                                        "APM":fields[24], "RelAPM":fields[25],
-                                        "CPS":fields[26], "RelCPS":fields[27],
-                                        "PeaceRate":fields[28], "RelPeaceRate":fields[29],
-                                        "BattleRate":fields[30], "RelBattleRate":fields[31],
-                                        "Win":fields[32], "UnusualAPMatMin":fields[33],
-                                        "CRWarmUp": fields[34], "CRNonWarmUp": fields[35]})
+                                        "CRWarmUp": fields[16], "CRNonWarmUp": fields[17],
+                                        "CommandPerSec":fields[18],
+                                        "PeaceRb":fields[19], "BattleRb": fields[20]})
+                    events_out.writerow({"Filename": fields[21],
+                                        "GameID":fields[22], "UID":fields[23],
+                                        "Rank":fields[24],
+                                        "RelRank":fields[25], 
+                                        "VarAPM":fields[26], 
+                                        "APM":fields[27], "RelAPM":fields[28],
+                                        "CPS":fields[29], "RelCPS":fields[30],
+                                        "PeaceRate":fields[31], "RelPeaceRate":fields[32],
+                                        "BattleRate":fields[33], "RelBattleRate":fields[34],
+                                        "Win":fields[35], "UnusualAPMatMin":fields[36],
+                                        "CRWarmUp": fields[37], "CRNonWarmUp": fields[38],
+                                        "CommandPerSec":fields[39],
+                                        "PeaceRb":fields[40], "BattleRb": fields[41]})
 
     # writing to a new text file if the command line arguments indicate to do so
     if write:
