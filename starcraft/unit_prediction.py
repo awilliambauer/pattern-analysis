@@ -3,6 +3,12 @@ from sc2.position import Point2
 from collections import deque
 
 movement_speeds = {
+    "SiegeTankSieged": 0.0,
+    "Larva": 0.0,
+    "LurkerEgg": 0.0,
+    "LurkerBurrowed": 0.0,
+    "BattleHellion": 5.95,
+    "WidowMineBurrowed": 0.0,
     "Overlord": 0.902,
     "Queen": 1.31,
     "LiftedBuilding": 1.31,
@@ -13,7 +19,7 @@ movement_speeds = {
     "BurrowedCreepRoach": 2.56,
     "Carrier": 2.62,
     "Mothership": 2.62,
-    "High Templar": 2.62,
+    "HighTemplar": 2.62,
     "Observer": 2.62,
     "ActivatedUpgradedVoidRay": 2.62,
     "Battlecruiser": 2.62,
@@ -23,6 +29,7 @@ movement_speeds = {
     "UpgradedOverlord": 2.62,
     "BurrowedInfestor": 2.8,
     "ActivatedVoidRay": 2.89,
+    "LiberatorAG": 0.0,
     "Colossus": 3.15,
     "Disruptor": 3.15,
     "Immortal": 3.15,
@@ -32,9 +39,14 @@ movement_speeds = {
     "Hellbat": 3.15,
     "Marauder": 3.15,
     "Marine": 3.15,
+    "MarineShield": 3.15,
     "SiegeTank": 3.15,
-    "AssaultViking": 3.15,  # perhaps it has some other internal name?
+    "VikingAssault": 3.15,  # perhaps it has some other internal name?
+    "Viking": 3.15,
+    "MothershipCore": 2.62,
+    "OverlordTransport": 0.92,
     "UndisguisedChangeling": 3.15,
+    "Changeling": 3.15,
     "Hydralisk": 3.15,
     "Infestor": 3.15,
     "Roach": 3.15,
@@ -44,7 +56,11 @@ movement_speeds = {
     "CreepQueen": 3.5,
     "CreepSpineCrawler": 3.5,
     "CreepSporeCrawler": 3.5,
+    "Medivac": 3.5,
+    "CreepTumor": 0.0,
+    "CreepTumorBurrowed": 0.0,
     "BurrowedCreepInfestor": 3.64,
+    "Egg": 0.0,
     "CreepLocust": 3.66,
     "VoidRay": 3.85,
     "Banshee": 3.85,
@@ -105,6 +121,7 @@ movement_speeds = {
     "PurificationNova": 5.95,
     "Hellion": 5.95,
     "UpgradedZergling": 6.57,
+    "ZerglingWings": 6.57,
     "UpgradedCreepZergling": 8.54,
     "UpgradedActivatedZealot": 10.4,
     "Interceptor": 10.5
@@ -112,6 +129,10 @@ movement_speeds = {
 
 
 def get_movement_speed(unit_name, **options):
+    if "Burrowed" in unit_name and ("Roach" not in unit_name and "Infestor" not in unit_name):
+        return 0.0
+    if "Changeling" in unit_name and unit_name != "Changeling":
+        return get_movement_speed(unit_name.replace("Changeling", ""))
     modified_unit_name = unit_name
     if "Upgraded" in options and options["Upgraded"]:
         modified_unit_name += "Upgraded"
@@ -119,10 +140,36 @@ def get_movement_speed(unit_name, **options):
         modified_unit_name += "Activated"
     if "Creep" in options and options["Creep"]:
         modified_unit_name += "Creep"
+    if unit_name not in movement_speeds:
+        with open("missing_unit_speeds.txt","a") as f:
+            f.write(unit_name + "\n")
+        return 3.5  # todo make this unnecessary!
     return movement_speeds[unit_name] / 22.4  # convert units per second into units per frame
 
 
-flying_units = ["Overlord"]
+flying_units = ["Observer",
+                "WarpPrism",
+                "Phoenix",
+                "VoidRay",
+                "Carrier",
+                "Interceptor",
+                "Mothership",
+                "MothershipCore",
+                "Oracle",
+                "Tempest",
+                "Medivac",
+                "Viking",
+                "Banshee",
+                "Raven",
+                "Battlecruiser",
+                "PointDefenseDrone",
+                "Liberator",
+                "Overlord",
+                "Overseer",
+                "Mutalisk",
+                "Corruptor",
+                "Brood Lord",
+                "Viper"]
 
 
 def is_flying_unit(unit_name):

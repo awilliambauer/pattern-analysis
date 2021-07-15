@@ -119,34 +119,15 @@ class ExporterBot(sc2.BotAI):
 def main():
 
     maps = [
-        "JagannathaLE"
-        # "HeavyRainLE",
-        # "NeoPlanetSLE",
-        # "MerryGoRoundLE",
-        # "KorhalCompoundLE",
-        # "KorhalCarnageKnockoutLE",
-        # "YeonsuLE",
-        # "HabitationStationLE",
-        # "FoxtrotLabsLE",
-        # "DashandTerminalLE",
-        # "MoonlightMadnessLE",
-        # "BloodBoilLE",
-        # "CodaLE",
-        # "DasanStationLE",
-        # "GalacticProcessLE",
-        # "OvergrowthLE",
-        # "DaybreakLE",
-        # "NewGettysburgLE",
-        # "BridgeheadLE",
-        # "CloudKingdomLE",
-        # "InvaderLE",
-        # "OhanaLE",
-        # "KingSejongStationLE",
-        # #"StasisLE",
-        # "DeathauraLE",
-        # "PurityandIndustryLE",
-        # "TurboCruise84LE",
-        # "TritonLE",
+        "TritonLE",
+        "LightshadeLE",
+        "RomanticideLE",
+        "OxideLE",
+        "Turbocruise84LE",
+        "PurityandIndustryLE",
+        "BlackburnLE",
+        "BeckettIndustriesLE",
+        "StasisLE"
     ]
 
     for map_ in maps:

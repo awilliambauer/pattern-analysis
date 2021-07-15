@@ -36,6 +36,8 @@ def is_mining_loc(resource_locs, location):
         cluster_centers = af.cluster_centers_
         # 8.5 threshold set empirically based on 5-replay sample
         # TODO verify with bigger sample
+        if len(cluster_centers) == 0:
+            return False
         return min([dist(location, center) for center in cluster_centers]) < 8.5
     except:
         print(resource_locs)

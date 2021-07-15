@@ -9,10 +9,12 @@ import traceback
 from loguru import logger
 import pickle
 import lzma
+from names_to_hashes import get_hashes
+from hashes_to_names import get_names
 from MapAnalyzer.MapData import MapData
 from MapAnalyzer.utils import import_bot_instance
 
-import starcraft
+import file_locations
 
 GREEN = Point3((0, 255, 0))
 RED = Point3((255, 0, 0))
@@ -201,10 +203,20 @@ def generate_paths(file):
 
 
 def create_path_data():
-    files = os.listdir(starcraft.PICKLED_MAP_DATA_DIRECTORY)
+    files = os.listdir(file_locations.PICKLED_MAP_DATA_DIRECTORY)
     # files = files[:8]  # just limiting map count for debugging
-    files = ["JagannathaLE.xz"]
-    pool = Pool(min(cpu_count(), 60))
+    files = [
+        "TritonLE.xz",
+        "LightshadeLE.xz",
+        "RomanticideLE.xz",
+        "OxideLE.xz",
+        "Turbocruise84LE.xz",
+        "PurityandIndustryLE.xz",
+        "BlackburnLE.xz",
+        "BeckettIndustriesLE.xz",
+        "StasisLE.xz"
+    ]
+    pool = Pool(min(cpu_count(), 9))
     results = pool.map(generate_paths, files)
     pool.close()
     pool.join()
@@ -226,37 +238,73 @@ class MapPathData:
         return self.chunks[int(chunk_idx)][(nearest_source_x, nearest_source_y)][(nearest_dest_x, nearest_dest_y)]
 
 
+# credit timgeb https://stackoverflow.com/questions/1952464/in-python-how-do-i-determine-if-an-object-is-iterable
+def is_iterable(thing):
+    try:
+        iter(thing)
+        return True
+    except TypeError:
+        return False
+
+
 def load_path_data_chunk(path_chunk_file_name):
-    print("loading chunk", path_chunk_file_name[-5:-3])
-    with lzma.open(starcraft.MAP_PATH_DATA_DIRECTORY + "/" + path_chunk_file_name, "rb") as r:
+    print("loading chunk", path_chunk_file_name)
+    with open(file_locations.MAP_PATH_DATA_DIRECTORY + "/" + path_chunk_file_name, "rb") as r:
         return pickle.load(r)
 
 
 def load_path_data(map_file_name):
-    files = os.listdir(starcraft.MAP_PATH_DATA_DIRECTORY)
-    chunk_file_names = []
-
+    print("loading map", map_file_name)
+    files = os.listdir(file_locations.MAP_PATH_DATA_DIRECTORY)
+    chunk_file_names = set()
     for file in files:
-        if map_file_name in file:
-            chunk_file_names.append(file)
+        if isinstance(map_file_name, list) or isinstance(map_file_name, tuple):
+            for possible_name in map_file_name:
+                if possible_name.lower() in file.lower():
+                    chunk_file_names.add(file)
+                    break
+        elif map_file_name in file:
+            chunk_file_names.add(file)
     if len(chunk_file_names) == 0:
         return None
-    pool = Pool(min(min(cpu_count(), 30), len(chunk_file_names)))
-    chunks = pool.map(load_path_data_chunk, chunk_file_names)
+    chunks = []
+    for chunk_file_name in chunk_file_names:
+        chunks.append(load_path_data_chunk(chunk_file_name))
     chunks.sort(key=lambda chunk: next(iter(chunk.keys())))
-    pool.close()
-    pool.join()
     return MapPathData(map_file_name, chunks)
 
 
 def get_all_path_generated_maps():
     files = []
-    for file in os.listdir(starcraft.MAP_PATH_DATA_DIRECTORY):
-        if file.endswith("00.xz"):
-            files.append(file[:-5])
+    for file in os.listdir("map_path_data"):
+        if file.endswith("00.pkl"):
+            files.append(file[:-6])
     return files
 
 
+def get_all_possible_names(map_name):
+    hashes = get_hashes(map_name)
+    names = []
+    for hash in hashes:
+        for name in get_names(hash):
+            if name not in names:
+                names.append(name)
+    return names
+
+
+def test():
+    maps = ["EternalEmpireLE"]
+    for map in maps:
+        map_path_data = load_path_data(map)
+        idx = 0
+        for chunk in map_path_data.chunks:
+            with open("/Accounts/leisherz/pattern-analysis/starcraft/map_path_data_non_pickle/" + map + str(idx).zfill(2) + ".pkl", "wb") as f:
+                pickle.dump(chunk, f)
+                print("Saving path data chunk", idx, "for map", map)
+            idx += 1
+
+
 if __name__ == "__main__":
-    create_path_data()
+    test()
+    # load_path_data("InterloperLE")
     # print(load_path_data("16-BitLE").get_path((25, 25), (75, 75)))
