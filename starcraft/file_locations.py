@@ -1,0 +1,6 @@
+VALID_MAP_LIST_FILE = "valid_maps.txt"
+REPLAY_FILE_DIRECTORY = "/Accounts/awb/pattern-analysis/starcraft/replays"
+REPLAY_INFO_FILE = "replays_info.csv"
+PICKLED_MAP_DATA_DIRECTORY = "map_data"
+MAP_PATH_DATA_DIRECTORY = "map_path_data_non_pickle"
+SCOUTING_STATS_OUTPUT_FILE = "scouting_stats.csv"
