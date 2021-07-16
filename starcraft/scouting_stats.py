@@ -531,8 +531,9 @@ def scouting_times(replay, which, current_map_path_data):
 
     try:
         frames = r.frames
+        print("starting final scouting states")
         team1_scouting_states, team2_scouting_states = final_scouting_states(r, current_map_path_data)
-
+        print("calculated final scouting states")
         # times normalized by the length of the game
         if which == 1:
             team1_time_list = scouting_timefrac_list(team1_scouting_states, frames)

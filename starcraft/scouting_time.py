@@ -37,7 +37,7 @@ def generateFields(filename, which, map_path_data):
     a 2 will return absolute frames.'''
     # loading the replay
     try:
-        print("analyzing replay",filename)
+        print("analyzing replay", filename)
         t = time.time()
         # extracting the game id and adding the correct tag
         # pathname = "practice_replays/" + filename
@@ -55,10 +55,10 @@ def generateFields(filename, which, map_path_data):
         except:
             print(filename, "cannot load using sc2reader due to an internal ValueError")
             raise
-        print("loaded replay", filename)
+        print("loaded replay", filename, "len:", r.real_length)
         team1_times, team2_times = scouting_stats.scouting_times(r, which, map_path_data)
         team1_rank, team1_rel_rank, team2_rank, team2_rel_rank = scouting_stats.ranking_stats(r)
-
+        print("finished scouting stats")
         team1_uid = r.players[0].detail_data['bnet']['uid']
         team2_uid = r.players[1].detail_data['bnet']['uid']
         team1_race = r.players[0].play_race
@@ -76,10 +76,6 @@ def generateFields(filename, which, map_path_data):
         return
 
 
-def test(replay):
-    return None
-
-
 def writeToCsv(which, filename):
     '''writeToCsv gathers information about all valid replays and writes
     that information to a csv for analysis in R. This file in particular
@@ -95,25 +91,23 @@ def writeToCsv(which, filename):
     # with the command line argument -w
     results = []
     count = 0
-    for map_name_group, replays in group_replays_by_map(file_locations.REPLAY_INFO_FILE).items():
-        if "EternalEmpireLE" not in map_name_group:
-            continue
-        if count > 1000:
+    with Pool(min(cpu_count(), 10)) as pool:
+        for map_name_group, replays in group_replays_by_map(file_locations.REPLAY_INFO_FILE).items():
+            if "EternalEmpireLE" not in map_name_group:
+                continue
+            if count > 1000:
+                break
+            map_path_data = load_path_data(map_name_group)
+            print("loaded path data for map", map_name_group, "with", len(replays), "replays")
+            count += len(replays)
+            map_time = time.time()
+            new_results = map(partial(generateFields, which=which, map_path_data=map_path_data), replays[0:10])
+            print("analyzing", len(replays), "replays for map", map_name_group, "took", time.time() - map_time)
+            for result in new_results:
+                results.append(result)
             break
-        map_path_data = load_path_data(map_name_group)
-        print("loaded path data for map", map_name_group, "with", len(replays), "replays")
-        count += len(replays)
-        pool = Pool(min(cpu_count(), 60))
-        map_time = time.time()
-        new_results = pool.map(partial(generateFields, which=which, map_path_data=map_path_data), replays[:100])
-        print("analyzing", len(replays), "for map", map_name_group, "took", time.time() - map_time)
-        for result in new_results:
-            results.append(result)
-        pool.close()
-        pool.join()
-        break
     with open(filename, 'w', newline='') as my_csv:
-        events_out = csv.DictWriter(my_csv, fieldnames=["GameID", "UID", "Rank", "ScoutTime"])
+        events_out = csv.DictWriter(my_csv, fieldnames=["GameID", "UID", "Rank", "Race", "ScoutTime"])
         events_out.writeheader()
         for fields in results:
             if fields:
@@ -145,7 +139,7 @@ if __name__ == "__main__":
     #     sc2reader.log_utils.add_log_handler(logging.StreamHandler(sys.stdout), "INFO")
 
     t1 = time.time()
-    writeToCsv(1, "scouting_time_fraction.csv")
+    #writeToCsv(1, "scouting_time_fraction.csv")
     writeToCsv(2, "scouting_time_frames1.csv")
     deltatime = time.time() - t1
     print("Run time: ", "{:2d}".format(int(deltatime // 60)), "minutes and", "{:05.2f}".format(deltatime % 60),

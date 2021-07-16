@@ -68,7 +68,7 @@ unit_vision_ranges = {
     "LiberatorAG": 10,
     "Marauder": 10,
     "Viking": 10,
-    "VikingAssault":10,
+    "VikingAssault": 10,
     "Corruptor": 10,
     "Hatchery": 10,
     "Infestor": 10,
@@ -112,9 +112,11 @@ def get_unit_vision_range(unit_name):
     if "Changeling" in unit_name:
         return get_unit_vision_range("Changeling")
     if unit_name not in unit_vision_ranges:
-        with open("missing_unit_vision.txt","a") as f:
-            f.write(unit_name + "\n")
-        return 9 # todo make this unnecessary
+        with open("missing_unit_vision.txt", "a") as f:
+            already_missing = f.readlines()
+            if unit_name not in [it.strip() for it in already_missing]:
+                f.write(unit_name + "\n")
+        return 9  # todo make this unnecessary
     return unit_vision_ranges[unit_name]
 
 
@@ -197,6 +199,8 @@ class UnitData:
     def get_position_estimate(self, frame):
         if self.path is None:
             return self.pos
+        if len(self.path) == 0:
+            print("no path")
         if len(self.path) == 1:
             return self.path[0]
         if is_flying_unit(self.unit.name):
@@ -254,7 +258,7 @@ def build_scouting_dictionaries(replay, events, objects, frames, current_map_pat
     # Add starting bases
     base_names = ["Hatchery", "Lair", "Hive", "Nexus", "CommandCenter", "CommandCenterFlying",
                   "OrbitalCommand", "OrbitalCommandFlying", "PlanetaryFortress"]
-
+    print("test1")
     for cur_frame in range(1, 3):
         start_base = \
             [u for u in objects if
@@ -281,6 +285,7 @@ def build_scouting_dictionaries(replay, events, objects, frames, current_map_pat
     # iterating through events in order
     for event in injected_events:
         cur_frame = event.frame
+        print("test3",cur_frame)
         # adding new units to the list of active units
         if isinstance(event, sc2reader.events.tracker.UnitBornEvent):
             if not event.unit.is_building:
@@ -316,7 +321,7 @@ def build_scouting_dictionaries(replay, events, objects, frames, current_map_pat
 
                     # checking for the first instance of scouting - units ordered to
                 # the opponent's base
-
+                print("test4")
                 target_location = event.location
                 # print("sending", event.active_selection, "to", target_location, "at sec", cur_frame / 22.4)
                 # the current player has just ordered their selected non-building units to move to the location
@@ -334,6 +339,7 @@ def build_scouting_dictionaries(replay, events, objects, frames, current_map_pat
                         continue
                     unit_data.path = current_map_path_data.get_path(unit_data.pos, target_location)
                     unit_data.path_start_frame = event.frame
+                print("test5")
         # checking camera events
         elif isinstance(event, sc2reader.events.game.CameraEvent):
             if event.player.is_observer or event.player.is_referee:
@@ -344,6 +350,7 @@ def build_scouting_dictionaries(replay, events, objects, frames, current_map_pat
             elif cur_team == 2:
                 opp_team = 1
             camera_location = event.location
+            print("testtestest")
             # looking at their own base
             if within_distance(camera_location, event.player.bases[cur_frame],
                                SCOUTING_CAMERA_DISTANCE_FROM_BASE):  # TODO inaccuracy? this checks with
@@ -371,6 +378,7 @@ def build_scouting_dictionaries(replay, events, objects, frames, current_map_pat
                     if dist(camera_location, base_location) < SCOUTING_CAMERA_DISTANCE_FROM_BASE and \
                             (cur_frame - (possible_scouting_units[opp_team][base][1] if base in possible_scouting_units[
                                 opp_team] else -1e10)) < SCOUTING_MAX_TIME_AFTER_UNIT_ARRIVES:
+                        print("blahblah")
                         # if the camera is within a certain distance and a unit has been there in the last X seconds
                         scouting_states[cur_team] = updatePrevScoutStates(scouting_states[cur_team], cur_frame,
                                                                           prev_frames[cur_team],
@@ -409,6 +417,7 @@ def build_scouting_dictionaries(replay, events, objects, frames, current_map_pat
                             opp_team = 1  # TODO potential bug here? players might be different ids?
                         for base, base_location in replay.player[opp_team].bases[cur_frame].items():
                             if dist(base_location, unit_data.pos) < get_unit_vision_range(unit_data.unit.name) * 2:
+                                print("peepbobobobo")
                                 if base not in units_scouting_base:
                                     units_scouting_base[base] = []
                                 units_scouting_base[base].append(unit_data.unit)
@@ -626,7 +635,7 @@ def final_scouting_states(replay, current_map_path_data):
     objects = r.objects.values()
     team1_scouting_states, team2_scouting_states = build_scouting_dictionaries(r, allEvents, objects, frames,
                                                                                current_map_path_data)
-
+    print("built scouting dicts")
     battles, harassing = battle_detector.buildBattleList(r)
     team1_scouting_states = integrate_engagements(team1_scouting_states, battles, scale, "Engaged in Battle")
     team2_scouting_states = integrate_engagements(team2_scouting_states, battles, scale, "Engaged in Battle")

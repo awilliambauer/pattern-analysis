@@ -142,7 +142,9 @@ def get_movement_speed(unit_name, **options):
         modified_unit_name += "Creep"
     if unit_name not in movement_speeds:
         with open("missing_unit_speeds.txt","a") as f:
-            f.write(unit_name + "\n")
+            already_missing = f.readlines()
+            if unit_name not in [it.strip() for it in already_missing]:
+                f.write(unit_name + "\n")
         return 3.5  # todo make this unnecessary!
     return movement_speeds[unit_name] / 22.4  # convert units per second into units per frame
 
@@ -192,7 +194,6 @@ def get_position_estimate_along_path(path: List[Point2], start_time, current_tim
     current_distance_traveled = 0.0
     if len(path) == 1:
         return path[0]
-
     for (prev, current) in window(path):
         remaining_distance = estimate_distance_traveled - current_distance_traveled
         distance_between_two = current.distance_to(prev)

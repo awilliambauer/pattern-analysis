@@ -2,11 +2,12 @@ import os
 import random
 from multiprocessing import Pool, cpu_count
 import math
-from typing import List
+from typing import List, Optional
 import sc2
 from sc2.position import Point3, Point2
 import traceback
 from loguru import logger
+import time
 import pickle
 import lzma
 from names_to_hashes import get_hashes
@@ -160,8 +161,25 @@ PATH_ROW_CHUNK_SIZE = 10
 PATH_RESOLUTION = 5
 
 
+def lower_resolution(path):
+    if path is None:
+        return None
+    new_path = []
+    current_idx = 0
+    current_point = None
+    while current_point != path[-1]:
+        current_point = path[current_idx]
+        adjusted_point = ((current_point[0] // PATH_RESOLUTION) * PATH_RESOLUTION,
+                          (current_point[1] // PATH_RESOLUTION) * PATH_RESOLUTION)
+        if len(new_path) == 0 or new_path[-1] != adjusted_point:
+            new_path.append(adjusted_point)
+        current_idx += 1
+    return new_path
+
+
 def generate_paths(file):
     try:
+        start_time = time.time()
         with lzma.open("map_data/" + file, "rb") as f:
             raw_game_data, raw_game_info, raw_observation = pickle.load(f)
 
@@ -183,19 +201,19 @@ def generate_paths(file):
                     y1 = y1_relative + y_offset
                     for x2 in range(0, astar_grid.shape[0], PATH_RESOLUTION):
                         for y2 in range(0, astar_grid.shape[1], PATH_RESOLUTION):
-                            if (x1, y1) not in paths.keys():
-                                paths[(x1, y1)] = {}
-                            paths[(x1, y1)][(x2, y2)] = map_data.pathfind((x1, y1), (x2, y2), astar_grid)
-            with lzma.open("map_path_data/" + file[:-3] + str(chunk).zfill(2) + ".xz", "wb") as f:
+                            if x1 != x2 or y1 != y2:  # if equal, unit is already there
+                                best_path = lower_resolution(map_data.pathfind((x1, y1), (x2, y2), astar_grid))
+                                if best_path is not None:
+                                    if best_path[0] == (x1, y1):
+                                        if len(best_path) != 1:
+                                            paths[(x1, y1, x2, y2)] = best_path[1]
+                                    else:
+                                        paths[(x1, y1, x2, y2)] = best_path[0]
+            with open("map_path_data_better_optimized/" + file[:-3] + str(chunk).zfill(2) + ".pkl", "wb") as f:
                 pickle.dump(paths, f)
                 f.close()
                 print("Saving path data chunk", chunk, "for map", file)
-
-        print("Generated",
-              (astar_grid.shape[0] * astar_grid.shape[1] * astar_grid.shape[0] * astar_grid.shape[1] // (
-                      PATH_RESOLUTION ** 4)),
-              "paths for map", map_data.map_name)
-
+        print("Generated paths for map", map_data.map_name, "in", time.time() - start_time, "seconds")
     except Exception as e:
         print("Exception generating path data for map", file, e)
         traceback.print_exc()
@@ -205,17 +223,17 @@ def generate_paths(file):
 def create_path_data():
     files = os.listdir(file_locations.PICKLED_MAP_DATA_DIRECTORY)
     # files = files[:8]  # just limiting map count for debugging
-    files = [
-        "TritonLE.xz",
-        "LightshadeLE.xz",
-        "RomanticideLE.xz",
-        "OxideLE.xz",
-        "Turbocruise84LE.xz",
-        "PurityandIndustryLE.xz",
-        "BlackburnLE.xz",
-        "BeckettIndustriesLE.xz",
-        "StasisLE.xz"
-    ]
+    # files = [
+    #     "TritonLE.xz",
+    #     "LightshadeLE.xz",
+    #     "RomanticideLE.xz",
+    #     "OxideLE.xz",
+    #     "Turbocruise84LE.xz",
+    #     "PurityandIndustryLE.xz",
+    #     "BlackburnLE.xz",
+    #     "BeckettIndustriesLE.xz",
+    #     "StasisLE.xz"
+    # ]
     pool = Pool(min(cpu_count(), 9))
     results = pool.map(generate_paths, files)
     pool.close()
@@ -227,15 +245,31 @@ class MapPathData:
         self.map_name = map_name
         self.chunks = chunks
 
-    def get_path(self, source, dest) -> List[Point2]:
+    def get_path(self, source, dest) -> Optional[List[Point2]]:
+        print("getting path")
         nearest_source_x = round(source[0] / PATH_RESOLUTION) * PATH_RESOLUTION
         nearest_source_y = round(source[1] / PATH_RESOLUTION) * PATH_RESOLUTION
         nearest_dest_x = round(dest[0] / PATH_RESOLUTION) * PATH_RESOLUTION
         nearest_dest_y = round(dest[1] / PATH_RESOLUTION) * PATH_RESOLUTION
-        chunk_idx = nearest_source_y // PATH_ROW_CHUNK_SIZE
-        # print(chunk_idx, (nearest_source_x, nearest_source_y),
-        #       (nearest_dest_x, nearest_dest_y))  # TODO make this get a better approximation of src and dest
-        return self.chunks[int(chunk_idx)][(nearest_source_x, nearest_source_y)][(nearest_dest_x, nearest_dest_y)]
+        if nearest_dest_x == nearest_source_x and nearest_dest_y == nearest_source_y:
+            return None
+        start_chunk_idx = int(nearest_source_y // PATH_ROW_CHUNK_SIZE)  # is int() here redundant?
+        path = []
+        if (nearest_source_x, nearest_source_y, nearest_dest_x, nearest_dest_y) not in self.chunks[start_chunk_idx]:
+            return None
+        next_point = self.chunks[start_chunk_idx][(nearest_source_x, nearest_source_y, nearest_dest_x, nearest_dest_y)]
+        while next_point[0] != nearest_dest_x or next_point[1] != nearest_dest_y:
+            print("this point:",next_point)
+            path.append(Point2(next_point))
+            next_chunk_idx = int(next_point[1] // PATH_ROW_CHUNK_SIZE)
+            if (next_point[0], next_point[1], nearest_dest_x, nearest_dest_y) not in self.chunks[next_chunk_idx]:
+                return path
+            next_point = self.chunks[next_chunk_idx][(next_point[0], next_point[1], nearest_dest_x, nearest_dest_y)]
+            print("next point:",next_point)
+        if len(path) == 0:
+            return None
+        print("got path")
+        return path
 
 
 # credit timgeb https://stackoverflow.com/questions/1952464/in-python-how-do-i-determine-if-an-object-is-iterable
@@ -249,13 +283,13 @@ def is_iterable(thing):
 
 def load_path_data_chunk(path_chunk_file_name):
     print("loading chunk", path_chunk_file_name)
-    with open(file_locations.MAP_PATH_DATA_DIRECTORY + "/" + path_chunk_file_name, "rb") as r:
+    with open("map_path_data_better_optimized" + "/" + path_chunk_file_name, "rb") as r:
         return pickle.load(r)
 
 
 def load_path_data(map_file_name):
     print("loading map", map_file_name)
-    files = os.listdir(file_locations.MAP_PATH_DATA_DIRECTORY)
+    files = os.listdir("map_path_data_better_optimized")
     chunk_file_names = set()
     for file in files:
         if isinstance(map_file_name, list) or isinstance(map_file_name, tuple):
@@ -268,17 +302,16 @@ def load_path_data(map_file_name):
     if len(chunk_file_names) == 0:
         return None
     chunks = []
-    for chunk_file_name in chunk_file_names:
+    for chunk_file_name in sorted(chunk_file_names):
         chunks.append(load_path_data_chunk(chunk_file_name))
-    chunks.sort(key=lambda chunk: next(iter(chunk.keys())))
     return MapPathData(map_file_name, chunks)
 
 
 def get_all_path_generated_maps():
     files = []
     for file in os.listdir("map_path_data"):
-        if file.endswith("00.pkl"):
-            files.append(file[:-6])
+        if file.endswith("00.xz"):
+            files.append(file[:-5])
     return files
 
 
@@ -292,16 +325,30 @@ def get_all_possible_names(map_name):
     return names
 
 
+def optimize_map(map):
+    print("optimizing", map)
+    map_path_data = load_path_data(map)
+    idx = 0
+    for chunk in map_path_data.chunks:
+        paths = {}
+        for start_pos, dict_1 in chunk.items():
+            for dest_pos, path in dict_1.items():
+                if path is not None:
+                    if start_pos not in paths:
+                        paths[start_pos] = {}
+                    paths[start_pos][dest_pos] = path
+
+        with open("map_path_data_optimized/" + map + str(idx).zfill(2) + ".pkl", "wb") as f:
+            pickle.dump(paths, f)
+            f.close()
+            print("Saving path data chunk", idx, "for map", map)
+        idx += 1
+
+
 def test():
-    maps = ["EternalEmpireLE"]
-    for map in maps:
-        map_path_data = load_path_data(map)
-        idx = 0
-        for chunk in map_path_data.chunks:
-            with open("/Accounts/leisherz/pattern-analysis/starcraft/map_path_data_non_pickle/" + map + str(idx).zfill(2) + ".pkl", "wb") as f:
-                pickle.dump(chunk, f)
-                print("Saving path data chunk", idx, "for map", map)
-            idx += 1
+    maps = get_all_path_generated_maps()
+    with Pool(min(cpu_count(), 60)) as pool:
+        pool.map(optimize_map, maps)
 
 
 if __name__ == "__main__":
