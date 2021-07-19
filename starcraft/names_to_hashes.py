@@ -1,3 +1,7 @@
+# used to get a list of hashes that have been associated with a map name
+# this in turn is used to load the correct map for any map name, even in foreign languages
+# ZL June 2021
+
 name_to_hash = {'ThunderbirdLE': ['7f85710b94d844af67b77d3c69ed33b1dfcff49d51242c5ca27d85b9a57679d3',
                                   '07074a19597aaa6507d08bbe3162ef21f3347f3b39f91f9444173192aa2248b5',
                                   '18086b64555491f087a687d610c6094a8cc4fb820cccf1c1cb016a9a4a19657b',

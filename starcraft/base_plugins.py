@@ -170,7 +170,7 @@ class BaseTracker(object):
                     if unit.id not in self.building_locs:
                         self.logger.info(f"\nlanded building {unit} should be in dict at {event.frame}: {replay.filename}, {event}")
                         for e in replay.events[::-1]:
-                            if unit.finished_at < e.frame < event.frame and isinstance(e, sc2reader.events.UnitTypeChangeEvent) and e.unit == unit and e.unit_type_name == target_type:
+                            if unit.finished_at is not None and unit.finished_at < e.frame < event.frame and isinstance(e, sc2reader.events.UnitTypeChangeEvent) and e.unit == unit and e.unit_type_name == target_type:
                                 # most recent landing
                                 self.logger.info(f"found recent landing {e}, last known loc = {get_last_known_loc(unit.id, e.frame, self.lookup)}, built at {self.lookup[unit.finished_at][unit.id]}")
                                 frame, loc = get_last_known_loc(unit.id, e.frame, self.lookup)
@@ -241,7 +241,7 @@ class BaseTracker(object):
                     mining_locs = [(loc, finish) for loc, finish, pref in zip(locs[labels == k], finishes[labels == k], prefs[labels == k]) if pref]
                     if len(mining_locs) > 1:
                         # split up clusters with more than one mining base
-                        original = min(mining_locs, key=lambda x: x[1])
+                        original = min(filter(lambda x: x is not None, mining_locs), key=lambda x: x[1])
                         to_split = [x for x in mining_locs if x[0].tolist() != original[0].tolist()]
                         for i, (loc, finish) in enumerate(to_split):
                             new_label = n_clusters + i

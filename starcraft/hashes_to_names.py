@@ -1,3 +1,7 @@
+# allows us to convert map hash to a list of names
+# used to load the correct map for each replay
+# ZL June 2021
+
 hash_to_names = {
     '7f85710b94d844af67b77d3c69ed33b1dfcff49d51242c5ca27d85b9a57679d3': ['ThunderbirdLE', 'OiseaudefoudreEC',
                                                                          'PtakGromuER', 'DonnervogelLE',
@@ -3456,4 +3460,7 @@ hash_to_names = {
 
 
 def get_names(hash):
+    """
+    Returns a list of map names which all have the same hash
+    """
     return hash_to_names[hash]

@@ -127,6 +127,7 @@ movement_speeds = {
     "Interceptor": 10.5
 }
 
+missing_units = set()
 
 def get_movement_speed(unit_name, **options):
     if "Burrowed" in unit_name and ("Roach" not in unit_name and "Infestor" not in unit_name):
@@ -141,10 +142,14 @@ def get_movement_speed(unit_name, **options):
     if "Creep" in options and options["Creep"]:
         modified_unit_name += "Creep"
     if unit_name not in movement_speeds:
-        with open("missing_unit_speeds.txt","a") as f:
-            already_missing = f.readlines()
-            if unit_name not in [it.strip() for it in already_missing]:
-                f.write(unit_name + "\n")
+        missing_units.add(unit_name)
+        # with open("missing_unit_speeds.txt","a") as f:
+        #     try:
+        #         already_missing = f.readlines()
+        #         if unit_name not in [it.strip() for it in already_missing]:
+        #             f.write(unit_name + "\n")
+        #     except:
+        #         print("missing unit",unit_name)
         return 3.5  # todo make this unnecessary!
     return movement_speeds[unit_name] / 22.4  # convert units per second into units per frame
 

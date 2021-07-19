@@ -9,18 +9,19 @@ import file_locations
 from functools import partial
 from multiprocessing import Pool, cpu_count
 from collections import Counter
-import scouting_stats
 from itertools import repeat
 import scouting_stats
+import unit_prediction
+import scouting_detector
 import file_locations
-from map_path_generation import load_path_data, get_all_possible_names
+from load_map_path_data import load_path_data
 from sc2reader.engine.plugins import SelectionTracker, APMTracker
 from selection_plugin import ActiveSelection
 from base_plugins import BaseTracker
-from replay_verification import group_replays_by_map, get_map_name_groups
+from generate_replay_info import group_replays_by_map
 import numpy as np
 import traceback
-
+from modified_rank_plugin import ModifiedRank
 try:
     from reprlib import repr
 except ImportError:
@@ -55,18 +56,15 @@ def generateFields(filename, which, map_path_data):
         except:
             print(filename, "cannot load using sc2reader due to an internal ValueError")
             raise
-        print("loaded replay", filename, "len:", r.real_length)
         team1_times, team2_times = scouting_stats.scouting_times(r, which, map_path_data)
         team1_rank, team1_rel_rank, team2_rank, team2_rel_rank = scouting_stats.ranking_stats(r)
-        print("finished scouting stats")
         team1_uid = r.players[0].detail_data['bnet']['uid']
         team2_uid = r.players[1].detail_data['bnet']['uid']
         team1_race = r.players[0].play_race
         team2_race = r.players[1].play_race
         fields = [game_id, team1_uid, team1_rank, team1_times, team2_uid, team2_rank, team2_times, team1_race,
                   team2_race]
-        print("generated fields for replay", filename)
-        print("time:", time.time() - t)
+        print("generated fields for replay", filename, "game length:", r.real_length, "time:", time.time() - t)
         return fields
 
     except KeyboardInterrupt:
@@ -91,21 +89,16 @@ def writeToCsv(which, filename):
     # with the command line argument -w
     results = []
     count = 0
-    with Pool(min(cpu_count(), 10)) as pool:
-        for map_name_group, replays in group_replays_by_map(file_locations.REPLAY_INFO_FILE).items():
-            if "EternalEmpireLE" not in map_name_group:
-                continue
-            if count > 1000:
-                break
+    with Pool(min(cpu_count(), 60)) as pool:
+        for map_name_group, replays in group_replays_by_map().items():
             map_path_data = load_path_data(map_name_group)
             print("loaded path data for map", map_name_group, "with", len(replays), "replays")
             count += len(replays)
             map_time = time.time()
-            new_results = map(partial(generateFields, which=which, map_path_data=map_path_data), replays[0:10])
+            new_results = pool.map(partial(generateFields, which=which, map_path_data=map_path_data), replays)
             print("analyzing", len(replays), "replays for map", map_name_group, "took", time.time() - map_time)
             for result in new_results:
                 results.append(result)
-            break
     with open(filename, 'w', newline='') as my_csv:
         events_out = csv.DictWriter(my_csv, fieldnames=["GameID", "UID", "Rank", "Race", "ScoutTime"])
         events_out.writeheader()
@@ -131,6 +124,7 @@ def writeToCsv(which, filename):
 if __name__ == "__main__":
     sc2reader.engine.register_plugin(APMTracker())
     sc2reader.engine.register_plugin(SelectionTracker())
+    sc2reader.engine.register_plugin(ModifiedRank())
     sc2reader.engine.register_plugin(ActiveSelection())
     bt = BaseTracker()
     #     bt.logger.setLevel(logging.ERROR)
@@ -140,7 +134,12 @@ if __name__ == "__main__":
 
     t1 = time.time()
     #writeToCsv(1, "scouting_time_fraction.csv")
-    writeToCsv(2, "scouting_time_frames1.csv")
+    writeToCsv(2, "scouting_time_seconds.csv")
     deltatime = time.time() - t1
     print("Run time: ", "{:2d}".format(int(deltatime // 60)), "minutes and", "{:05.2f}".format(deltatime % 60),
           "seconds")
+    with open("missing_unit_speeds.txt", "r") as file:
+        file.writelines(scouting_detector.missing_units)
+    with open("missing_unit_vision.txt", "r") as file:
+        file.writelines(unit_prediction.missing_units)
+
