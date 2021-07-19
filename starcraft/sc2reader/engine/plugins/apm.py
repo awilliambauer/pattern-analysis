@@ -29,15 +29,17 @@ class APMTracker(object):
         event.player.apm[int(event.second / 60)] += 1.4
 
     def handleSelectionEvent(self, event, replay):
-        event.player.aps[event.second] += 1.4
-        event.player.apm[int(event.second / 60)] += 1.4
+        if event.player: # some selection events lack a player
+            event.player.aps[event.second] += 1.4
+            event.player.apm[int(event.second / 60)] += 1.4
 
     def handleCommandEvent(self, event, replay):
         event.player.aps[event.second] += 1.4
         event.player.apm[int(event.second / 60)] += 1.4
 
     def handlePlayerLeaveEvent(self, event, replay):
-        event.player.seconds_played = event.second
+        if event.player: # some leave events lack a player
+            event.player.seconds_played = event.second
 
     def handleEndGame(self, event, replay):
         for human in replay.humans:

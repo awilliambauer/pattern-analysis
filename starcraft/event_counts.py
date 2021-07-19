@@ -85,7 +85,7 @@ def writeToCsv():
     files = []
     # valid_game_ids.txt musst be produced first by running scouting_stats.py
     # with the command line argument -w
-    games = open("valid_game_ids.txt", 'r')
+    games = open("valid_replay_filenames.txt", 'r')
     for line in games:
         files.append(line.strip())
     games.close()

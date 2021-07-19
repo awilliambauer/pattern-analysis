@@ -7,8 +7,10 @@ import csv
 import numpy as np
 import logging
 import sys
+from modified_rank_plugin import ModifiedRank
+
 root = logging.getLogger()
-#root.setLevel(logging.DEBUG)
+# root.setLevel(logging.DEBUG)
 
 handler = logging.StreamHandler(sys.stdout)
 handler.setLevel(logging.DEBUG)
@@ -20,6 +22,7 @@ with open("lookup.json") as fp:
     lookup = json.load(fp)
 
 sc2reader.engine.register_plugin(SelectionTracker())
+sc2reader.engine.register_plugin(ModifiedRank())
 sc2reader.engine.register_plugin(APMTracker())
 sc2reader.engine.register_plugin(ActiveSelection())
 
@@ -46,13 +49,15 @@ with open("sc2_test_events.csv", 'w') as fp:
                 try:
                     com_type = lookup[command.name][command.ability.name]
                 except KeyError:
-                    print("lookup doesn't have {} - {} - {}".format(command.ability.name, command.name, command.active_selection))
+                    print("lookup doesn't have {} - {} - {}".format(command.ability.name, command.name,
+                                                                    command.active_selection))
                     continue
                 if com_type is None:
                     continue
                 selection = command.active_selection
                 if com_type == "Order":
-                    selection = [u for u in command.active_selection if u.name not in lookup["ignoreunits"] and not u.is_building]
+                    selection = [u for u in command.active_selection if
+                                 u.name not in lookup["ignoreunits"] and not u.is_building]
                     if len(selection) == 0:
                         continue
                     if all(u.name in lookup["econunits"] for u in selection):
@@ -70,4 +75,3 @@ with open("sc2_test_events.csv", 'w') as fp:
                         events_out.writerow({"game_id": game_id, "uid": uid, "frame": command.frame, "type": com_type})
                 else:
                     events_out.writerow({"game_id": game_id, "uid": uid, "frame": command.frame, "type": com_type})
-                        

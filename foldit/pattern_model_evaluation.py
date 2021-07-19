@@ -1,5 +1,6 @@
 import argparse
-from sklearn.ensemble import GradientBoostingRegressor
+from sklearn.experimental import enable_hist_gradient_boosting
+from sklearn.ensemble import GradientBoostingRegressor, HistGradientBoostingRegressor
 from sklearn.model_selection import cross_val_score, ShuffleSplit, ParameterGrid
 from sklearn.feature_selection import RFECV
 import pickle
@@ -10,6 +11,8 @@ import os
 import string
 import sys
 import csv
+import ast
+import time
 from itertools import product, groupby
 from functools import partial
 from multiprocessing import Pool
@@ -38,12 +41,9 @@ def compute_pattern_actions(r: pd.Series, k: int, cid: int, sub_k: int,
         return pd.Series([sum(r.actions[puz_cs == scid]) for scid in subcluster_series.labels],
                          index=["pattern_{}_actions".format(l) for l in subcluster_series.labels])
 
+
 def score_candidate(X, y, cv):
-    selector = RFECV(GradientBoostingRegressor(loss="huber"), step=1, cv=cv)
-    selector.fit(X, y)
-    X_sel = selector.transform(X)
-    # score for this candidate is CV score fitting on X_sel
-    return np.mean(cross_val_score(GradientBoostingRegressor(loss="huber"), X_sel, y, cv=cv))
+    return np.mean(cross_val_score(GradientBoostingRegressor(loss="huber"), X, y, cv=cv))
 
 
 def generate_candidates(k, sub_ks, pattern_lookups, cids, cur_sub_k_idx):
@@ -54,10 +54,10 @@ def generate_candidates(k, sub_ks, pattern_lookups, cids, cur_sub_k_idx):
 
 def find_best_predictive_model(model_dir: str, user: str, data: pd.DataFrame,
                                puz_idx_lookup:  Dict[Tuple[str, str], Tuple[int, int]],
-                               pattern_lookups: Dict[int, PatternLookup],
-                               cluster_lookup: Dict[int, np.ndarray],
-                               subseries_lookups: Dict[int, Dict[int, SubSeriesLookup]],
-                               subclusters: SubClusters,
+                               pattern_lookups: Dict[str, Dict[int, PatternLookup]],
+                               cluster_lookup: Dict[str, Dict[int, np.ndarray]],
+                               subseries_lookups: Dict[str, Dict[int, Dict[int, SubSeriesLookup]]],
+                               subclusters: Dict[str, SubClusters],
                                action_counts) -> Tuple:
     """
     BRUTE FORCE APPROACH, memory needs are too high
@@ -83,7 +83,7 @@ def find_best_predictive_model(model_dir: str, user: str, data: pd.DataFrame,
     # action_counts: (k, (cid, sub_k)) -> pd.DataFrame (single column for base pattern, column per subpattern otherwise)
     subcluster_series_lookup = {} # (k, (cid, sub_k)) -> SubclusterSeries
 
-    cv = ShuffleSplit(n_splits=3, test_size=0.3, random_state=304)
+    cv = ShuffleSplit(random_state=304)
     scores_lookup = {}
     for k in pattern_lookups[user]:
         scores = {}  # candidate tuple -> CV score
@@ -170,14 +170,14 @@ if __name__ == "__main__":
     assert os.path.exists(args.config)
     with open(args.config) as fp:
         config = json.load(fp)
-
+    start_time = time.perf_counter()
 
     print("loading raw data", end="...")
     # pids = ["2003433", "2003642", "2003195", "2003313", "2003287", "2002475", "2002294", "2002196", "2002141", "2002110"]
     soln_lookup = {}
     parent_lookup = {}
     child_lookup = {}
-    data, puz_metas = load_extend_data(config["pids"] + config["test_pids"], soln_lookup, parent_lookup, child_lookup, False, 600)
+    data, puz_metas = load_extend_data(config["train_pids"] + config["test_pids"], soln_lookup, parent_lookup, child_lookup, False, 600)
 
     with open("../data/foldit/user_metadata_v4.csv") as fp:
         user_metas = {(r['uid'], r['pid']): r for r in csv.DictReader(fp)}
@@ -200,7 +200,8 @@ if __name__ == "__main__":
                                 'best':      float(r['best']),
                                 'best_solo': float(r['best_solo'])
                                } for r in csv.DictReader(fp)}
-    print("done")
+    print(f"done (took {time.perf_counter() - start_time:0.2f} seconds)")
+    start_time = time.perf_counter()
 
     print("evaluating model at", args.model_dir)
     print("loading model data", end="...")
@@ -213,7 +214,9 @@ if __name__ == "__main__":
         series_lookup["all"] = all_series
 
     krange = config["krange"]
-    users = [d for d in os.listdir(args.model_dir) if os.path.isdir(f"{args.model_dir}/{d}")] if "user" in config else ["all"]
+    users = [d for d in os.listdir(args.model_dir) if 
+                os.path.isdir(f"{args.model_dir}/{d}") and 
+                os.path.exists(f"{args.model_dir}/{d}/subpatterns")] if "user" in config else ["all"]
 
     _, mrf_lookup, model_lookup, _ = load_TICC_output(args.model_dir, users, krange)
     dummy_subseries_lookup = {user: {int(d.strip("k")): [int(c.strip("cid")) for c in os.listdir(f"{args.model_dir}/{user}/subpatterns/{d}")]
@@ -231,7 +234,8 @@ if __name__ == "__main__":
             pattern_lookups = pickle.load(fp)
     else:
         # predict patterns on full data for all candidate models
-        print("generating patterns on full data", end="...")
+        print("\ngenerating patterns on full data", end="...")
+        gen_start_time = time.perf_counter()
         cluster_lookup    = {}
         subseries_lookups = {}
         subclusters       = {}
@@ -264,7 +268,9 @@ if __name__ == "__main__":
             pickle.dump(subclusters, fp)
         with open(args.model_dir + "/eval/pattern_lookup.pickle", "wb") as fp:
             pickle.dump(pattern_lookups, fp)
-    print("done")
+        print(f"done (took {time.perf_counter() - gen_start_time:0.2f} seconds)")
+    print(f"done (took {time.perf_counter() - start_time:0.2f} seconds)")
+    start_time = time.perf_counter()
     # select model
     print("generating action count series", end="...")
     rows = []
@@ -285,25 +291,37 @@ if __name__ == "__main__":
     data["median_prior_perf"] = data.apply(lambda r: np.median([float(x['perf']) for x in user_meta_lookup[r.uid]
                                                                 if puz_infos[x['pid']]["end"] < puz_infos[r.pid]["start"]]), axis=1)
     data.median_prior_perf.fillna(data.median_prior_perf.median(), inplace=True)
-    print("done")
+    print(f"done (took {time.perf_counter() - start_time:0.2f} seconds)")
 
     scores_lookup = {}
     for user in users:
-        print("finding most predictive model for", user)
-        action_counts = {}
-        best_k, best_candidate, scores = find_best_predictive_model(args.model_dir, user, data, puz_idx_lookup, pattern_lookups,
-                                                                    cluster_lookup, subseries_lookups, subclusters,
-                                                                    action_counts)
-        scores_lookup[user] = scores
-        with open(f"{args.model_dir}/eval/{user}_best_model.txt", 'w') as fp:
-            fp.write(str((best_k, best_candidate)) + "\n")
-            
-        with open(f"{args.model_dir}/eval/{user}_action_counts.pickle", "wb") as fp:
-            pickle.dump(action_counts, fp)
+        if os.path.exists(f"{args.model_dir}/eval/{user}_best_model.txt"):
+            with open(f"{args.model_dir}/eval/{user}_best_model.txt") as fp:
+                best_k, best_candidate = ast.literal_eval(fp.read())
 
-        print("selected model:", best_k, best_candidate)
+            with open(f"{args.model_dir}/eval/{user}_action_counts.pickle", "rb") as fp:
+                action_counts = pickle.load(fp)
+        else:
+            start_time = time.perf_counter()
+            print(f"finding most predictive model for {user}", end="...")
+            action_counts = {}
+            best_k, best_candidate, scores = find_best_predictive_model(args.model_dir, user, data[data.apply(lambda r: r.pid in config["train_pids"], axis=1)],
+                                                                        puz_idx_lookup, pattern_lookups,
+                                                                        cluster_lookup, subseries_lookups, subclusters,
+                                                                        action_counts)
+            scores_lookup[user] = scores
+            with open(f"{args.model_dir}/eval/{user}_best_model.txt", 'w') as fp:
+                fp.write(str((best_k, best_candidate)) + "\n")
+
+            with open(f"{args.model_dir}/eval/{user}_action_counts.pickle", "wb") as fp:
+                pickle.dump(action_counts, fp)
+
+            print(f"done (took {time.perf_counter() - start_time:0.2f} seconds)")
+            start_time = time.perf_counter()
+
+        print(f"selected model: {best_k} {best_candidate}")
     
-        ps = sum([[(get_pattern_label(p, cid, sub_k), p) for p in pattern_lookups[best_k][cid][sub_k]] for cid, sub_k in best_candidate], [])
+        ps = sum([[(get_pattern_label(p, cid, sub_k), p) for p in pattern_lookups[user][best_k][cid][sub_k]] for cid, sub_k in best_candidate], [])
         ps_uid_pid = {tag: sorted(xs) for tag, xs in groupby(sorted(ps, key=lambda p: (p[1].uid, p[1].pid)), lambda p: (p[1].uid, p[1].pid))}
         pattern_use_lookup = {tag: {pt for pt, _ in xs} for tag, xs in ps_uid_pid.items()}
         pts = {pt for pt, p in ps}
@@ -322,7 +340,7 @@ if __name__ == "__main__":
         results = results.merge(pd.DataFrame(data=acc), on=["uid", "pid"])
         #results["distinct_patterns"] = results.apply(lambda r: len(pattern_use_lookup[(r.uid, r.pid)]), axis=1)
         #results["action_count_all"] = results.apply(lambda r: user_metas[(r.uid, r.pid)]["action_count_all"], axis=1)
-        # results["action_count_relevant"] = results.apply(lambda r: user_metas[(r.uid, r.pid)]["action_count_relevant"], axis=1)
+        results["action_count_relevant"] = results.apply(lambda r: user_metas[(r.uid, r.pid)]["action_count_relevant"], axis=1)
         #results["action_count_best"] = results.apply(lambda r: user_metas[(r.uid, r.pid)]["action_count_best"], axis=1)
         #results["best_energy_time"] = results.apply(lambda r: user_metas[(r.uid, r.pid)]["best_energy_time"], axis=1)
         #results["action_rate_all"] = results.apply(lambda r: r.action_count_all / r.time, axis=1)
@@ -331,40 +349,47 @@ if __name__ == "__main__":
     
         # find best model, compare to baseline
     
-        features = results.drop(IGNORE_COLUMNS, axis=1)
+        tuning_pids = config["train_pids"] + config["test_pids"][:len(config["test_pids"]) // 3]
+        features = results[results.apply(lambda r: r.pid in tuning_pids, axis=1)].drop(IGNORE_COLUMNS, axis=1)
     
         baseline_features = ["action_count_relevant", "median_prior_perf", "experience"]
     
         seed = 13*17*31
         models = {#"ridge": Ridge,
-                  "ensemble": GradientBoostingRegressor}
+                  "gbr": GradientBoostingRegressor,}
+                #   "hist": HistGradientBoostingRegressor} # no HistGradientBoost for now, as it does not support feature importance
+                                                           # this breaks RFECV in addition to being less useful
         model_params = {"ridge": {"random_state": [seed], "alpha": [0.1, 0.5, 1, 5, 10], "normalize": [True, False]},
-                        "ensemble": {"random_state": [seed], "learning_rate": [0.01, 0.02, 0.05, 0.1],
-                                     "n_estimators": [100, 500, 1000], "n_iter_no_change": [100]}}
-        # std_base = deepcopy(model_params["ensemble"])
-        # std_base["loss"] = ["ls", "lad"]
-        # huber_base = deepcopy(model_params["ensemble"])
-        # huber_base["loss"] = ["huber"]
-        # huber_base["alpha"] = [0.9, 0.95, 0.99]
-        # model_params["ensemble"] = [std_base, huber_base]
-        model_params["ensemble"]["loss"] = ["huber"]
-        model_params["ensemble"]["alpha"] = [0.85, 0.9, 0.95, 0.99]
+                        "gbr": {"random_state": [seed], "learning_rate": [0.01, 0.05, 0.1, 0.5],
+                                "n_estimators": [100, 500], "n_iter_no_change": [100]},
+                        "hist": {"random_state": [seed], "learning_rate": [0.01, 0.05, 0.1, 0.5, 1],
+                                 "max_iter": [100, 500, 1000, 1500]}}
+
+        model_params["gbr"]["loss"] = ["huber"]
+        model_params["gbr"]["alpha"] = [0.9, 0.95, 0.99]
+        model_params["hist"]["loss"] = ["least_squares", "least_absolute_deviation"]
+        model_params["hist"]["l2_regularization"] = [0, 1.5]
     
         with Pool(25, maxtasksperchild=4) as pool:
-            cv = ShuffleSplit(n_splits=3, test_size=0.3, random_state=seed)
+            cv = ShuffleSplit(random_state=seed)
             print("fitting baseline")
+            start_time = time.perf_counter()
             scores = {}
             X = features[baseline_features].values
             y = features["perf"].values.ravel()
-            for lab, model in models.items():
+            for model_label, model in models.items():
                 evals = []
-                for param in ParameterGrid(model_params[lab]):
+                for param in ParameterGrid(model_params[model_label]):
                     evals.append((pool.apply_async(score_param, (param, model, X, y, cv)), param))
-                print("{}: {} scores sent to pool, collecting results".format(lab, len(evals)))
-                scores[lab] = [(x.get(), param) for x, param in evals]
+                print("{}: {} scores sent to pool, collecting results".format(model_label, len(evals)))
+                scores[model_label] = [(x.get(), param) for x, param in evals]
             baseline_scores = scores
             print("baseline")
-            print(max(scores["ensemble"], key=lambda x: x[0][0]))
+            # [0] to get return value of score_param, [0] to get the CV accuracy
+            for model_label in models:
+                print(f"{model_label}: {max(scores[model_label].items(), key=lambda x: x[0][0])}")
+            print(f"(took {time.perf_counter() - start_time:0.2f} seconds)")
+            start_time = time.perf_counter()
     
             model_scores = {}
             for ftype in ["actions", "use"]:
@@ -375,15 +400,19 @@ if __name__ == "__main__":
                 scores = {}
                 X = features[candidate_features].values
                 y = features["perf"].values.ravel()
-                for lab, model in models.items():
+                for model_label, model in models.items():
                     evals = []
-                    for param in ParameterGrid(model_params[lab]):
+                    for param in ParameterGrid(model_params[model_label]):
                         evals.append((pool.apply_async(score_param, (param, model, X, y, cv)), param))
-                    print("{}: {} scores sent to pool, collecting results".format(lab, len(evals)))
-                    scores[lab] = [(x.get(), param) for x, param in evals]
+                    print("{}: {} scores sent to pool, collecting results".format(model_label, len(evals)))
+                    scores[model_label] = [(x.get(), param) for x, param in evals]
                 model_scores[ftype] = scores
                 print("best {} model".format(ftype))
-                print(max(scores["ensemble"], key=lambda x: x[0][0]))
+                # [0] to get return value of score_param, [0] to get the CV accuracy
+                for model_label in models:
+                    print(f"{model_label}: {max(scores[model_label].items(), key=lambda x: x[0][0])}")
+                print(f"(took {time.perf_counter() - start_time:0.2f} seconds)")
+                start_time = time.perf_counter()
     
         with open(f"{args.model_dir}/eval/{user}_baseline_scores.pickle", 'wb') as fp:
             pickle.dump(baseline_scores, fp)

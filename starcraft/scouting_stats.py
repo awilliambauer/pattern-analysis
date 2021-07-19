@@ -538,7 +538,7 @@ def scouting_times(replay, which, current_map_path_data):
             team1_time_list = scouting_timeframe_list1(team1_scouting_states)
             team2_time_list = scouting_timeframe_list1(team2_scouting_states)
 
-        return team1_time_list, team2_time_list
+
 
     except:
         traceback.print_exc()

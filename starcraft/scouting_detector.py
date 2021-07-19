@@ -470,7 +470,7 @@ def updatePrevScoutStates(scouting_dict, frame, prev_frame, prev_state):
         i += 1
     return scouting_dict
 
-
+  
 def is_scouting(frame_list):
     '''isScouting returns True if the combination of tags for a frame indicates
     that the player is scouting, and False if otherwise. isScouting takes in

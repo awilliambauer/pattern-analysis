@@ -206,7 +206,7 @@ if __name__ == "__main__":
         with open(args.lookup, "rb") as fp:
             race_lookup = pickle.load(fp)
     else:
-        with open("valid_game_ids.txt") as fp:
+        with open("valid_replay_filenames.txt") as fp:
             replay_files = [x.strip() for x in fp.readlines() if x.startswith("spawningtool")]
         if args.sample:
             matchups = []

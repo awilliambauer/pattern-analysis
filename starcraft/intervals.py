@@ -14,6 +14,8 @@ import scouting_stats
 from sc2reader.engine.plugins import SelectionTracker, APMTracker
 from selection_plugin import ActiveSelection
 from base_plugins import BaseTracker
+from modified_rank_plugin import ModifiedRank
+
 
 def generateFields(filename):
     '''generateFields takes in a filename of a replay, loads it and gathers necessary
@@ -52,6 +54,7 @@ def generateFields(filename):
     except:
         return
 
+
 def writeToCsv():
     '''writeToCsv gathers information about all valid replays and writes
     that information to a csv for analysis in R. This file in particular
@@ -60,7 +63,7 @@ def writeToCsv():
     files = []
     # valid_game_ids.txt musst be produced first by running scouting_stats.py
     # with the command line argument -w
-    games = open("valid_game_ids.txt", 'r')
+    games = open("valid_replay_filenames.txt", 'r')
     for line in games:
         files.append(line.strip())
     games.close()
@@ -78,21 +81,24 @@ def writeToCsv():
                 game_id = fields[0]
                 team1_uid, team1_rank, team1_avg_int = fields[1], fields[2], fields[3]
                 team2_uid, team2_rank, team2_avg_int = fields[4], fields[5], fields[6]
-                if (team1_avg_int != -1) and not(math.isnan(team1_rank)):
-                    events_out.writerow({"GameID": game_id, "UID": team1_uid, "Rank": team1_rank, "Interval": team1_avg_int})
-                if (team2_avg_int != -1) and not(math.isnan(team2_rank)):
-                    events_out.writerow({"GameID": game_id, "UID": team2_uid, "Rank": team2_rank, "Interval": team2_avg_int})
-
+                if (team1_avg_int != -1) and not (math.isnan(team1_rank)):
+                    events_out.writerow(
+                        {"GameID": game_id, "UID": team1_uid, "Rank": team1_rank, "Interval": team1_avg_int})
+                if (team2_avg_int != -1) and not (math.isnan(team2_rank)):
+                    events_out.writerow(
+                        {"GameID": game_id, "UID": team2_uid, "Rank": team2_rank, "Interval": team2_avg_int})
 
 
 if __name__ == "__main__":
     t1 = time.time()
 
     sc2reader.engine.register_plugin(APMTracker())
+    sc2reader.engine.register_plugin(ModifiedRank())
     sc2reader.engine.register_plugin(SelectionTracker())
     sc2reader.engine.register_plugin(ActiveSelection())
     sc2reader.engine.register_plugin(BaseTracker())
 
     writeToCsv()
-    deltatime = time.time()-t1
-    print("Run time: ", "{:2d}".format(int(deltatime//60)), "minutes and", "{:05.2f}".format(deltatime%60), "seconds")
+    deltatime = time.time() - t1
+    print("Run time: ", "{:2d}".format(int(deltatime // 60)), "minutes and", "{:05.2f}".format(deltatime % 60),
+          "seconds")

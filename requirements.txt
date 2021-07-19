@@ -14,3 +14,4 @@ statsmodels
 mpyq
 sshtunnel
 pydot
+burnysc2
