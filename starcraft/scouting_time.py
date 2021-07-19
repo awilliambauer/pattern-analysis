@@ -14,11 +14,11 @@ import scouting_stats
 import unit_prediction
 import scouting_detector
 import file_locations
-from map_path_generation import load_path_data, get_all_possible_names
+from load_map_path_data import load_path_data
 from sc2reader.engine.plugins import SelectionTracker, APMTracker
 from selection_plugin import ActiveSelection
 from base_plugins import BaseTracker
-from replay_verification import group_replays_by_map, get_map_name_groups
+from generate_replay_info import group_replays_by_map
 import numpy as np
 import traceback
 from modified_rank_plugin import ModifiedRank
@@ -90,7 +90,7 @@ def writeToCsv(which, filename):
     results = []
     count = 0
     with Pool(min(cpu_count(), 60)) as pool:
-        for map_name_group, replays in group_replays_by_map(file_locations.REPLAY_INFO_FILE).items():
+        for map_name_group, replays in group_replays_by_map().items():
             map_path_data = load_path_data(map_name_group)
             print("loaded path data for map", map_name_group, "with", len(replays), "replays")
             count += len(replays)

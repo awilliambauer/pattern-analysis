@@ -3,7 +3,7 @@ from __future__ import absolute_import, print_function, unicode_literals, divisi
 
 from datetime import datetime
 from sc2reader.utils import Length, get_real_type
-from sc2reader.objects import Observer, Team
+from sc2reader.objects import Observer, Team, Computer
 from sc2reader.engine.events import PluginExit
 from sc2reader.constants import GAME_SPEED_FACTOR
 
@@ -40,9 +40,9 @@ class GameHeartNormalizer(object):
             if start_frame != -1 and event.frame > start_frame + 5:  # fuzz it a little
                 break
             if (
-                event.name == "UnitBornEvent"
-                and event.control_pid
-                and event.unit_type_name in self.PRIMARY_BUILDINGS
+                    event.name == "UnitBornEvent"
+                    and event.control_pid
+                    and event.unit_type_name in self.PRIMARY_BUILDINGS
             ):
                 # In normal replays, starting units are born on frame zero.
                 if event.frame == 0:
@@ -61,7 +61,7 @@ class GameHeartNormalizer(object):
         replay.game_length = Length(seconds=replay.frames / 16)
         replay.real_type = get_real_type(replay.teams)
         replay.real_length = Length(
-            seconds=int(replay.game_length.seconds / GAME_SPEED_FACTOR[replay.speed])
+            seconds=int(replay.game_length.seconds / GAME_SPEED_FACTOR["WoL"][replay.speed])
         )
         replay.start_time = datetime.utcfromtimestamp(
             replay.unix_timestamp - replay.real_length.seconds
@@ -83,6 +83,9 @@ class GameHeartNormalizer(object):
             # Fix the slot data to be accurate
             p.slot_data["observe"] = 1
             p.slot_data["team_id"] = None
+            # TODO is this ok?
+            if isinstance(p, Computer):  # bugfix crash here due to Computer object having no UID
+                continue
             obs = Observer(p.sid, p.slot_data, p.uid, p.init_data, p.pid)
 
             # Because these obs start the game as players the client

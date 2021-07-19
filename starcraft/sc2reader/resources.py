@@ -52,7 +52,7 @@ class Replay(Resource):
     #: Fully qualified filename of the replay file represented.
     filename = str()
 
-    #: Total number of frames in this game at 16 frames per second.
+    #: Total number of frames in this game at 16 frames per second. (THIS MAY BE INCORRECT, probably 22.4 fps)
     frames = int()
 
     #: The SCII client build number

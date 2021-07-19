@@ -1,3 +1,8 @@
+# uses the burnysc2 library to save game data from a map
+# with this we get the terrain data, which we use for pathfinding
+# ZL June 2021
+
+
 import sys, os
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
@@ -30,12 +35,6 @@ from s2clientprotocol import sc2api_pb2 as sc_pb
 import pickle, os, sys, traceback, lzma
 
 from loguru import logger
-
-
-"""
-This "bot" will loop over several available ladder maps and generate the pickle file in the "/test/pickle_data/" subfolder.
-These will then be used to run tests from the test script "test_pickled_data.py"
-"""
 
 
 class ExporterBot(sc2.BotAI):
@@ -95,9 +94,9 @@ class ExporterBot(sc2.BotAI):
             UnitTypeId(unit_id)
             for unit_id, data in self.game_data.units.items()
             if data._proto.race != Race.NoRace and data._proto.race != Race.Random and data._proto.available
-            # Dont cloak units
-            and UnitTypeId(unit_id) != UnitTypeId.MOTHERSHIP
-            and (data._proto.mineral_cost or data._proto.movement_speed or data._proto.weapons)
+               # Dont cloak units
+               and UnitTypeId(unit_id) != UnitTypeId.MOTHERSHIP
+               and (data._proto.mineral_cost or data._proto.movement_speed or data._proto.weapons)
         }
 
         # Create units for self
@@ -117,7 +116,6 @@ class ExporterBot(sc2.BotAI):
 
 
 def main():
-
     maps = [
         "TritonLE",
         "LightshadeLE",

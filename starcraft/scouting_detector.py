@@ -470,46 +470,7 @@ def updatePrevScoutStates(scouting_dict, frame, prev_frame, prev_state):
         i += 1
     return scouting_dict
 
-
-def checkFirstInstance(scouting_dict, scale):
-    '''checkFirstInstance is intended to avoid false positive scouting tags
-    in the early game.
-    Because it is possible for a player to 'scout' their opponent without
-    actually looking at their base (a player can order units around the map
-    and only view the mini-map), we added a sending units tag as a possible
-    first instance of scouting. checkFirstInstance finds these tags and verifies
-    that there does not already exist an instance of scouting within the next 45
-    seconds, and if an instance does exist, checkFirstInstance eradicates this
-    false positive scouting tag.
-    checkFirstInstance takes in a scouting dictionary, as well as the scale -
-    which indicates game speed in frames per second. It returns the updated and
-    verified scouting dictionary'''
-    frame_jump45 = 45 * int(scale)
-    send_units = "Sending units to the opponent's base"
-    keys = scouting_dict.keys()
-    for key in keys:
-        state = scouting_dict[key][1]
-        # recorded instance of ordering units
-        if send_units in state:
-            # check if there is a regular scouting instance within the next 45 secs
-            for i in range(key + 1, frame_jump45 + key + 1):
-                # make sure it doesn't throw a key error
-                if i in keys:
-                    if is_scouting(scouting_dict[i]):
-                        # if there is an instance of scouting, reset the original
-                        scouting_dict[key][1].remove(send_units)
-                        return scouting_dict
-            # No instance that already corresponds to the unit ordering, consider it scouting
-            # for 10 seconds
-            frame_jump10 = 10 * int(scale)
-            for i in range(key, key + frame_jump10 + 1):
-                if not (send_units in scouting_dict[i][1]):
-                    scouting_dict[i][1].append(send_units)
-            return scouting_dict
-    # No ordering of units, return original dictionary
-    return scouting_dict
-
-
+  
 def is_scouting(frame_list):
     '''isScouting returns True if the combination of tags for a frame indicates
     that the player is scouting, and False if otherwise. isScouting takes in
@@ -648,9 +609,6 @@ def final_scouting_states(replay, current_map_path_data):
     team2_scouting_states = integrate_engagements(team2_scouting_states, battles, scale, "Engaged in Battle")
     team1_scouting_states = integrate_engagements(team1_scouting_states, harassing, scale, "Harassing")
     team2_scouting_states = integrate_engagements(team2_scouting_states, harassing, scale, "Harassing")
-
-    team1_scouting_states = checkFirstInstance(team1_scouting_states, scale)
-    team2_scouting_states = checkFirstInstance(team2_scouting_states, scale)
 
     team1_scouting_states = removeEmptyFrames(team1_scouting_states, frames)
     team2_scouting_states = removeEmptyFrames(team2_scouting_states, frames)

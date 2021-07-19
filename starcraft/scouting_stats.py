@@ -7,19 +7,16 @@ import csv
 import time
 from itertools import repeat
 from multiprocessing import Pool, cpu_count
-
 import math
 import sc2reader
 from sc2reader.engine.plugins import SelectionTracker, APMTracker
-
 import control_groups
 import scouting_detector
 from base_plugins import BaseTracker
-from map_path_generation import load_path_data
-from replay_verification import group_replays_by_map
+from load_map_path_data import load_path_data
+from generate_replay_info import group_replays_by_map
 from selection_plugin import ActiveSelection
 from sc2.position import Point2
-
 import statistics
 import traceback
 import battle_detector
@@ -233,7 +230,7 @@ def scouting_timeframe_list1(scouting_dict):
         state = scouting_dict[key]
         if is_scouting(state):
             if not (cur_scouting):
-                time_frames.append(key/ 22.4)
+                time_frames.append(key / 22.4)
             cur_scouting = True
         else:
             cur_scouting = False
@@ -541,7 +538,7 @@ def scouting_times(replay, which, current_map_path_data):
             team1_time_list = scouting_timeframe_list1(team1_scouting_states)
             team2_time_list = scouting_timeframe_list1(team2_scouting_states)
 
-        return team1_time_list, team2_time_list
+
 
     except:
         traceback.print_exc()
@@ -759,7 +756,7 @@ def test():
     from modified_rank_plugin import ModifiedRank
     from selection_plugin import ActiveSelection
     from base_plugins import BaseTracker
-    from map_path_generation import load_path_data, get_all_possible_names
+    from generate_map_path_data import load_path_data, get_all_possible_names
     import datetime
     from replay_verification import map_pretty_name_to_file
     sc2reader.engine.register_plugin(APMTracker())
@@ -780,7 +777,7 @@ def test():
     print(times[0])
     print(times[1])
     print("processing", "replay", "took", time.time() - ts, "sec")
-    print("replay was",r.real_length)
+    print("replay was", r.real_length)
 
 
 if __name__ == "__main__":
