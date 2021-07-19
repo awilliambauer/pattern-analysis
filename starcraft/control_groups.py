@@ -54,7 +54,7 @@ def macroRates(game_events, battles, frames, seconds):
             team = event.player.pid
             # new control group
             if isinstance(event, sc2reader.events.game.SetControlGroupEvent):
-                cgrps[team][control_group] = event.active_selection
+                cgrps[team][control_group] = event.player.selection[10]
                 # if isMacro(cgrps[team][control_group]):
                 #     if battle_detector.duringBattle(event.frame, battles):
                 #         battle_ct[team] += 1
@@ -63,7 +63,8 @@ def macroRates(game_events, battles, frames, seconds):
 
             # adding units to an existing control group
             elif isinstance(event, sc2reader.events.game.AddToControlGroupEvent):
-                for unit in event.active_selection:
+                units = event.player.selection[10]
+                for unit in units:
                     if not(unit in cgrps[team][control_group]):
                         cgrps[team][control_group].append(unit)
                 # if isMacro(cgrps[team][control_group]):

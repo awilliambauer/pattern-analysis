@@ -2,7 +2,7 @@
 # to a CSV
 # Alison Cameron
 # August 2020
-
+from modified_rank_plugin import ModifiedRank
 import sc2reader
 import csv
 import os
@@ -77,7 +77,7 @@ def writeToCsv():
     files = []
     # valid_game_ids.txt musst be produced first by running scouting_stats.py
     # with the command line argument -w
-    games = open("valid_game_ids.txt", 'r')
+    games = open("valid_replay_filenames.txt", 'r')
     for line in games:
         files.append(line.strip())
     games.close()
@@ -105,6 +105,7 @@ def writeToCsv():
 
 if __name__ == "__main__":
     sc2reader.engine.register_plugin(APMTracker())
+    sc2reader.engine.register_plugin(ModifiedRank())
     sc2reader.engine.register_plugin(SelectionTracker())
     sc2reader.engine.register_plugin(ActiveSelection())
     sc2reader.engine.register_plugin(BaseTracker())
