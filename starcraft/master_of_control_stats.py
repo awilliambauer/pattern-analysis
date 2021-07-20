@@ -19,6 +19,7 @@ from selection_plugin import ActiveSelection
 from base_plugins import BaseTracker
 from modified_rank_plugin import ModifiedRank
 import traceback
+from modified_rank_plugin import ModifiedRank
 
 
 def generateFields(filename):
@@ -376,6 +377,7 @@ if __name__ == "__main__":
     writeToCsv, which will write statistics to a csv for each
     StarCraft 2 replay file in a directory.'''
     sc2reader.engine.register_plugin(APMTracker())
+    sc2reader.engine.register_plugin(ModifiedRank())
     sc2reader.engine.register_plugin(SelectionTracker())
     sc2reader.engine.register_plugin(ActiveSelection())
     sc2reader.engine.register_plugin(ModifiedRank())
