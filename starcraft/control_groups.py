@@ -6,6 +6,7 @@
 import sc2reader
 import battle_detector
 import os
+import numpy as np
 
 # the main function, control_group_stats(replay) takes in a replay previously
 # loaded by sc2reader. Wherever this replay is loaded, the following plugins
@@ -45,7 +46,17 @@ def macroRates(game_events, battles, frames, seconds):
              2: {0:[], 1:[], 2:[], 3:[], 4:[], 5:[], 6:[], 7:[], 8:[], 9:[], 10:[]}}
     peace_ct = {1: 0, 2: 0}
     battle_ct = {1: 0, 2: 0}
+    peace_rb = {1: 0, 2: 0}
+    battle_rb = {1: 0, 2: 0}
     peace_time, battle_time = 0, 0
+
+    cgrps_set = {1: {0:0, 1:0, 2:0, 3:0, 4:0, 5:0, 6:0, 7:0, 8:0, 9:0, 10:0},
+             2: {0:0, 1:0, 2:0, 3:0, 4:0, 5:0, 6:0, 7:0, 8:0, 9:0, 10:0}}
+    cgrps_add = {1: {0:0, 1:0, 2:0, 3:0, 4:0, 5:0, 6:0, 7:0, 8:0, 9:0, 10:0},
+             2: {0:0, 1:0, 2:0, 3:0, 4:0, 5:0, 6:0, 7:0, 8:0, 9:0, 10:0}}
+    cgrps_get = {1: {0:0, 1:0, 2:0, 3:0, 4:0, 5:0, 6:0, 7:0, 8:0, 9:0, 10:0},
+             2: {0:0, 1:0, 2:0, 3:0, 4:0, 5:0, 6:0, 7:0, 8:0, 9:0, 10:0}}
+
 
     # building up peace and battle macro command counts for each player
     for event in game_events:
@@ -54,23 +65,28 @@ def macroRates(game_events, battles, frames, seconds):
             team = event.player.pid
             # new control group
             if isinstance(event, sc2reader.events.game.SetControlGroupEvent):
+                list1 = sorted(cgrps[team][control_group])
+                list2 = sorted(event.active_selection)
+                if len(cgrps[team][control_group]) != 0 and list1 != list2:
+                    if battle_detector.duringBattle(event.frame, battles):
+                        battle_rb[team] += 1
+                    else:
+                        peace_rb[team] += 1
                 cgrps[team][control_group] = event.active_selection
-                # if isMacro(cgrps[team][control_group]):
-                #     if battle_detector.duringBattle(event.frame, battles):
-                #         battle_ct[team] += 1
-                #     else:
-                #         peace_ct[team] += 1
+                cgrps_set[team][control_group] += 1
+              
 
             # adding units to an existing control group
             elif isinstance(event, sc2reader.events.game.AddToControlGroupEvent):
+                if len(cgrps[team][control_group]) != 0:
+                    if battle_detector.duringBattle(event.frame, battles):
+                        battle_rb[team] += 1
+                    else:
+                        peace_rb[team] += 1
                 for unit in event.active_selection:
                     if not(unit in cgrps[team][control_group]):
                         cgrps[team][control_group].append(unit)
-                # if isMacro(cgrps[team][control_group]):
-                #     if battle_detector.duringBattle(event.frame, battles):
-                #         battle_ct[team] += 1
-                #     else:
-                #         peace_ct[team] += 1
+                cgrps_add[team][control_group] += 1                 
 
             # Selecting a pre-set control group
             elif isinstance(event, sc2reader.events.game.GetControlGroupEvent):
@@ -79,6 +95,7 @@ def macroRates(game_events, battles, frames, seconds):
                         battle_ct[team] += 1
                     else:
                         peace_ct[team] += 1
+                cgrps_get[team][control_group] += 1 
 
     # Calculating total peacetime and total battletime (in seconds) for the game
     for battle in battles:
@@ -99,7 +116,22 @@ def macroRates(game_events, battles, frames, seconds):
     p1_battle_rate = battle_ct[1]/battle_time
     p2_battle_rate = battle_ct[2]/battle_time
 
-    return p1_peace_rate, p1_battle_rate, p2_peace_rate, p2_battle_rate
+    p1_peace_rb = peace_rb[1]/peace_time
+    p2_peace_rb = peace_rb[2]/peace_time
+    p1_battle_rb = battle_rb[1]/battle_time
+    p2_battle_rb = battle_rb[2]/battle_time
+
+    p1_cps_cg = list(np.array(list(cgrps_set[1].values()))/seconds) + \
+                list(np.array(list(cgrps_add[1].values()))/seconds) + \
+                list(np.array(list(cgrps_get[1].values()))/seconds)
+    p2_cps_cg = list(np.array(list(cgrps_set[2].values()))/seconds) + \
+                list(np.array(list(cgrps_add[2].values()))/seconds) + \
+                list(np.array(list(cgrps_get[2].values()))/seconds)
+
+    # print(p1_cps_cg, "\n", p2_cps_cg, "\n")
+
+    return p1_peace_rate, p1_battle_rate, p2_peace_rate, p2_battle_rate, \
+    p1_peace_rb, p2_peace_rb, p1_battle_rb, p2_battle_rb, p1_cps_cg, p2_cps_cg
 
 def isMacro(cgrp):
     '''isMacro returns true if all of the units in a control group
@@ -120,6 +152,9 @@ def control_group_stats(replay):
 
     p1_cps, p2_cps = commandsPerSecond(r.game_events, r.real_length.total_seconds())
     battles, harassing = battle_detector.buildBattleList(r)
-    p1_peace_rate, p1_battle_rate, p2_peace_rate, p2_battle_rate = macroRates(r.game_events, battles, r.frames, r.real_length.total_seconds())
+    p1_peace_rate, p1_battle_rate, p2_peace_rate, p2_battle_rate, \
+    p1_peace_rb, p2_peace_rb, p1_battle_rb, p2_battle_rb, \
+    p1_cps_cg, p2_cps_cg = macroRates(r.game_events, battles, r.frames, r.real_length.total_seconds())
 
-    return p1_cps, p1_peace_rate, p1_battle_rate, p2_cps, p2_peace_rate, p2_battle_rate
+    return p1_cps, p1_peace_rate, p1_battle_rate, p2_cps, p2_peace_rate, p2_battle_rate, \
+    p1_peace_rb, p2_peace_rb, p1_battle_rb, p2_battle_rb, p1_cps_cg, p2_cps_cg

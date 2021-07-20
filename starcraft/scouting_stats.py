@@ -16,6 +16,7 @@ from collections import Counter
 from sc2reader.engine.plugins import SelectionTracker, APMTracker
 from selection_plugin import ActiveSelection
 from base_plugins import BaseTracker
+from modified_rank_plugin import ModifiedRank
 import traceback
 
 
@@ -287,6 +288,7 @@ if __name__ == "__main__":
     sc2reader.engine.register_plugin(SelectionTracker())
     sc2reader.engine.register_plugin(ActiveSelection())
     sc2reader.engine.register_plugin(BaseTracker())
+    sc2reader.engine.register_plugin(ModifiedRank())
 
     t1 = time.time()
     # command line arguments for debugging and saving a list of valid replays

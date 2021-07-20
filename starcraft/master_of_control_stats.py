@@ -17,6 +17,7 @@ from collections import Counter
 from sc2reader.engine.plugins import SelectionTracker, APMTracker
 from selection_plugin import ActiveSelection
 from base_plugins import BaseTracker
+from modified_rank_plugin import ModifiedRank
 import traceback
 
 
@@ -31,7 +32,7 @@ def generateFields(filename):
 
         # extracting the game id and adding the correct tag
         #pathname = "practice_replays/" + filename
-        pathname = "/Accounts/awb/pattern-analysis/starcraft/replays/" + filename
+        pathname = "/Accounts/awb-data/replays/" + filename
         game_id = filename.split("_")[1].split(".")[0]
         if filename.startswith("ggg"):
             game_id = "ggg-" + game_id
@@ -242,7 +243,7 @@ def writeToCsv(write, debug, start, end):
     # obtain a list of filenames from either the directory or a text file
     if write:
         # files = os.listdir("practice_replays")
-        files = os.listdir("/Accounts/awb/pattern-analysis/starcraft/replays")
+        files = os.listdir("/Accounts/awb-data/replays/")
         valid_games = []
     else:
         files = []
@@ -377,6 +378,8 @@ if __name__ == "__main__":
     sc2reader.engine.register_plugin(APMTracker())
     sc2reader.engine.register_plugin(SelectionTracker())
     sc2reader.engine.register_plugin(ActiveSelection())
+    sc2reader.engine.register_plugin(ModifiedRank())
+    # sc2reader.engine.register_plugin(ModifiedRank())
     # sc2reader.engine.register_plugin(BaseTracker())
 
     t1 = time.time()

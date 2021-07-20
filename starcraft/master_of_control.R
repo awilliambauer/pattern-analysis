@@ -1,5 +1,5 @@
 # library
-library(tidyverse)
+library(dplyr)
 
 # import data
 moc <- read.csv("master_of_control_stats_new.csv") %>% 
@@ -25,31 +25,31 @@ set.seed(525701)
 bronze_UID <- (moc %>% group_by(League) %>% 
                  filter(League == "Bronze") %>% 
                  distinct(UID) %>% 
-                 slice_sample(n = 50))$UID
+                 slice_sample(n = 400))$UID
 silver_UID <- (moc %>% group_by(League) %>% 
                  filter(League == "Silver") %>% 
                  distinct(UID) %>% 
-                 slice_sample(n = 50))$UID
+                 slice_sample(n = 400))$UID
 gold_UID <- (moc %>% group_by(League) %>% 
                filter(League == "Gold") %>% 
                distinct(UID) %>% 
-               slice_sample(n = 50))$UID
+               slice_sample(n = 400))$UID
 platinum_UID <- (moc %>% group_by(League) %>% 
                    filter(League == "Platinum") %>% 
                  distinct(UID) %>% 
-                 slice_sample(n = 50))$UID
+                 slice_sample(n = 400))$UID
 diamond_UID <- (moc %>% group_by(League) %>% 
                   filter(League == "Diamond") %>% 
                  distinct(UID) %>% 
-                 slice_sample(n = 50))$UID
+                 slice_sample(n = 400))$UID
 master_UID <- (moc %>% group_by(League) %>% 
                  filter(League == "Master") %>% 
                  distinct(UID) %>% 
-                 slice_sample(n = 50))$UID
+                 slice_sample(n = 400))$UID
 grandmaster_UID <- (moc %>% group_by(League) %>% 
                       filter(League == "Grandmaster") %>% 
                  distinct(UID) %>% 
-                 slice_sample(n = 50))$UID
+                 slice_sample(n = 400))$UID
 
 uids <- unique(c(bronze_UID, silver_UID, gold_UID, platinum_UID, diamond_UID, 
           master_UID, grandmaster_UID))
@@ -164,7 +164,7 @@ write.table(moc_gm, file = "debug_ids.txt", sep = "\n",
 moc_gm_csv <- read_csv("master_of_control_stats_debug.csv")
 cg_check_1 <- (moc_gm_csv %>% filter(Filename == "spawningtool_47754.SC2Replay") %>% select(RelRank))$RelRank[1]
 
-# ======================= # Warmup # ======================= #
+# ======================= # Rebind # ======================= #
 ggplot(moc, aes(x = League, y = PeaceRb/BattleRb)) +
   geom_boxplot() + 
   scale_y_log10()
@@ -203,7 +203,7 @@ diffAll <- function(x) {
   return(res)
 }
 
-res <- diffAll(toList(moc$CommandPerSec))
+# res <- diffAll(toList(moc$CommandPerSec))
 
 diff_moc_sample <- moc_sample %>% 
   group_by(League) %>% 
@@ -213,3 +213,4 @@ diff_moc_sample <- moc_sample %>%
             Min = min(diffAll(toList(CommandPerSec))),
             Max = max(diffAll(toList(CommandPerSec))))
 
+write.csv(diff_moc_sample, "diff_moc_sample.csv")
