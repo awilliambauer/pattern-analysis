@@ -24,26 +24,36 @@ import battle_detector
 from unit_prediction import get_position_estimate_along_path, get_movement_speed, is_flying_unit
 
 
-def scouting_stats(scouting_dict):
+def scouting_stats(scouting_dict, first_battle_end_frame):
     '''scouting_stats calculates the number of times a player initiates scouting
     and the total number of frames they spend scouting their opponent.
     It takes in a scouting dictionary returned by final_scouting_states
     and returns the number of instances and the total number of frames.'''
     num_times = 0
+    num_times_after_first_battle = 0
     total_frames = 0
     scouting_frames = 0
     cur_scouting = False
+    is_first_scouting = True
+    first_scouting = 0
 
     length = len(scouting_dict.keys())
     if is_scouting(scouting_dict[1]):
         num_times += 1
         scouting_frames += 1
         cur_scouting = True
+        if is_first_scouting:
+            first_scouting = 1
+            is_first_scouting = False
     total_frames += 1
     frame = 2
     while (frame < length):
         total_frames += 1
         if is_scouting(scouting_dict[frame]):
+            # if this is the first time the player scouts
+            if is_first_scouting:
+                first_scouting = frame
+                is_first_scouting = False
             # if the player is in a streak of scouting
             if cur_scouting == True:
                 scouting_frames += 1
@@ -51,6 +61,8 @@ def scouting_stats(scouting_dict):
             # to scouting their opponent
             else:
                 num_times += 1
+                if (frame > first_battle_end_frame):
+                    num_times_after_first_battle += 1
                 scouting_frames += 1
                 cur_scouting = True
         else:
@@ -58,10 +70,10 @@ def scouting_stats(scouting_dict):
         frame += 1
 
     # calculating rates based on counts, currently not useful information so we don't return
-    scouting_fraction = scouting_frames / total_frames
-    scouting_rate = num_times / total_frames
+    # scouting_fraction = scouting_frames / total_frames
+    # scouting_rate = num_times / total_frames
 
-    return num_times, scouting_frames
+    return num_times, scouting_frames, num_times_after_first_battle, first_scouting
 
 
 def categorize_player(scouting_frames, battles, harassing, total_frames):
@@ -259,11 +271,8 @@ def has_initial_scouting(scouting_dict, frames, battles):
 
 
 def scoutsMainBase(scouting_dict):
-    '''scoutsMainBase returns 1 (indicating True) if a player scouts their
-    opponent's main base more than 50% of the times they scout, and
-    0 (indicating False) if a player scouts expansion bases more than 50%
-    of the time. It takes in a complete scouting dictionary returned
-    by final_scouting_states.'''
+    '''scoutsMainBase returns the ratio of scouting their
+    opponent's main base to the total times they scout'''
     keys = scouting_dict.keys()
     mainbase_ct = 0
     scouting_ct = 0
@@ -284,12 +293,14 @@ def scoutsMainBase(scouting_dict):
         # No scouting, return a flag
         return -1
 
-    if mainbase_ct / scouting_ct >= 0.5:
-        # True
-        return 1
-    else:
-        # False
-        return 0
+    # if mainbase_ct / scouting_ct >= 0.5:
+    #     # True
+    #     return 1
+    # else:
+    #     # False
+    #     return 0
+
+    return mainbase_ct / scouting_ct
 
 
 def scout_new_areas(scouting_dict):
@@ -457,24 +468,37 @@ def scouting_freq_and_cat(replay, current_map_path_data):
     try:
         frames = r.frames
         seconds = r.real_length.total_seconds()
+        battles, harassing = battle_detector.buildBattleList(r)
+        if (len(battles) > 0):
+            first_battle_end_frame = battles[0][1]
+        else:
+            print("battle time or peace time is zero")
+            raise RuntimeError()
 
         team1_scouting_states, team2_scouting_states = final_scouting_states(r, current_map_path_data)
 
-        team1_num_times, team1_time = scouting_stats(team1_scouting_states)
-        team2_num_times, team2_time = scouting_stats(team2_scouting_states)
+        team1_num_times, team1_time, \
+        team1_num_times_fb, team1_first_scouting = scouting_stats(team1_scouting_states, first_battle_end_frame)
+        team2_num_times, team2_time, \
+        team2_num_times_fb, team2_first_scouting = scouting_stats(team2_scouting_states, first_battle_end_frame)
 
+        team1_scout_mainbase = scoutsMainBase(team1_scouting_states)
+        team2_scout_mainbase = scoutsMainBase(team2_scouting_states)
+        
         team1_freq = team1_num_times / seconds
         team2_freq = team2_num_times / seconds
+
+        team1_freq_fb = team1_num_times_fb / seconds
+        team2_freq_fb = team2_num_times_fb / seconds
 
         team1_frames = scouting_timeframe_list1(team1_scouting_states)
         team2_frames = scouting_timeframe_list1(team2_scouting_states)
 
-        battles, harassing = battle_detector.buildBattleList(r)
-
         team1_cat = categorize_player(team1_frames, battles, harassing, frames)
         team2_cat = categorize_player(team2_frames, battles, harassing, frames)
 
-        return team1_freq, team1_cat, team2_freq, team2_cat, r.winner.number
+        return team1_freq, team1_cat, team1_freq_fb, team1_scout_mainbase, team1_first_scouting, \
+        team2_freq, team2_cat, team2_freq_fb, team2_scout_mainbase, team2_first_scouting, r.winner.number
 
     except:
         print(replay.filename, "contains errors within scouting_detector")
@@ -618,6 +642,7 @@ def print_verification(replay):
 
     except:
         print(replay.filename, "contains errors within scouting_detector")
+        traceback.print_exc()
         raise
 
 
@@ -627,7 +652,7 @@ def generate_fields(replay_file, map_path_data):
     these stats to a csv."""
     try:
         # convert replay file name to path
-        replay_file_path = "/Accounts/awb/pattern-analysis/starcraft/replays" + "/" + replay_file
+        replay_file_path = "/Accounts/awb-data/replays/" + "/" + replay_file
         # assume that replays that are passed in are valid
         # if they are valid, sc2reader should not crash
         replay = sc2reader.load_replay(replay_file_path)
@@ -641,11 +666,13 @@ def generate_fields(replay_file, map_path_data):
         elif replay_file.startswith("dropsc"):
             game_id = "ds-" + game_id
 
-        team1_freq, team1_cat, team2_freq, team2_cat, winner = scouting_detector.scouting_freq_and_cat(replay,
-                                                                                                       map_path_data)
+        team1_freq, team1_cat, team1_freq_fb, team1_scout_mb, team1_first_scouting, \
+        team2_freq, team2_cat, team2_freq_fb, team2_scout_mb, team2_first_scouting, \
+            winner = scouting_freq_and_cat(replay, map_path_data)
         team1_rank, team1_rel_rank, team2_rank, team2_rel_rank = ranking_stats(replay)
-        team1_cps, team1_peace_rate, team1_battle_rate, team2_cps, team2_peace_rate, team2_battle_rate = \
-            control_groups.control_group_stats(replay)
+        team1_cps, team1_peace_rate, team1_battle_rate, team2_cps, team2_peace_rate, team2_battle_rate, \
+        team1_peace_rb, team2_peace_rb, team1_battle_rb, team2_battle_rb, \
+        team1_cps_cg, team2_cps_cg = control_groups.control_group_stats(replay)
         team1_rel_freq = team1_freq - team2_freq
         team2_rel_freq = team2_freq - team1_freq
 
@@ -665,25 +692,26 @@ def generate_fields(replay_file, map_path_data):
         team2_uid = replay.players[1].detail_data['bnet']['uid']
         # creating the fields based on who won
         if winner == 1:
-            fields = (game_id, team1_uid, team1_cat, team1_rank, team1_rel_rank,
-                      team1_freq, team1_rel_freq, team1_aps, team1_rel_aps,
-                      team1_cps, team1_rel_cps, team1_peace_rate, team1_rel_pr,
+            fields = (game_id, team1_uid, team1_cat, team1_rank, team1_freq_fb,
+                      team1_freq, team1_rel_freq, team1_aps, team1_scout_mb,
+                      team1_cps, team1_first_scouting, team1_peace_rate, team1_rel_pr,
                       team1_battle_rate, team1_rel_br, 1,
-                      game_id, team2_uid, team2_cat, team2_rank, team2_rel_rank,
-                      team2_freq, team2_rel_freq, team2_aps, team2_rel_aps,
-                      team2_cps, team2_rel_cps, team2_peace_rate, team2_rel_pr,
+                      game_id, team2_uid, team2_cat, team2_rank, team2_freq_fb,
+                      team2_freq, team2_rel_freq, team2_aps, team2_scout_mb,
+                      team2_cps, team2_first_scouting, team2_peace_rate, team2_rel_pr,
                       team2_battle_rate, team2_rel_br, 0,
                       replay.map_name)
         elif winner == 2:
-            fields = (game_id, team1_uid, team1_cat, team1_rank, team1_rel_rank,
-                      team1_freq, team1_rel_freq, team1_aps, team1_rel_aps,
-                      team1_cps, team1_rel_cps, team1_peace_rate, team1_rel_pr,
+            fields = (game_id, team1_uid, team1_cat, team1_rank, team1_freq_fb,
+                      team1_freq, team1_rel_freq, team1_aps, team1_scout_mb,
+                      team1_cps, team1_first_scouting, team1_peace_rate, team1_rel_pr,
                       team1_battle_rate, team1_rel_br, 0,
-                      game_id, team2_uid, team1_cat, team2_rank, team2_rel_rank,
-                      team2_freq, team2_rel_freq, team2_aps, team2_rel_aps,
-                      team2_cps, team2_rel_cps, team2_peace_rate, team2_rel_pr,
+                      game_id, team2_uid, team1_cat, team2_rank, team2_freq_fb,
+                      team2_freq, team2_rel_freq, team2_aps, team2_scout_mb,
+                      team2_cps, team2_first_scouting, team2_peace_rate, team2_rel_pr,
                       team2_battle_rate, team2_rel_br, 1,
                       replay.map_name)
+        # print("generated fields for replay")
         return fields
     except:
         print("exception while generating scouting stats for replay", replay_file)
@@ -716,36 +744,45 @@ def ranking_stats(replay):
 
 
 def writeToCsv():
-    with open("scouting_stats.csv", 'w', newline='') as fp:
+    with open("scouting_stats_cluster.csv", 'w', newline='') as fp:
         events_out = csv.DictWriter(fp, fieldnames=["GameID", "UID", "ScoutingCategory",
-                                                    "Rank", "RelRank", "ScoutingFrequency",
-                                                    "RelScoutingFrequency", "APS", "RelAPS",
-                                                    "CPS", "RelCPS", "PeaceRate", "RelPeaceRate",
+                                                    "Rank", "ScoutingFrequencyAfterFirstBattle", 
+                                                    "ScoutingFrequency",
+                                                    "RelScoutingFrequency", "APS", "MainBaseScoutRate",
+                                                    "CPS", "FirstScouting", "PeaceRate", "RelPeaceRate",
                                                     "BattleRate", "RelBattleRate", "Win"])
         events_out.writeheader()
-        for map_name, replays in maps.items():
+        count = 0
+        for map_name, replays in group_replays_by_map().items():
+            if count > 2:
+                break
             print("loading path data for map", map_name, "which has", len(replays), "replays")
-            pool = Pool(min(cpu_count(), 10))
+            pool = Pool(min(cpu_count(), 15))
             map_path_data = load_path_data(map_name)
-            results = pool.starmap(generate_fields, zip(replays, repeat(map_path_data)))
+            results = pool.starmap(generate_fields, zip(replays[:20], repeat(map_path_data)))
             pool.close()
+            count+=1
             pool.join()
             for fields in results:
                 if fields:  # generateFields will return None for invalid replays
                     # writing 1 line to the csv for each player and their respective stats
                     events_out.writerow({"GameID": fields[0], "UID": fields[1],
                                          "ScoutingCategory": fields[2], "Rank": fields[3],
-                                         "RelRank": fields[4], "ScoutingFrequency": fields[5],
+                                         "ScoutingFrequencyAfterFirstBattle": fields[4], 
+                                         "ScoutingFrequency": fields[5],
                                          "RelScoutingFrequency": fields[6], "APS": fields[7],
-                                         "RelAPS": fields[8], "CPS": fields[9], "RelCPS": fields[10],
+                                         "MainBaseScoutRate": fields[8], "CPS": fields[9], 
+                                         "FirstScouting": fields[10],
                                          "PeaceRate": fields[11], "RelPeaceRate": fields[12],
                                          "BattleRate": fields[13], "RelBattleRate": fields[14],
                                          "Win": fields[15]})
                     events_out.writerow({"GameID": fields[16], "UID": fields[17],
                                          "ScoutingCategory": fields[18], "Rank": fields[19],
-                                         "RelRank": fields[20], "ScoutingFrequency": fields[21],
+                                         "ScoutingFrequencyAfterFirstBattle": fields[20], 
+                                         "ScoutingFrequency": fields[21],
                                          "RelScoutingFrequency": fields[22], "APS": fields[23],
-                                         "RelAPS": fields[24], "CPS": fields[25], "RelCPS": fields[26],
+                                         "MainBaseScoutRate": fields[24], "CPS": fields[25], 
+                                         "FirstScouting": fields[26],
                                          "PeaceRate": fields[27], "RelPeaceRate": fields[28],
                                          "BattleRate": fields[29], "RelBattleRate": fields[30],
                                          "Win": fields[31]})
@@ -782,4 +819,35 @@ def test():
 
 
 if __name__ == "__main__":
-    test()
+    '''This main function parses command line arguments and calls
+    writeToCsv, which will write statistics to a csv for each
+    StarCraft 2 replay file in a directory.'''
+    sc2reader.engine.register_plugin(APMTracker())
+    sc2reader.engine.register_plugin(SelectionTracker())
+    sc2reader.engine.register_plugin(ActiveSelection())
+    sc2reader.engine.register_plugin(BaseTracker())
+    sc2reader.engine.register_plugin(ModifiedRank())
+    t1 = time.time()
+    # command line arguments for debugging and saving a list of valid replays
+    parser = argparse.ArgumentParser()
+    # debugging argument - if included, you must also include the start and end
+    # index of which files in the directory you want to be processed
+    # ex: python scouting_stats.py --d 0 50   will process the first 50
+    # replays in the directory, print extra information, and process replays one by one
+    # if not included, the program will use multiprocessing and will run much faster
+    parser.add_argument('--d', nargs=2, type=int)
+    # saving list of valid replays - if included, writeToCsv will create a text file
+    # of all valid game filenames. If not included, writeToCsv will expect that
+    # text file to exist and will read filenames from the text file.
+    parser.add_argument('--w', action='store_true')
+    args = parser.parse_args()
+    if args.d:
+        start = args.d[0]
+        end = args.d[1]
+    else:
+        start = 0
+        end = 0
+    writeToCsv()
+    deltatime = time.time()-t1
+    print("Run time: ", "{:2d}".format(int(deltatime//60)), "minutes and", "{:05.2f}".format(deltatime%60), "seconds")
+
