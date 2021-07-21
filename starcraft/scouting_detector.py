@@ -108,6 +108,7 @@ unit_vision_ranges = {
 }
 missing_units = set()
 
+
 def get_unit_vision_range(unit_name):
     if "Changeling" in unit_name and unit_name != "Changeling":
         return get_unit_vision_range("Changeling")
@@ -135,7 +136,7 @@ def build_event_lists(tracker_events, game_events):
     It returns one list of all relevant events.'''
 
     events = []
-    ability_names = ["RightClick", "Attack"]
+    ability_names = ["RightClick", "Attack", "ScannerSweep"]
     base_names = ["Hatchery", "Lair", "Hive", "Nexus", "CommandCenter", "CommandCenterFlying",
                   "OrbitalCommand", "OrbitalCommandFlying", "PlanetaryFortress"]
     team1 = 1
@@ -173,10 +174,10 @@ def build_event_lists(tracker_events, game_events):
                 raise RuntimeError()
         # account for moving units
         elif isinstance(g_event, sc2reader.events.game.TargetUnitCommandEvent) and (
-                g_event.ability_name in ability_names):
+                g_event.ability_name in ability_names or "Rally" in g_event.ability_name):
             events.append(g_event)
         elif isinstance(g_event, sc2reader.events.game.TargetPointCommandEvent) and (
-                g_event.ability_name in ability_names):
+                g_event.ability_name in ability_names or "Rally" in g_event.ability_name):
             events.append(g_event)
 
     # if either team has 0 camera events, scouting behavior cannot be detected and
@@ -195,35 +196,38 @@ class UnitData:
         self.unit = unit
         self.id = unit.id
         self.pos = (pos[0], pos[1]) if pos is not None else None  # making sure that we aren't using z coord
-        self.path = None
+        self.paths = []
         self.path_start_frame = None
         self.unit_speed = get_movement_speed(unit.name)
         self.flying = is_flying_unit(unit.name)
 
+    def finish_path(self, frame):
+        self.paths.pop(0)
+        self.path_start_frame = frame
+
     def get_position_estimate(self, frame):
-        if self.path is None:
+        if len(self.paths) == 0:
             return self.pos
-        if len(self.path) == 0:
-            print("no path")
-        if len(self.path) == 1:
-            return self.path[0]
+        path = self.paths[0]
         if is_flying_unit(self.unit.name):
             distance_moved = (frame - self.path_start_frame) * self.unit_speed
-            if distance_moved > (self.path[-1] - self.path[0]).length:
-                return self.path[-1]
-            difference = self.path[-1] - self.path[0]
-            if not difference.length:
-                return self.pos
+            difference = path[-1] - path[0]
+            if not difference.length or distance_moved > difference.length:
+                self.finish_path(frame)
+                return path[-1]
             direction = difference.normalized
-            return self.path[0] + direction * distance_moved
-        return get_position_estimate_along_path(self.path, self.path_start_frame, frame, self.unit_speed)
+            return path[0] + direction * distance_moved
+        position_on_path = get_position_estimate_along_path(path, self.path_start_frame, frame, self.unit_speed)
+        if position_on_path == path[-1]:
+            self.finish_path(frame)
+        return position_on_path
 
 
 def update_estimated_unit_positions(units, team, current_frame):
     for unit in units[team].values():
         unit.pos = unit.get_position_estimate(current_frame)
-        # if unit.unit.name == "Overlord":
-        #     print(unit.unit,unit.pos, current_frame / 22.4)
+        # if unit.unit.name == "SCV" and team == 2:
+        #     print(unit.unit, unit.pos, current_frame / 22.4)
 
 
 def initialize_scouting_dictionaries(frames):
@@ -249,6 +253,11 @@ def build_scouting_dictionaries(replay, events, objects, frames, current_map_pat
     replay. It is used to estimate unit positions.
     '''
     scouting_occurences = {1: [], 2: []}
+    scanner_sweeps = {1: [], 2: []} # a dict indexed by team containing lists of (time, location) pairs representing
+    # terran scanner sweeps
+    rallies = {1: [], 2: []}
+    # a dict indexed by team containing lists of (building, location) pairs representing where buildings are rallied to
+
     # UpdatePathingUnitPositionsEvent gets injected into the events list once every 23 frames to ensure that
     # there are regular checks for game events that we care about that happen based on unit positions.
     # without these events, the time at which we would check for these game events would depend on when there
@@ -288,14 +297,13 @@ def build_scouting_dictionaries(replay, events, objects, frames, current_map_pat
     prev_states = {1: "Viewing themself", 2: "Viewing themself"}
     prev_frames = {1: 0, 2: 0}
 
-    first_instance = {1: True, 2: True}
-
     # iterating through events in order
     for event in injected_events:
         cur_frame = event.frame
         # adding new units to the list of active units
         if isinstance(event, sc2reader.events.tracker.UnitBornEvent):
             if not event.unit.is_building:
+
                 set_unit_pos(event.control_pid, event.unit, event.location)
 
         # updating unit positions
@@ -314,9 +322,12 @@ def build_scouting_dictionaries(replay, events, objects, frames, current_map_pat
         # updating unit positions, and the first instance of scouting
         elif isinstance(event, sc2reader.events.game.TargetUnitCommandEvent) or isinstance(event,
                                                                                            sc2reader.events.game.TargetPointCommandEvent):
+            target_location = event.location[:2]
             cur_team = event.player.pid
+            if event.ability_name == "ScannerSweep":
+                scanner_sweeps[cur_team].append((cur_frame, target_location))
             # updating unit positions and checking for the first instance of scouting
-            if event.ability_name in ["RightClick", "Attack"]:
+            elif event.ability_name in ["RightClick", "Attack"]:
 
                 # update the location of the unit we are targeting
                 if "Unit" in event.name:
@@ -328,12 +339,16 @@ def build_scouting_dictionaries(replay, events, objects, frames, current_map_pat
 
                     # checking for the first instance of scouting - units ordered to
                 # the opponent's base
-                target_location = event.location[:2]
                 # print("sending", event.active_selection, "to", target_location, "at sec", cur_frame / 22.4)
                 # the current player has just ordered their selected non-building units to move to the location
                 for selected_unit in event.active_selection:
                     if selected_unit.is_building:
-                        continue
+                        # rally this building to target
+                        for building, location in rallies[cur_team]:
+                            if building == selected_unit:
+                                rallies[cur_team].remove((building, location))
+                        # todo figure out if we are targeting mineral
+                        rallies[cur_team].append((selected_unit, target_location))
                     if selected_unit.id not in units[cur_team]:
                         # print("missing previous information about", selected_unit.name)
                         # if we have no previous information about the position of the unit, ignore it
@@ -343,12 +358,24 @@ def build_scouting_dictionaries(replay, events, objects, frames, current_map_pat
                     if unit_data.pos is None:
                         # print("unit data exists but has no position for", selected_unit.name)
                         continue
-                    # if selected_unit.name == "Overlord":
-                    #     print("trying to move overlord to", target_location, "at sec", event.frame / 22.4)
-                    if not is_flying_unit(selected_unit.name):
-                        unit_data.path = current_map_path_data.get_path(unit_data.pos, target_location)
+                    # if selected_unit.name == "SCV":
+                    #     print("trying to move SCV to", target_location, "at sec", event.frame / 22.4, "queued:", event.flag["queued"])
+                    if event.flag["queued"]:
+                        if len(unit_data.paths) == 0:
+                            start_pos = unit_data.pos
+                        else:
+                            start_pos = unit_data.paths[-1][-1]  # the goal of the last path
                     else:
-                        unit_data.path = [Point2(unit_data.pos), Point2(target_location)]
+                        start_pos = unit_data.pos
+                    if not is_flying_unit(selected_unit.name):
+                        path = current_map_path_data.get_path(start_pos, target_location)
+                    else:
+                        path = [Point2(start_pos), Point2(target_location)]
+                    if path is not None:
+                        if event.flag["queued"]:
+                            unit_data.paths.append(path)
+                        else:
+                            unit_data.paths = [path]
                     unit_data.path_start_frame = event.frame
         # checking camera events
         elif isinstance(event, sc2reader.events.game.CameraEvent):
@@ -394,14 +421,14 @@ def build_scouting_dictionaries(replay, events, objects, frames, current_map_pat
                         base_location = (int(camera_location[0]), int(camera_location[1]))
                         # print("scouting detected by player", cur_team, "with units",
                         #       possible_scouting_units[opp_team][base][0], "at second", cur_frame / 22.4)
-                        scouting_occurences[cur_team].append({cur_frame / 22.4: possible_scouting_units[opp_team][base][0]})
+                        scouting_occurences[cur_team].append(
+                            {cur_frame / 22.4: possible_scouting_units[opp_team][base][0]})
                         scouting_states[cur_team][cur_frame][0] = "Scouting opponent - main base" if base in og_bases[
                             cur_team] else "Scouting opponent - expansions"
                         scouting_states[cur_team][cur_frame].append(base_location)
                         prev_frames[cur_team] = cur_frame
                         prev_states[cur_team] = "Scouting opponent - main base" if base in og_bases[
                             cur_team] else "Scouting opponent - expansions"
-                        # first_instance[cur_team] = False
                         viewing_opp_base = True
                         break
                     # not looking at a base
@@ -414,28 +441,33 @@ def build_scouting_dictionaries(replay, events, objects, frames, current_map_pat
                     prev_states[cur_team] = "Viewing empty map space"
         elif isinstance(event, UpdatePathingUnitPositionsEvent):
             for team in [1, 2]:
+                if team == 1:
+                    opp_team = 2
+                elif team == 2:
+                    opp_team = 1  # TODO potential bug here? players might be different ids?
                 update_estimated_unit_positions(units, team, cur_frame)
-                units_scouting_base = {}
-                for unit_id, unit_data in units[team].items():
-                    if unit_data.pos is None:
-                        continue
-                    if first_instance[team]:
-                        if team == 1:
-                            opp_team = 2
-                        elif team == 2:
-                            opp_team = 1  # TODO potential bug here? players might be different ids?
-                        for base, base_location in replay.player[opp_team].bases[cur_frame].items():
-                            if dist(base_location, unit_data.pos) < get_unit_vision_range(unit_data.unit.name) * 2:
-                                if base not in units_scouting_base:
-                                    units_scouting_base[base] = []
-                                units_scouting_base[base].append(unit_data.unit)
-                                # possible_scouting_units[opp_team][base] = cur_frame
-                                # print("second", cur_frame / 22.4, unit_data.unit.name,
-                                #       "views base")
-                                # first_instance[team] = False
+                for time, scan_location in scanner_sweeps[team]:
+                    if cur_frame - time > 22.4 * 12.3:
+                        scanner_sweeps[team].remove((time, scan_location))
+                for base, base_location in replay.player[opp_team].bases[cur_frame].items():
+                    objects_scouting = []
+                    # check if units are scouting
+                    for unit_id, unit_data in units[team].items():
+                        if unit_data.pos is None:
+                            continue
+                        if dist(base_location, unit_data.pos) < get_unit_vision_range(unit_data.unit.name) * 2:
+                            objects_scouting.append(unit_data.unit)
+                            # possible_scouting_units[opp_team][base] = cur_frame
+                            # print("second", cur_frame / 22.4, unit_data.unit.name,
+                            #       "views base")
+                            if "Units at opponent base" not in scouting_states[team][cur_frame][1]:
                                 scouting_states[team][cur_frame][1].append("Units at opponent base")
-                for base, units_scouting in units_scouting_base.items():
-                    possible_scouting_units[opp_team][base] = (units_scouting, cur_frame)
+                    # check scanner sweep scouting
+                    for time, scan_location in scanner_sweeps[team]:
+                        if dist(base_location, scan_location) < 13:
+                            objects_scouting.append("ScannerSweep")
+                    if len(objects_scouting) > 0:
+                        possible_scouting_units[opp_team][base] = (objects_scouting, cur_frame)
     return scouting_states[1], scouting_states[2]
 
 
@@ -470,7 +502,46 @@ def updatePrevScoutStates(scouting_dict, frame, prev_frame, prev_state):
         i += 1
     return scouting_dict
 
-  
+
+def checkFirstInstance(scouting_dict, scale):
+    '''checkFirstInstance is intended to avoid false positive scouting tags
+    in the early game.
+    Because it is possible for a player to 'scout' their opponent without
+    actually looking at their base (a player can order units around the map
+    and only view the mini-map), we added a sending units tag as a possible
+    first instance of scouting. checkFirstInstance finds these tags and verifies
+    that there does not already exist an instance of scouting within the next 45
+    seconds, and if an instance does exist, checkFirstInstance eradicates this
+    false positive scouting tag.
+    checkFirstInstance takes in a scouting dictionary, as well as the scale -
+    which indicates game speed in frames per second. It returns the updated and
+    verified scouting dictionary'''
+    frame_jump45 = 45 * int(scale)
+    send_units = "Sending units to the opponent's base"
+    keys = scouting_dict.keys()
+    for key in keys:
+        state = scouting_dict[key][1]
+        # recorded instance of ordering units
+        if send_units in state:
+            # check if there is a regular scouting instance within the next 45 secs
+            for i in range(key + 1, frame_jump45 + key + 1):
+                # make sure it doesn't throw a key error
+                if i in keys:
+                    if is_scouting(scouting_dict[i]):
+                        # if there is an instance of scouting, reset the original
+                        scouting_dict[key][1].remove(send_units)
+                        return scouting_dict
+            # No instance that already corresponds to the unit ordering, consider it scouting
+            # for 10 seconds
+            frame_jump10 = 10 * int(scale)
+            for i in range(key, key + frame_jump10 + 1):
+                if not (send_units in scouting_dict[i][1]):
+                    scouting_dict[i][1].append(send_units)
+            return scouting_dict
+    # No ordering of units, return original dictionary
+    return scouting_dict
+
+
 def is_scouting(frame_list):
     '''isScouting returns True if the combination of tags for a frame indicates
     that the player is scouting, and False if otherwise. isScouting takes in
@@ -609,6 +680,9 @@ def final_scouting_states(replay, current_map_path_data):
     team2_scouting_states = integrate_engagements(team2_scouting_states, battles, scale, "Engaged in Battle")
     team1_scouting_states = integrate_engagements(team1_scouting_states, harassing, scale, "Harassing")
     team2_scouting_states = integrate_engagements(team2_scouting_states, harassing, scale, "Harassing")
+
+    team1_scouting_states = checkFirstInstance(team1_scouting_states, scale)
+    team2_scouting_states = checkFirstInstance(team2_scouting_states, scale)
 
     team1_scouting_states = removeEmptyFrames(team1_scouting_states, frames)
     team2_scouting_states = removeEmptyFrames(team2_scouting_states, frames)

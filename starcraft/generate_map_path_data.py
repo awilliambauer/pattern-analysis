@@ -17,8 +17,11 @@ import numpy as np
 import heapq
 import pickle
 import lzma
-from MapAnalyzer.MapData import MapData
-from MapAnalyzer.utils import import_bot_instance
+try:
+    from MapAnalyzer.MapData import MapData
+    from MapAnalyzer.utils import import_bot_instance
+except ImportError:
+    pass
 
 import file_locations
 
