@@ -20,17 +20,19 @@ from sc2reader.log_utils import loggable
 from sc2reader.engine.plugins import SelectionTracker, APMTracker
 from selection_plugin import ActiveSelection
 from typing import NamedTuple, Tuple
+from enum import Enum
 
 base_names_tier_one = set(["Hatchery", "Nexus", "CommandCenter"])
 base_names = set(["Hatchery", "Lair", "Hive", "Nexus", "CommandCenter", "CommandCenterFlying", "OrbitalCommand", "OrbitalCommandFlying","PlanetaryFortress"])
 flying_buildings = ["Barracks", "Factory", "Starport", "CommandCenter"]
 land_cc_abils = ['LandOrbitalCommand', 'LandCommandCenter']
 cc_names = ['OrbitalCommand', 'CommandCenter']
-
+BaseType = Enum("BaseType", "MAIN EXPANSION PROXY")
 
 class BaseCluster(NamedTuple):
     label: int
     center: Tuple[int, int]
+    base_type: BaseType
 
 
 def is_mining_loc(resource_clusters, location):
@@ -89,6 +91,7 @@ class BaseTracker(object):
         self.building_locs = {}
         self.lookup = {}
         self.keyframes = []
+        self.mains = []
 
 
     def handleUnitBornEvent(self, event, replay):
@@ -98,6 +101,8 @@ class BaseTracker(object):
             self.building_locs[event.unit.id] = (event.location, event.unit.owner.team_id, 0, True)
             self.lookup[event.frame] = self.building_locs.copy()
             self.keyframes.append(event.frame)
+            self.mains.append(event.location)
+            
 
 
     def handleUnitInitEvent(self, event, replay):
@@ -248,6 +253,7 @@ class BaseTracker(object):
                 cluster_centers_indices = af.cluster_centers_indices_
                 centers = af.cluster_centers_.tolist()
                 labels = af.labels_
+                self.logger.debug(f"(frame {frame}): labels = {labels}")
                 n_clusters = len(cluster_centers_indices)
 
                 # mining location? must be separate cluster
@@ -257,14 +263,18 @@ class BaseTracker(object):
                     mining_locs = [(loc, finish) for loc, finish, pref in zip(locs[labels == k], finishes[labels == k], prefs[labels == k]) if pref]
                     if len(mining_locs) > 1:
                         # split up clusters with more than one mining base
+                        self.logger.debug(f"(frame {frame}): mining_locs = {mining_locs}")
                         original = min(filter(lambda x: x is not None, mining_locs), key=lambda x: x[1])
                         to_split = [x for x in mining_locs if x[0].tolist() != original[0].tolist()]
+                        self.logger.debug(f"(frame {frame}): original = {original}, to_split = {to_split}")
                         for i, (loc, finish) in enumerate(to_split):
                             new_label = n_clusters + i
+                            self.logger.debug(f"(frame {frame}): changing {labels[(locs == loc).all(axis=1).nonzero()]} to {new_label}")
                             labels[(locs == loc).all(axis=1).nonzero()] = new_label
                             members = [(loc, finish) for loc, finish, pref in zip(locs[labels == k], finishes[labels == k], prefs[labels == k]) if not pref]
                             for ml, mf in members:
                                 if dist(ml, loc) == min(dist(ml, x[0]) for x in [original] + to_split[:i] + to_split[i + 1:]) and mf >= finish:
+                                    self.logger.debug(f"(frame {frame}): changing {labels[(locs == ml).all(axis=1).nonzero()]} to {new_label}")
                                     labels[(locs == ml).all(axis=1).nonzero()] = new_label
                         new_centers.append(loc)
 
@@ -288,10 +298,16 @@ class BaseTracker(object):
                     central = select_center(cs)
                     cluster_centers_indices = np.append(cluster_centers_indices, (locs == central).all(axis=1).nonzero())
                     n_clusters += 1
-
+                # print(f"(frame {frame}): set(labels) = {set(labels)} center indices = {cluster_centers_indices}")
+                base_types = {}
+                for loc, label in zip(locs, labels):
+                    if any(np.array_equal(loc, m) for m in self.mains):
+                        base_types[label] = BaseType.MAIN
+                    elif label not in base_types and (is_mining_loc(self.resource_clusters, loc)):
+                        base_types[label] = BaseType.EXPANSION
                 for unit_id, loc, team_id, label in zip(unit_ids, locs, teamids, labels):
                     pdict[team_id].bases[frame][unit_id] = loc
-                    pdict[team_id].base_cluster[frame][unit_id] = BaseCluster(label, locs[cluster_centers_indices[label]])
+                    pdict[team_id].base_cluster[frame][unit_id] = BaseCluster(label, locs[cluster_centers_indices[label]], base_types.get(label, BaseType.PROXY))
 
         except:
             print(locs)
@@ -322,18 +338,18 @@ if __name__ == "__main__":
              'replays/spawningtool_52636.SC2Replay',
              'replays/spawningtool_47751.SC2Replay',
              'replays/spawningtool_47709.SC2Replay',
-             'replays/spawningtool_52635.SC2Replay']
-             # 'replays/spawningtool_59082.SC2Replay',
-             # 'replays/spawningtool_58796.SC2Replay',
-             # 'replays/spawningtool_52662.SC2Replay',
-             # 'replays/spawningtool_40787.SC2Replay']
+             'replays/spawningtool_52635.SC2Replay',
+             'replays/spawningtool_59082.SC2Replay',
+             'replays/spawningtool_58796.SC2Replay',
+             'replays/spawningtool_52662.SC2Replay',
+             'replays/spawningtool_40787.SC2Replay']
     sc2reader.engine.register_plugin(APMTracker())
     sc2reader.engine.register_plugin(SelectionTracker())
     sc2reader.engine.register_plugin(ActiveSelection())
     sc2reader.engine.register_plugin(BaseTracker())
 
     start = time.perf_counter()
-    replays = [sc2reader.load_replay(f) for f in files[:1]]
+    replays = [sc2reader.load_replay(f) for f in files]
     print(f"loading {len(files)} replays each over 1000 seconds took {time.perf_counter() - start} seconds")
 
     # fig, ax = plt.subplots()
