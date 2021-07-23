@@ -118,13 +118,6 @@ class _GameState:
             unit_state.pos = unit_state.get_position_estimate(current_frame)
 
 
-class ScoutingType(Enum):
-    MAIN = 1
-    EXPANSION = 2
-    PROXY = 3
-    ARMY = 4
-
-
 class ScoutingInstance:
     def __init__(self, player, start_time, end_time, location, units_used, units_scouted, scouting_type):
         self.player = player
@@ -222,6 +215,7 @@ def handle_unit_died_event(event, game_state):
 
 def handle_unit_born_event(event, game_state):
     game_state.set_unit_pos(event.unit, event.location)
+    # want to find the nearest production facility and see if it has a rally
 
 
 def handle_unit_positions_event(event, game_state):
@@ -243,6 +237,8 @@ def handle_scanner_sweep(event, game_state):
             base_cluster = game_state.player_states[opponent_id].base_cluster[event.frame][building_id]
             base_clusters_labeled[base_cluster.label] = base_cluster
             base_clusters[base_cluster.label] += 1
+    if len(buildings_being_scouted) == 0:
+        return
     most_common_base_cluster = max(base_clusters.items(), key=lambda cluster_count: cluster_count[1])[0]
     game_state.player_states[event.player.pid].potential_scouting_groups.append(
         PotentialScoutingGroup(event.frame, "ScannerSweep", buildings_being_scouted,
@@ -261,7 +257,13 @@ def handle_move_command(event, game_state):
     # print("sending", event.active_selection, "to", target_location, "at sec", cur_frame / 22.4)
     for selected_unit in event.active_selection:
         if selected_unit.is_building:
-            # TODO implement rallying
+            rallies = game_state.player_states[selected_unit.owner.pid].rallies
+            if event.flag["queued"]:
+                if selected_unit not in rallies:
+                    rallies[selected_unit] = []
+                rallies[selected_unit].append(event.location[:2])
+            else:
+                rallies[selected_unit] = [event.location[:2]]
             continue
         if not game_state.unit_pos_exists(selected_unit.id):
             # print("missing previous information about", selected_unit.name)
