@@ -13,7 +13,7 @@ from sc2reader.engine.plugins import SelectionTracker, APMTracker
 import control_groups
 import scouting_detector
 from file_locations import REPLAY_FILE_DIRECTORY
-from base_plugins import BaseTracker
+from base_plugins import BaseTracker, BaseType
 from modified_rank_plugin import ModifiedRank
 from load_map_path_data import load_path_data
 from generate_replay_info import group_replays_by_map
@@ -71,6 +71,8 @@ def get_scouting_frequency(replay, map_path_data):
         if is_first_scouting_1:
             first_scouting_time_1 = scouting_instance.start_time / 22.4
             is_first_scouting_1 = False
+        if scouting_instance.scouting_type == BaseType.MAIN:
+            scouting_mb_1_count += 1
         scouting_count_1 += 1
 
     # player 2's scouting instances
@@ -80,6 +82,8 @@ def get_scouting_frequency(replay, map_path_data):
         if is_first_scouting_2:
             first_scouting_time_2 = scouting_instance.start_time / 22.4
             is_first_scouting_2 = False
+        if scouting_instance.scouting_type == BaseType.MAIN:
+            scouting_mb_2_count += 1
         scouting_count_2 += 1
 
 
@@ -212,16 +216,16 @@ def writeToCsv():
                                                     "CPS", "PeaceRate",
                                                     "BattleRate", "Win"])
         events_out.writeheader()
-        count = 0
+        # count = 0
         for map_name, replays in group_replays_by_map().items():
-            if count > 1:
-                break
+            # if count > 1:
+            #     break
             print("loading path data for map", map_name, "which has", len(replays), "replays")
             pool = Pool(min(cpu_count(), 15))
             map_path_data = load_path_data(map_name)
-            results = pool.starmap(generate_fields, zip(replays[:2], repeat(map_path_data)))
+            results = pool.starmap(generate_fields, zip(replays, repeat(map_path_data)))
             pool.close()
-            count += 1
+            # count += 1
             pool.join()
             for fields in results:
                 if fields:  # generateFields will return None for invalid replays
