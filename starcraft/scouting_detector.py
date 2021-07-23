@@ -230,7 +230,23 @@ def handle_unit_positions_event(event, game_state):
 
 
 def handle_scanner_sweep(event, game_state):
-    game_state.player_states[event.player.pid].active_scanner_sweeps.append((event.frame, event.location))
+    if event.player.pid == 1:
+        opponent_id = 2
+    else:
+        opponent_id = 1
+    buildings_being_scouted = []
+    base_clusters_labeled = {}
+    base_clusters = defaultdict(lambda: 0)
+    for building_id, building_location in game_state.player_states[opponent_id].bases[event.frame].items():
+        if dist(building_location, event.location[:2]) < 13:
+            buildings_being_scouted.append(game_state.objects[building_id])
+            base_cluster = game_state.player_states[opponent_id].base_cluster[event.frame][building_id]
+            base_clusters_labeled[base_cluster.label] = base_cluster
+            base_clusters[base_cluster.label] += 1
+    most_common_base_cluster = max(base_clusters.items(), key=lambda cluster_count: cluster_count[1])[0]
+    game_state.player_states[event.player.pid].potential_scouting_groups.append(
+        PotentialScoutingGroup(event.frame, "ScannerSweep", buildings_being_scouted,
+                               base_clusters_labeled[most_common_base_cluster]))
 
 
 def handle_move_command(event, game_state):

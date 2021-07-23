@@ -141,7 +141,7 @@ def remove_scouting_during_battle(battle_list, scouting_list):
     for scouting_instance in scouting_list:
         during_battle = False
         for frame in range(scouting_instance.start_time, scouting_instance.end_time, 23):
-            if duringBattle(frame, battle_list):
+            if duringBattle(frame, battle_list, 10 * 22.4):
                 during_battle = True
                 break
         if not during_battle:
@@ -175,12 +175,12 @@ def averageLocations(list, dict):
         new_list.append(new_tuple)
     return new_list
 
-def duringBattle(frame, battles):
+def duringBattle(frame, battles, margin=10 * 22.4):
     '''duringBattle returns true if a frame takes place during a battle.
     The parameters are a frame of the game and a list of battles returned by
     buildBattleList.'''
     for battle in battles:
-        if frame >= battle[0] and frame <= battle[1]:
+        if frame >= (battle[0] - margin) and frame <= (battle[1] + margin):
             return True
 
 def toTime(battles, frames, seconds):
