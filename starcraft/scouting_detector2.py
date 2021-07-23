@@ -1,21 +1,45 @@
-from typing import List
+from typing import List, Tuple
+
+from sc2.position import Point2
 
 from starcraft.sc2reader.events.game import GameEvent
-from unit_prediction import get_position_estimate_along_path
+from unit_prediction import get_position_estimate_along_path, window
 from unit_info import get_unit_vision_radius, get_unit_movement_speed, is_flying_unit
 import sc2reader
+from math import dist
+from enum import Enum
+from collections import defaultdict, namedtuple
+
+# MAGIC CONSTANTS
+# the distance a unit or camera view needs to be from any base of an opponent before it's scouting
+SCOUTING_CAMERA_DISTANCE_FROM_BASE = 25
+SCOUTING_UNIT_DISTANCE_FROM_BASE = 25
+# the maximum time after a unit arrives at an opponents base before the player views that base during which it can be
+# considered scouting
+SCOUTING_MAX_TIME_AFTER_UNIT_ARRIVES = 30 * 22.4
+# the maximum time between instances of scouting after which they are considered separate
+SCOUTING_MAX_TIME_TO_JOIN = 10 * 22.4
 
 
 class _UnitState:
     def __init__(self, unit_data, pos=None):
         self.unit_data = unit_data
+        self.owner = unit_data.owner
         self.id = unit_data.id
         self.pos = pos
-        self.path_queue = None
+        self.path_queue = []
         self.path_start_frame = None
         self.movement_speed = get_unit_movement_speed(unit_data.name)
         self.vision_radius = get_unit_vision_radius(unit_data.name)
         self.flying = is_flying_unit(unit_data.name)
+
+    def __eq__(self, o: object) -> bool:
+        if not isinstance(o, _UnitState):
+            return False
+        return o.id == self.id
+
+    def __str__(self):
+        return str(self.unit_data)
 
     def finish_path(self, current_frame):
         self.path_queue.pop(0)
@@ -40,25 +64,50 @@ class _UnitState:
         return position_on_path
 
 
+PotentialScoutingGroup = namedtuple("PotentialScoutingGroup",
+                                    ["frame", "units_scouting", "units_being_scouted", "base_cluster"])
+
+
 class _PlayerState:
-    def __init__(self, id):
-        self.id = id
+    def __init__(self, player):
+        self.id = player.pid
+        self.race = player.play_race
         self.camera_pos = None
         self.upgrades = []
-        self.scouting_units = []
+        self.bases = player.bases
+        self.base_cluster = player.base_cluster
+        self.potential_scouting_groups = []  # a list of PotentialScoutingGroups
+        self.buildings_unseen = []
+        self.active_scanner_sweeps = []
+        self.rallies = {}  # building_id: rally_point_queue
 
 
 class _GameState:
-    def __init__(self):
+    def __init__(self, replay, map_path_data):
+        self.map_path_data = map_path_data
         self.current_frame = 0
-        self._unit_states = {}
-        self.player_states = (_PlayerState(1), _PlayerState(2))
+        self._unit_states = {}  # unit_id: _UnitState
+        self.player_states = {1: _PlayerState(replay.players[0]), 2: _PlayerState(replay.players[1])}
+        self.objects = replay.objects
+
+    def unit_pos_exists(self, unit_id):
+        return unit_id in self._unit_states
+
+    def get_unit_state(self, unit_id):
+        return self._unit_states[unit_id]
 
     def get_unit_pos(self, unit_id):
-        return self._unit_states[unit_id].pos
+        return self.get_unit_state(unit_id).pos
 
-    def set_unit_pos(self, unit_id, pos):
-        self._unit_states[unit_id].pos = pos
+    def set_unit_pos(self, unit, pos):
+        if unit.id not in self._unit_states:
+            self._unit_states[unit.id] = _UnitState(unit, pos)
+        else:
+            self._unit_states[unit.id].pos = pos
+
+    def delete_unit(self, unit_id):
+        if unit_id in self._unit_states:
+            self._unit_states.pop(unit_id)
 
     def get_camera_pos(self, player_id):
         return self.player_states[player_id].camera_pos
@@ -67,17 +116,30 @@ class _GameState:
         self.player_states[player_id].camera_pos = pos
 
     def update_unit_positions(self, current_frame):
-        for unit_state in self._unit_states:
+        for unit_state in self._unit_states.values():
             unit_state.pos = unit_state.get_position_estimate(current_frame)
 
 
+class ScoutingType(Enum):
+    MAIN = 1
+    EXPANSION = 2
+    PROXY = 3
+    ARMY = 4
+
+
 class ScoutingInstance:
-    def __init__(self, player, start_time, end_time, location, units_used):
+    def __init__(self, player, start_time, end_time, location, units_used, units_scouted, scouting_type):
         self.player = player
         self.start_time = start_time
         self.end_time = end_time
         self.location = location
         self.units_used = units_used
+        self.units_scouted = units_scouted
+        self.scouting_type = scouting_type
+
+    def __str__(self):
+        return str(self.player) + ": " + str(self.start_time) + "-" + str(self.end_time) + \
+               ", loc: " + str(self.location) + ", with: " + str(self.units_used) + ", on: " + str(self.units_scouted)
 
 
 class GameTickEvent:
@@ -91,17 +153,48 @@ def _get_events(replay) -> List[GameEvent]:
     return sorted_events
 
 
-def get_scouting_instances(replay) -> List[ScoutingInstance]:
+def get_scouting_instances(replay, map_path_data) -> Tuple[List[ScoutingInstance], List[ScoutingInstance]]:
     events = _get_events(replay)
     event_handlers = _init_event_handlers()
-    game_state = _GameState()
-    scouting_instances = []
+    game_state = _GameState(replay, map_path_data)
+    unjoined_scouting_instances = []
     for event in events:
         handlers = [handler for predicate, handler in event_handlers.items() if predicate(event)]
         for handler in handlers:
-            handler(event, game_state)
-    return scouting_instances
+            new_scouting_instances = handler(event, game_state)  # functions default to returning none
+            if new_scouting_instances is not None:
+                for scouting_instance in new_scouting_instances:
+                    unjoined_scouting_instances.append(scouting_instance)
 
+    scouting_instances_per_player = {1: [], 2: []}
+    for scouting_instance in unjoined_scouting_instances:
+        scouting_instances_per_player[scouting_instance.player].append(scouting_instance)
+    for pid in [1, 2]:
+        scouting_instances = scouting_instances_per_player[pid]
+        idx = 0
+        while idx < len(scouting_instances) - 1:
+            first = scouting_instances[idx]
+            second = scouting_instances[idx + 1]
+            if second.start_time - first.end_time > SCOUTING_MAX_TIME_TO_JOIN:
+                idx += 1
+                continue
+            # otherwise, join them
+            scouting_instances.pop(idx + 1)
+            scouting_instances.pop(idx)
+            combined_units_used = first.units_used
+            for unit in second.units_used:
+                if unit not in combined_units_used:
+                    combined_units_used.append(unit)
+            combined_units_scouted = first.units_scouted
+            for unit in second.units_scouted:
+                if unit not in combined_units_scouted:
+                    combined_units_scouted.append(unit)
+            merged = ScoutingInstance(first.player, first.start_time, second.end_time,
+                                      (first.location + second.location) / 2, combined_units_used,
+                                      combined_units_scouted, first.scouting_type)
+            scouting_instances.insert(idx, merged)
+
+    return scouting_instances_per_player[1], scouting_instances_per_player[2]
 
 
 def _init_event_handlers():
@@ -126,160 +219,130 @@ def _init_event_handlers():
 
 
 def handle_unit_died_event(event, game_state):
+    game_state.delete_unit(event.unit_id)
 
-
-# for unit_id in units[event.unit.owner.pid]:
-#     if unit_id == event.unit_id:
-#         units[event.unit.owner.pid].pop(unit_id)
-#         break
 
 def handle_unit_born_event(event, game_state):
-    game_state.set_unit_pos(event.control_pid, event.unit, event.location)
+    game_state.set_unit_pos(event.unit, event.location)
 
 
 def handle_unit_positions_event(event, game_state):
     for unit in event.units.keys():
-        game_state.set_unit_pos(unit.owner.pid, unit, event.units[unit])
+        game_state.set_unit_pos(unit, event.units[unit])
 
 
 def handle_scanner_sweep(event, game_state):
+    game_state.player_states[event.player.pid].active_scanner_sweeps.append((event.frame, event.location))
 
 
 def handle_move_command(event, game_state):
-    cur_team = event.player.pid
-
-    # updating unit positions and checking for the first instance of scouting
-    if event.ability_name in ["RightClick", "Attack"]:
-        target_location = event.location[:2]
-
-        # update the location of the unit we are targeting
-        if "Unit" in event.name:
-            if event.target_unit is None:
-                # print("no target unit exists for targetunitcommandevent")
-                pass
-            elif not event.target_unit.is_building:
-                game_state.set_unit_pos(event.target_unit.id, target_location)
-
-            # checking for the first instance of scouting - units ordered to
-        # the opponent's base
-        # print("sending", event.active_selection, "to", target_location, "at sec", cur_frame / 22.4)
-        # the current player has just ordered their selected non-building units to move to the location
-        for selected_unit in event.active_selection:
-            if selected_unit.is_building:
-                continue
-            if selected_unit.id not in units[cur_team]:
-                # print("missing previous information about", selected_unit.name)
-                # if we have no previous information about the position of the unit, ignore it
-                set_unit_pos(cur_team, selected_unit, None)  # add it to our list with no pos info
-                continue
-            unit_data = units[cur_team][selected_unit.id]
-            if unit_data.pos is None:
-                # print("unit data exists but has no position for", selected_unit.name)
-                continue
+    target_location = event.location[:2]
+    # if it's a target unit command, we can update the position of the unit it's targeting
+    if isinstance(event, sc2reader.events.game.TargetUnitCommandEvent):
+        if event.target_unit is None:
+            # print("no target unit exists for targetunitcommandevent")
+            pass
+        else:
+            game_state.set_unit_pos(event.target_unit, target_location)
+    # print("sending", event.active_selection, "to", target_location, "at sec", cur_frame / 22.4)
+    for selected_unit in event.active_selection:
+        if selected_unit.is_building:
+            # TODO implement rallying
+            continue
+        if not game_state.unit_pos_exists(selected_unit.id):
+            # print("missing previous information about", selected_unit.name)
+            game_state.set_unit_pos(selected_unit, None)  # add it to our list with no pos info
+            # if we have no previous information about the position of the unit, ignore it
+            continue
+        unit_state = game_state.get_unit_state(selected_unit.id)
+        if unit_state.pos is None:
+            # print("unit data exists but has no position for", selected_unit.name)
+            continue
+        if event.flag["queued"]:
+            if len(unit_state.path_queue) == 0:
+                start_pos = unit_state.pos
+            else:
+                start_pos = unit_state.path_queue[-1][-1]  # the goal of the last path
+        else:
+            start_pos = unit_state.pos
+        if not is_flying_unit(selected_unit.name):
+            path = game_state.map_path_data.get_path(start_pos, target_location)
+        else:
+            path = [Point2(start_pos), Point2(target_location)]
+        if path is not None:
             if event.flag["queued"]:
-                if len(unit_data.paths) == 0:
-                    start_pos = unit_data.pos
-                else:
-                    start_pos = unit_data.paths[-1][-1]  # the goal of the last path
+                unit_state.path_queue.append(path)
             else:
-                start_pos = unit_data.pos
-            if not is_flying_unit(selected_unit.name):
-                path = current_map_path_data.get_path(start_pos, target_location)
-            else:
-                path = [Point2(start_pos), Point2(target_location)]
-            if path is not None:
-                if event.flag["queued"]:
-                    unit_data.paths.append(path)
-                else:
-                    unit_data.paths = [path]
-            unit_data.path_start_frame = event.frame
+                unit_state.path_queue = [path]
+        unit_state.path_start_frame = event.frame
 
 
 def handle_camera_event(event, game_state):
     if event.player.is_observer or event.player.is_referee:
-        continue
-    cur_team = event.player.pid
-    if cur_team == 1:
-        opp_team = 2
-    elif cur_team == 2:
-        opp_team = 1
+        return
+    player_id = event.player.pid
+    if player_id == 1:
+        opponent_id = 2
+    elif player_id == 2:
+        opponent_id = 1
     camera_location = event.location
-    # looking at their own base
-    if within_distance(camera_location, event.player.bases[cur_frame],
-                       SCOUTING_CAMERA_DISTANCE_FROM_BASE):  # TODO inaccuracy? this checks with
-        # if the camera x,y is within 25 units of the base x,y, but might want to take into account
-        # width and height of base/camera
-        scouting_states[cur_team] = updatePrevScoutStates(scouting_states[cur_team], cur_frame,
-                                                          prev_frames[cur_team],
-                                                          prev_states[cur_team])
-        scouting_states[cur_team][cur_frame][0] = "Viewing themself"
-        prev_frames[cur_team] = cur_frame
-        prev_states[cur_team] = "Viewing themself"
-    # looking at their opponent's original base
-    else:
-        viewing_opp_base = False
-        for base, base_location in replay.player[opp_team].bases[cur_frame].items():
-            # print("the camera is at", camera_location, "the base is at", base_location)
-            # print("last time units arrived at this base: ",
-            #       last_time_unit_at_base[opp_team][base] if base in last_time_unit_at_base[
-            #           opp_team] else -1e10)
-            # print("cur frame:", cur_frame)
-            # print("units within scouting threshold:", (
-            #         cur_frame - (last_time_unit_at_base[opp_team][base] if base in last_time_unit_at_base[
-            #     opp_team] else -1e10)) < SCOUTING_MAX_TIME_AFTER_UNIT_ARRIVES)
-            # for each base existing at this frame
-            if dist(camera_location, base_location) < SCOUTING_CAMERA_DISTANCE_FROM_BASE and \
-                    (cur_frame - (possible_scouting_units[opp_team][base][1] if base in possible_scouting_units[
-                        opp_team] else -1e10)) < SCOUTING_MAX_TIME_AFTER_UNIT_ARRIVES:
-                # if the camera is within a certain distance and a unit has been there in the last X seconds
-                scouting_states[cur_team] = updatePrevScoutStates(scouting_states[cur_team], cur_frame,
-                                                                  prev_frames[cur_team],
-                                                                  prev_states[cur_team])
-                base_location = (int(camera_location[0]), int(camera_location[1]))
-                # print("scouting detected by player", cur_team, "with units",
-                #       possible_scouting_units[opp_team][base][0], "at second", cur_frame / 22.4)
-                scouting_occurences[cur_team].append(
-                    {cur_frame / 22.4: possible_scouting_units[opp_team][base][0]})
-                scouting_states[cur_team][cur_frame][0] = "Scouting opponent - main base" if base in og_bases[
-                    cur_team] else "Scouting opponent - expansions"
-                scouting_states[cur_team][cur_frame].append(base_location)
-                prev_frames[cur_team] = cur_frame
-                prev_states[cur_team] = "Scouting opponent - main base" if base in og_bases[
-                    cur_team] else "Scouting opponent - expansions"
-                # first_instance[cur_team] = False
-                viewing_opp_base = True
-                break
-            # not looking at a base
-        if not viewing_opp_base:
-            scouting_states[cur_team] = updatePrevScoutStates(scouting_states[cur_team], cur_frame,
-                                                              prev_frames[cur_team],
-                                                              prev_states[cur_team])
-            scouting_states[cur_team][cur_frame][0] = "Viewing empty map space"
-            prev_frames[cur_team] = cur_frame
-            prev_states[cur_team] = "Viewing empty map space"
+
+    buildings_in_range_of_camera = list(map(lambda building_and_loc: building_and_loc[0],
+                                            filter(lambda building_and_loc: dist(camera_location,
+                                                                                 building_and_loc[
+                                                                                     1]) < SCOUTING_CAMERA_DISTANCE_FROM_BASE,
+                                                   game_state.player_states[opponent_id].bases[event.frame].items())))
+
+    actual_scouting_groups = []
+
+    for potential_scouting_group in game_state.player_states[player_id].potential_scouting_groups:
+        time_since_arrived = event.frame - potential_scouting_group.frame
+        if time_since_arrived > SCOUTING_MAX_TIME_AFTER_UNIT_ARRIVES:
+            # this event was too long ago, remove it from the list
+            game_state.player_states[player_id].potential_scouting_groups.remove(potential_scouting_group)
+            continue
+        # if any of the buildings scouted by this group are in range of the camera
+        if not any(filter(lambda unit: unit.id in buildings_in_range_of_camera,
+                          potential_scouting_group.units_being_scouted)):
+            continue
+
+        actual_scouting_groups.append(potential_scouting_group)
+
+    return [ScoutingInstance(player_id, event.frame, event.frame, scouting_group.base_cluster.center,
+                             scouting_group.units_scouting, scouting_group.units_being_scouted,
+                             scouting_group.base_cluster.base_type) for scouting_group in actual_scouting_groups]
 
 
 def handle_game_tick_event(event, game_state):
-    for team in [1, 2]:
-        update_estimated_unit_positions(units, team, cur_frame)
+    for player_id in [1, 2]:
+        game_state.update_unit_positions(event.frame)
         units_scouting_base = {}
-        for unit_id, unit_data in units[team].items():
-            if unit_data.pos is None:
+        for unit_id, unit_state in game_state._unit_states.items():
+            if unit_state.pos is None:
                 continue
-            if first_instance[team]:
-                if team == 1:
-                    opp_team = 2
-                elif team == 2:
-                    opp_team = 1  # TODO potential bug here? players might be different ids?
-                for base, base_location in replay.player[opp_team].bases[cur_frame].items():
-                    if dist(base_location, unit_data.pos) < get_unit_vision_radius(unit_data.unit.name) * 2:
-                        if base not in units_scouting_base:
-                            units_scouting_base[base] = []
-                        units_scouting_base[base].append(unit_data.unit)
-                        # possible_scouting_units[opp_team][base] = cur_frame
-                        # print("second", cur_frame / 22.4, unit_data.unit.name,
-                        #       "views base")
-                        # first_instance[team] = False
-                        scouting_states[team][cur_frame][1].append("Units at opponent base")
-        for base, units_scouting in units_scouting_base.items():
-            possible_scouting_units[opp_team][base] = (units_scouting, cur_frame)
+            if not (unit_state.unit_data.is_army or unit_state.unit_data.is_worker):
+                continue
+            if unit_state.owner.pid != player_id:
+                continue
+            if player_id == 1:
+                opponent_id = 2
+            elif player_id == 2:
+                opponent_id = 1
+            for building_id, location in game_state.player_states[opponent_id].bases[event.frame].items():
+                if dist(location, unit_state.pos) < get_unit_vision_radius(unit_state.unit_data.name) * 1.5:
+                    if building_id not in units_scouting_base:
+                        units_scouting_base[building_id] = []
+                    units_scouting_base[building_id].append(unit_state.unit_data)
+                    # print("second", cur_frame / 22.4, unit_data.unit.name,
+                    #       "views base")
+        for building_id, units_scouting in units_scouting_base.items():
+            base_cluster = game_state.player_states[opponent_id].base_cluster[event.frame][building_id]
+            existing_potential_scouting_groups = game_state.player_states[player_id].potential_scouting_groups
+            matching_potential_scouting_groups = list(
+                filter(lambda existing_group: existing_group.base_cluster.label == base_cluster.label,
+                       existing_potential_scouting_groups))
+            for group in matching_potential_scouting_groups:
+                existing_potential_scouting_groups.remove(group)
+            building_unit = game_state.objects[building_id]
+            scouting_group = PotentialScoutingGroup(event.frame, units_scouting, [building_unit], base_cluster)
+            existing_potential_scouting_groups.append(scouting_group)

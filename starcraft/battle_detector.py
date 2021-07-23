@@ -136,6 +136,18 @@ def buildBattleList(replay):
 
     return new_battles, new_harassing
 
+def remove_scouting_during_battle(battle_list, scouting_list):
+    scouting_list_no_battles = []
+    for scouting_instance in scouting_list:
+        during_battle = False
+        for frame in range(scouting_instance.start_time, scouting_instance.end_time, 23):
+            if duringBattle(frame, battle_list):
+                during_battle = True
+                break
+        if not during_battle:
+            scouting_list_no_battles.append(scouting_instance)
+    return scouting_list_no_battles
+
 def initializeDictionary(list):
     '''initializeDictionary returns a dictionary where the items in the list
     are keys and the values are empty lists. This is used to aid buildBattleList.'''
