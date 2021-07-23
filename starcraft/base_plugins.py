@@ -17,6 +17,7 @@ import warnings
 warnings.simplefilter('ignore', UserWarning)
 import sc2reader
 from sc2reader.log_utils import loggable
+import logging
 from sc2reader.engine.plugins import SelectionTracker, APMTracker
 from selection_plugin import ActiveSelection
 from typing import NamedTuple, Tuple
@@ -248,8 +249,15 @@ class BaseTracker(object):
                 locs = np.array(locs)
                 prefs = np.array(prefs)
                 finishes = np.array(finishes)
+                self.logger.debug(f"(frame {frame}): locs = {locs.tolist()} prefs = {prefs.tolist()}")
 
                 af = AffinityPropagation(preference=[0 if p else -5000 for p in prefs], random_state=None).fit(locs)
+                count = 1
+                while -1 in af.labels_ and count < 100:  # indicates clustering did not converge, so we retry until it does (giving up after 100 tries)
+                    af = AffinityPropagation(preference=[0 if p else -5000 for p in prefs], random_state=None, max_iter=5000).fit(locs)
+                    count += 1
+                if count > 1:
+                    self.logger.warning(f"(frame {frame}): Tried {count} times to achieve convergence --- {'FAILED' if count == 100 else 'SUCCEEDED'}")
                 cluster_centers_indices = af.cluster_centers_indices_
                 centers = af.cluster_centers_.tolist()
                 labels = af.labels_
@@ -298,7 +306,7 @@ class BaseTracker(object):
                     central = select_center(cs)
                     cluster_centers_indices = np.append(cluster_centers_indices, (locs == central).all(axis=1).nonzero())
                     n_clusters += 1
-                # print(f"(frame {frame}): set(labels) = {set(labels)} center indices = {cluster_centers_indices}")
+                self.logger.debug(f"(frame {frame}): set(labels) = {set(labels)} center indices = {cluster_centers_indices}")
                 base_types = {}
                 for loc, label in zip(locs, labels):
                     if any(np.array_equal(loc, m) for m in self.mains):
@@ -346,7 +354,10 @@ if __name__ == "__main__":
     sc2reader.engine.register_plugin(APMTracker())
     sc2reader.engine.register_plugin(SelectionTracker())
     sc2reader.engine.register_plugin(ActiveSelection())
-    sc2reader.engine.register_plugin(BaseTracker())
+    bt = BaseTracker()
+    bt.logger.setLevel(logging.WARN)
+    bt.logger.addHandler(logging.StreamHandler())
+    sc2reader.engine.register_plugin(bt)
 
     start = time.perf_counter()
     replays = [sc2reader.load_replay(f) for f in files]
