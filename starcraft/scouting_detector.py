@@ -216,6 +216,10 @@ def handle_unit_died_event(event, game_state):
 def handle_unit_born_event(event, game_state):
     game_state.set_unit_pos(event.unit, event.location)
     # want to find the nearest production facility and see if it has a rally
+    buildings = game_state.player_states[event.unit.owner.pid].bases[event.frame].items()
+    closest_compatible_building = min(
+        filter(lambda id_and_loc: can_produce(game_state.objects[id_and_loc[0]].name, event.unit.name), buildings),
+        key=lambda id_and_loc: dist(id_and_loc[1][:2], event.location[:2]))
 
 
 def handle_unit_positions_event(event, game_state):

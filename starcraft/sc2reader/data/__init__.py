@@ -202,6 +202,8 @@ class Unit(object):
         return self.id <= other.id
 
     def __eq__(self, other):
+        if not isinstance(other, Unit):
+            return False
         return self.id == other.id
 
     def __ne__(self, other):
