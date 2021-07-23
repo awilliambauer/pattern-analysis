@@ -1,8 +1,6 @@
 from typing import List, Tuple
-
 from sc2.position import Point2
-
-from starcraft.sc2reader.events.game import GameEvent
+from sc2reader.events.game import GameEvent
 from unit_prediction import get_position_estimate_along_path, window
 from unit_info import get_unit_vision_radius, get_unit_movement_speed, is_flying_unit
 import sc2reader

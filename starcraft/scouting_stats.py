@@ -2,8 +2,7 @@
 # Alison Cameron, David Chu, Zimri Leisher
 # July 2021
 
-from scouting_detector import is_scouting, final_scouting_states, to_time, print_time
-import argparse
+import scouting_detector
 import csv
 import time
 from itertools import repeat
@@ -25,7 +24,21 @@ from unit_prediction import get_position_estimate_along_path, get_movement_speed
 from collections import namedtuple
 
 
-def get_scouting_frequency(replay):
+# creating the fields based on who won
+fields_tuple = namedtuple('fields_tuple', ['game_id', 
+                                'team1_uid', 'team1_rank', 'team1_freq',
+                                'team1_freq_fb', 'team1_scout_mb', 'team1_first_scouting',
+                                'team1_apm', 'team1_rel_apm',
+                                'team1_cps', 'team1_peace_rate',
+                                'team1_battle_rate', "win_1",
+                                'team2_uid', 'team2_rank', 'team2_freq',
+                                'team2_freq_fb', 'team2_scout_mb', 'team2_first_scouting',
+                                'team2_apm', 'team2_rel_apm',
+                                'team2_cps', 'team2_peace_rate',
+                                'team2_battle_rate', "win_2"])
+
+
+def get_scouting_frequency(replay, map_path_data):
     '''get_scouting_frequency takes in a previously loaded replay
     from sc2reader and returns the scouting frequency (instances per second),
     the scouting_frequnecy after the first battle, and the frame of the first
@@ -41,28 +54,31 @@ def get_scouting_frequency(replay):
         raise RuntimeError()
 
     try:
-        scouting_instances = scouting_detector.get_scouting_instances(r)
-        scouting_count_1, scouting_count_2 = 0
-        scouting_count_after_first_battle_1, scouting_count_after_first_battle_2 = 0
-        first_scouting_time_1, first_scouting_time_2 = 0
-        is_first_scouting_1, is_first_scouting_2 = True
-        scouting_mb_1_count, scouting_mb_2_count = 0
+        scouting_instances_1, scouting_instances_2 = scouting_detector.get_scouting_instances(r, map_path_data)
+        scouting_count_1, scouting_count_2 = 0, 0
+        scouting_count_after_first_battle_1, scouting_count_after_first_battle_2 = 0, 0
+        first_scouting_time_1, first_scouting_time_2 = 0, 0
+        is_first_scouting_1, is_first_scouting_2 = True, True
+        scouting_mb_1_count, scouting_mb_2_count = 0, 0
         
-        for scouting_instance in scouting_instances:
-            if scouting_instance.player == 1:
-                if scouting_instance.start_time > first_battle_start_frame:
-                    scouting_count_after_first_battle_1 += 1
-                if is_first_scouting_1:
-                    first_scouting_time_1 = scouting_instance.start_time / 22.4
-                    is_first_scouting_1 = False
-                scouting_count_1 += 1
-            else:
-                if scouting_instance.start_time > first_battle_start_frame:
-                    scouting_count_after_first_battle_2 += 1
-                if is_first_scouting_2:
-                    first_scouting_time_2 = scouting_instance.start_time / 22.4
-                    is_first_scouting_2 = False
-                scouting_count_2 += 1
+        # player 1's scouting instances
+        for scouting_instance in scouting_instances_1:
+            if scouting_instance.start_time > first_battle_start_frame:
+                scouting_count_after_first_battle_1 += 1
+            if is_first_scouting_1:
+                first_scouting_time_1 = scouting_instance.start_time / 22.4
+                is_first_scouting_1 = False
+            scouting_count_1 += 1
+
+        # player 2's scouting instances
+        for scouting_instance in scouting_instances_2:
+            if scouting_instance.start_time > first_battle_start_frame:
+                scouting_count_after_first_battle_2 += 1
+            if is_first_scouting_2:
+                first_scouting_time_2 = scouting_instance.start_time / 22.4
+                is_first_scouting_2 = False
+            scouting_count_2 += 1
+        
         
         # scouting rate (instances/seconds)         
         scouting_freq_1 = scouting_count_1 / seconds
@@ -107,7 +123,7 @@ def generate_fields(replay_file, map_path_data):
         # Scouting stats
         team1_freq, team1_freq_fb, team1_scout_mb, team1_first_scouting, \
         team2_freq, team2_freq_fb, team2_scout_mb, team2_first_scouting, \
-            = get_scouting_frequency(replay)
+            = get_scouting_frequency(replay, map_path_data)
         winner = replay.winner.number
         team1_rank, team1_rel_rank, team2_rank, team2_rel_rank = ranking_stats(replay)
         
@@ -126,18 +142,6 @@ def generate_fields(replay_file, map_path_data):
         team1_uid = replay.players[0].detail_data['bnet']['uid']
         team2_uid = replay.players[1].detail_data['bnet']['uid']
         
-        # creating the fields based on who won
-        fields_tuple = namedtuple('fields_tuple', ['game_id', 
-                                        'team1_uid', 'team1_rank', 'team1_freq',
-                                        'team1_freq_fb', 'team1_scout_mb', 'team1_first_scouting',
-                                        'team1_apm', 'team1_rel_apm',
-                                        'team1_cps', 'team1_peace_rate',
-                                        'team1_battle_rate', "win_1",
-                                        'team2_uid', 'team2_rank', 'team2_freq',
-                                        'team2_freq_fb', 'team2_scout_mb', 'team2_first_scouting',
-                                        'team2_apm', 'team2_rel_apm',
-                                        'team2_cps', 'team2_peace_rate',
-                                        'team2_battle_rate', "win_2"])
         if winner == 1:
             fields = fields_tuple(game_id, 
                                 team1_uid, team1_rank, team1_freq,
@@ -207,16 +211,16 @@ def writeToCsv():
                                                     "CPS", "PeaceRate",
                                                     "BattleRate", "Win"])
         events_out.writeheader()
-        # count = 0
+        count = 0
         for map_name, replays in group_replays_by_map().items():
-            # if count > 2:
-            #     break
+            if count > 2:
+                break
             print("loading path data for map", map_name, "which has", len(replays), "replays")
             pool = Pool(min(cpu_count(), 15))
             map_path_data = load_path_data(map_name)
             results = pool.starmap(generate_fields, zip(replays[:20], repeat(map_path_data)))
             pool.close()
-            # count+=1
+            count+=1
             pool.join()
             for fields in results:
                 if fields:  # generateFields will return None for invalid replays
