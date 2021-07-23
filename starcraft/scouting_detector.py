@@ -2,7 +2,7 @@ from typing import List, Tuple
 from sc2.position import Point2
 from sc2reader.events.game import GameEvent
 from unit_prediction import get_position_estimate_along_path, window
-from unit_info import get_unit_vision_radius, get_unit_movement_speed, is_flying_unit
+from unit_info import get_unit_vision_radius, get_unit_movement_speed, is_flying_unit, can_produce
 import sc2reader
 from math import dist
 from enum import Enum
@@ -216,9 +216,16 @@ def handle_unit_died_event(event, game_state):
 def handle_unit_born_event(event, game_state):
     game_state.set_unit_pos(event.unit, event.location)
     # want to find the nearest production facility and see if it has a rally
-    buildings = game_state.player_states[event.unit.owner.pid].bases[event.frame].items()
+    if event.control_pid == 0:
+        # not controlled by a player
+        return
+    buildings = game_state.player_states[event.control_pid].bases[event.frame].items()
+    possible_production_buildings = list(
+        filter(lambda id_and_loc: can_produce(game_state.objects[id_and_loc[0]].name, event.unit.name), buildings))
+    if len(possible_production_buildings) == 0:
+        return
     closest_compatible_building = min(
-        filter(lambda id_and_loc: can_produce(game_state.objects[id_and_loc[0]].name, event.unit.name), buildings),
+        possible_production_buildings,
         key=lambda id_and_loc: dist(id_and_loc[1][:2], event.location[:2]))
 
 
@@ -245,7 +252,7 @@ def handle_scanner_sweep(event, game_state):
         return
     most_common_base_cluster = max(base_clusters.items(), key=lambda cluster_count: cluster_count[1])[0]
     game_state.player_states[event.player.pid].potential_scouting_groups.append(
-        PotentialScoutingGroup(event.frame, "ScannerSweep", buildings_being_scouted,
+        PotentialScoutingGroup(event.frame, ["ScannerSweep"], buildings_being_scouted,
                                base_clusters_labeled[most_common_base_cluster]))
 
 

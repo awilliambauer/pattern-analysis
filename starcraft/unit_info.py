@@ -285,3 +285,7 @@ flying_units = ["Observer",
 
 def is_flying_unit(unit_name):
     return unit_name in flying_units
+
+
+def can_produce(building_name, unit_name):
+    return False
