@@ -8,6 +8,7 @@ import sc2reader
 from multiprocessing import Pool, cpu_count
 import csv
 import traceback
+import random
 import file_locations
 from replay_verification import map_pretty_name_to_file
 from load_map_path_data import get_all_possible_names
@@ -46,7 +47,7 @@ def get_map_name_groups():
     return map_name_clusters
 
 
-def group_replays_by_map():
+def group_replays_by_map(replay_filter=lambda x: True):
     """
     :return: a dictionary of map name groups to replays that took place on that map. See get_map_name_groups for more
     info.
@@ -55,14 +56,17 @@ def group_replays_by_map():
     maps = {}
     with open(file_locations.REPLAY_INFO_FILE, "r") as replays_info:
         reader = csv.DictReader(replays_info)
-        for row in reader:
+        rows = random.choices(list(reader), k=10000)
+        for row in rows:
+            if not replay_filter(row):
+                continue
             matching_map_name_group = None
             for map_name_group in map_name_groups:
                 if row["Map"] in map_name_group:
                     matching_map_name_group = tuple(map_name_group)
                     break
             if matching_map_name_group is None:
-                print("no map name group for replay", row) # i think this should be impossible...
+                print("no map name group for replay", row)  # i think this should be impossible...
                 continue
             if matching_map_name_group not in maps:
                 maps[matching_map_name_group] = []
