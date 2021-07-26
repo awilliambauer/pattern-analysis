@@ -3,12 +3,14 @@ from typing import Dict, List
 
 from load_map_path_data import load_path_data
 from generate_replay_info import group_replays_by_map
+from collections import namedtuple
+import datetime
 from functools import partial
 import time
 import csv
 
 
-def run(function, replay_filter, threads=60) -> List[Dict]:
+def run(function, replay_filter=lambda x: True, threads=60) -> List[Dict]:
     start_time = time.time()
     results = []
     count = 0
@@ -17,7 +19,9 @@ def run(function, replay_filter, threads=60) -> List[Dict]:
     replay_count = sum(map(lambda name_replay: len(name_replay[1]), replay_map_groups))
     print(len(replay_map_groups.keys()), "maps", replay_count, "replays")
     with Pool(min(threads, cpu_count())) as pool:
-        for map_name_group, replays in replay_map_groups:
+        for map_name_group, replays in replay_map_groups.items():
+            if len(replays) == 0:
+                continue
             map_path_data = load_path_data(map_name_group)
             if map_path_data is None:
                 print("no path data for map", map_name_group)
@@ -33,17 +37,22 @@ def run(function, replay_filter, threads=60) -> List[Dict]:
                     count_errors_this_map += 1
             count_errors += count_errors_this_map
             print(time.time() - map_time, "s to finish processing map", map_name_group, len(replays), "replays,",
-                  count_errors_this_map, "errors", count,"/",replay_count," done")
+                  count_errors_this_map, "errors", count, "/", replay_count, " done")
     deltatime = time.time() - start_time
-    print("Analyzed",replay_count,"replays, Run time: ", "{:2d}".format(int(deltatime // 60)), "minutes and", "{:05.2f}".format(deltatime % 60),
+    print("Analyzed", replay_count, "replays, Run time: ", "{:2d}".format(int(deltatime // 60)), "minutes and",
+          "{:05.2f}".format(deltatime % 60),
           "seconds")
+    print("Time per replay:", replay_count / deltatime)
     return results
 
 
 def save(results, output_file):
-    first_result_fields = results[0].keys()
+    output_file_adjusted = output_file[:-4] if output_file.endswith(".csv") else output_file
+    output_file_adjusted += datetime.datetime.now().date()
+    output_file_adjusted += ".csv"
+    first_result_fields = results[0]._fields
     # assume that every result has the same fields
-    with open(output_file, 'w', newline='') as my_csv:
+    with open(output_file_adjusted, 'w', newline='') as my_csv:
         events_out = csv.DictWriter(my_csv, fieldnames=first_result_fields)
         events_out.writeheader()
         for result in results:
@@ -52,4 +61,4 @@ def save(results, output_file):
                     rows = [result]
                 else:
                     rows = result
-                events_out.writerows(rows)
+                events_out.writerows(map(lambda tuple: tuple._asdict(), rows))

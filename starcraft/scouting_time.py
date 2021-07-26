@@ -23,6 +23,7 @@ from generate_replay_info import group_replays_by_map
 import numpy as np
 import traceback
 from modified_rank_plugin import ModifiedRank
+from data_analysis_helper import run, save
 
 try:
     from reprlib import repr
@@ -30,7 +31,7 @@ except ImportError:
     pass
 
 
-def generateFields(filename, which, map_path_data):
+def generateFields(filename, map_path_data):
     '''generateFields takes in a filename of a replay, loads it and gathers necessary
     statistics, and returns the statistics in a tuple. It is to be used to write
     these stats to a csv. It also takes in an integer (1 or 2), which indicates
@@ -95,6 +96,9 @@ def writeToCsv(which, filename):
         count = 0
         for map_name_group, replays in group_replays_by_map().items():
             map_path_data = load_path_data(map_name_group)
+            if map_path_data is None:
+                print("no path data for map", map_name_group)
+                continue
             print("loaded path data for map", map_name_group, "with", len(replays), "replays")
             count += len(replays)
             map_time = time.time()
@@ -138,12 +142,8 @@ if __name__ == "__main__":
     sc2reader.engine.register_plugin(bt)
     #     sc2reader.log_utils.add_log_handler(logging.StreamHandler(sys.stdout), "INFO")
 
-    t1 = time.time()
-    # writeToCsv(1, "scouting_time_fraction.csv")
-    writeToCsv(2, "scouting_time_seconds_new.csv")
-    deltatime = time.time() - t1
-    print("Run time: ", "{:2d}".format(int(deltatime // 60)), "minutes and", "{:05.2f}".format(deltatime % 60),
-          "seconds")
+    results = run(generateFields, lambda row: row["Rank1"] == "7" or row["Rank2"] == 7)
+    save(results, "scouting_instances_gm")
     # with open("missing_unit_speeds.txt", "r") as file:
     #     file.writelines(scouting_detector.missing_units)
     # with open("missing_unit_vision.txt", "r") as file:
