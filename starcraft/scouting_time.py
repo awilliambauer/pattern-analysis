@@ -41,7 +41,6 @@ def generateFields(filename, map_path_data):
     a 2 will return absolute frames.'''
     # loading the replay
     try:
-        print("analyzing replay", filename)
         t = time.time()
         # extracting the game id and adding the correct tag
         # pathname = "practice_replays/" + filename
@@ -68,7 +67,6 @@ def generateFields(filename, map_path_data):
         team2_race = r.players[1].play_race
         fields = [game_id, team1_uid, team1_rank, team1_times, team2_uid, team2_rank, team2_times, team1_race,
                   team2_race]
-        print("generated fields for replay", filename, "game length:", r.real_length, "time:", time.time() - t)
         return fields
 
     except KeyboardInterrupt:
@@ -142,7 +140,7 @@ if __name__ == "__main__":
     sc2reader.engine.register_plugin(bt)
     #     sc2reader.log_utils.add_log_handler(logging.StreamHandler(sys.stdout), "INFO")
 
-    results = run(generateFields, lambda row: row["Rank1"] == "7" or row["Rank2"] == 7)
+    results = run(generateFields)
     save(results, "scouting_instances_gm")
     # with open("missing_unit_speeds.txt", "r") as file:
     #     file.writelines(scouting_detector.missing_units)

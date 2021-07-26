@@ -8,6 +8,22 @@ import datetime
 from functools import partial
 import time
 import csv
+import traceback
+
+
+def analysis_function_wrapper(function, map_path_data, filename):
+    try:
+        start_time = time.time()
+        print("Analyzing", filename)
+        results = function(filename, map_path_data)
+        print("Analyzed replay in", time.time() - start_time)
+        return results
+    except KeyboardInterrupt:
+        raise
+    except Exception as e:
+        print("Exception while analyzing replay", filename, ":")
+        traceback.print_exc()
+        return None
 
 
 def run(function, replay_filter=lambda x: True, threads=60) -> List[Dict]:
@@ -16,7 +32,7 @@ def run(function, replay_filter=lambda x: True, threads=60) -> List[Dict]:
     count = 0
     count_errors = 0
     replay_map_groups = group_replays_by_map(replay_filter)
-    replay_count = sum(map(lambda name_replay: len(name_replay[1]), replay_map_groups))
+    replay_count = sum(map(lambda name_replay: len(name_replay[1]), replay_map_groups.items()))
     print(len(replay_map_groups.keys()), "maps", replay_count, "replays")
     with Pool(min(threads, cpu_count())) as pool:
         for map_name_group, replays in replay_map_groups.items():
@@ -29,7 +45,8 @@ def run(function, replay_filter=lambda x: True, threads=60) -> List[Dict]:
             print("loaded path data for map", map_name_group, "with", len(replays), "replays")
             count += len(replays)
             map_time = time.time()
-            new_results = pool.map(partial(function, map_path_data=map_path_data), replays)
+            new_results = pool.map(partial(analysis_function_wrapper, function=function, map_path_data=map_path_data),
+                                   replays)
             results += new_results
             count_errors_this_map = 0
             for result in new_results:
