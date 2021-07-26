@@ -226,6 +226,12 @@ def handle_unit_born_event(event, game_state):
     closest_compatible_building = min(
         possible_production_buildings,
         key=lambda id_and_loc: dist(id_and_loc[1][:2], event.location[:2]))
+    if closest_compatible_building[0] in game_state.player_states[event.control_pid].rallies:
+        rally = game_state.player_states[event.control_pid].rallies[closest_compatible_building[0]]
+        unit_state = game_state.get_unit_state(event.unid.id)
+        unit_state.path_queue = rally
+        unit_state.path_start_frame = event.frame
+
 
 
 def handle_unit_positions_event(event, game_state):
