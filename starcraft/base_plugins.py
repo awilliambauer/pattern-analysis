@@ -315,7 +315,11 @@ class BaseTracker(object):
                         base_types[label] = BaseType.EXPANSION
                 for unit_id, loc, team_id, label in zip(unit_ids, locs, teamids, labels):
                     pdict[team_id].bases[frame][unit_id] = loc
-                    pdict[team_id].base_cluster[frame][unit_id] = BaseCluster(label, locs[cluster_centers_indices[label]], base_types.get(label, BaseType.PROXY))
+                    try:
+                        pdict[team_id].base_cluster[frame][unit_id] = BaseCluster(label, locs[cluster_centers_indices[label]], base_types.get(label, BaseType.PROXY))
+                    except Exception as e:
+                        print(frame, unit_id, label, cluster_centers_indices, cluster_centers_indices[label])
+                        raise e
 
         except:
             print(locs)

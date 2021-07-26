@@ -76,7 +76,6 @@ class _PlayerState:
         self.base_cluster = player.base_cluster
         self.potential_scouting_groups = []  # a list of PotentialScoutingGroups
         self.buildings_unseen = []
-        self.active_scanner_sweeps = []
         self.rallies = {}  # building_id: rally_point_queue
 
 
@@ -86,7 +85,7 @@ class _GameState:
         self.current_frame = 0
         self._unit_states = {}  # unit_id: _UnitState
         self.player_states = {1: _PlayerState(replay.players[0]), 2: _PlayerState(replay.players[1])}
-        self.objects = replay.objects
+        self.id_to_object = replay.objects
 
     def unit_pos_exists(self, unit_id):
         return unit_id in self._unit_states
@@ -221,7 +220,7 @@ def handle_unit_born_event(event, game_state):
         return
     buildings = game_state.player_states[event.control_pid].bases[event.frame].items()
     possible_production_buildings = list(
-        filter(lambda id_and_loc: can_produce(game_state.objects[id_and_loc[0]].name, event.unit.name), buildings))
+        filter(lambda id_and_loc: can_produce(game_state.id_to_object[id_and_loc[0]].name, event.unit), buildings))
     if len(possible_production_buildings) == 0:
         return
     closest_compatible_building = min(
@@ -244,7 +243,7 @@ def handle_scanner_sweep(event, game_state):
     base_clusters = defaultdict(lambda: 0)
     for building_id, building_location in game_state.player_states[opponent_id].bases[event.frame].items():
         if dist(building_location, event.location[:2]) < 13:
-            buildings_being_scouted.append(game_state.objects[building_id])
+            buildings_being_scouted.append(game_state.id_to_object[building_id])
             base_cluster = game_state.player_states[opponent_id].base_cluster[event.frame][building_id]
             base_clusters_labeled[base_cluster.label] = base_cluster
             base_clusters[base_cluster.label] += 1
@@ -341,8 +340,12 @@ def handle_camera_event(event, game_state):
 
 
 def handle_game_tick_event(event, game_state):
+    game_state.update_unit_positions(event.frame)
     for player_id in [1, 2]:
-        game_state.update_unit_positions(event.frame)
+        if player_id == 1:
+            opponent_id = 2
+        elif player_id == 2:
+            opponent_id = 1
         units_scouting_base = {}
         for unit_id, unit_state in game_state._unit_states.items():
             if unit_state.pos is None:
@@ -351,10 +354,6 @@ def handle_game_tick_event(event, game_state):
                 continue
             if unit_state.owner.pid != player_id:
                 continue
-            if player_id == 1:
-                opponent_id = 2
-            elif player_id == 2:
-                opponent_id = 1
             for building_id, location in game_state.player_states[opponent_id].bases[event.frame].items():
                 if dist(location, unit_state.pos) < get_unit_vision_radius(unit_state.unit_data.name) * 1.5:
                     if building_id not in units_scouting_base:
@@ -363,13 +362,21 @@ def handle_game_tick_event(event, game_state):
                     # print("second", cur_frame / 22.4, unit_data.unit.name,
                     #       "views base")
         for building_id, units_scouting in units_scouting_base.items():
-            base_cluster = game_state.player_states[opponent_id].base_cluster[event.frame][building_id]
-            existing_potential_scouting_groups = game_state.player_states[player_id].potential_scouting_groups
-            matching_potential_scouting_groups = list(
-                filter(lambda existing_group: existing_group.base_cluster.label == base_cluster.label,
-                       existing_potential_scouting_groups))
-            for group in matching_potential_scouting_groups:
-                existing_potential_scouting_groups.remove(group)
-            building_unit = game_state.objects[building_id]
-            scouting_group = PotentialScoutingGroup(event.frame, units_scouting, [building_unit], base_cluster)
-            existing_potential_scouting_groups.append(scouting_group)
+            try:
+                base_cluster = game_state.player_states[opponent_id].base_cluster[event.frame][building_id]
+                existing_potential_scouting_groups = game_state.player_states[player_id].potential_scouting_groups
+                matching_potential_scouting_groups = list(
+                    filter(lambda existing_group: existing_group.base_cluster.label == base_cluster.label,
+                           existing_potential_scouting_groups))
+                for group in matching_potential_scouting_groups:
+                    existing_potential_scouting_groups.remove(group)
+                building_unit = game_state.id_to_object[building_id]
+                scouting_group = PotentialScoutingGroup(event.frame, units_scouting, [building_unit], base_cluster)
+                existing_potential_scouting_groups.append(scouting_group)
+            except:
+                print(building_id)
+                print(building_id in units_scouting_base)
+                print(event.frame)
+                print(game_state.player_states[opponent_id].base_cluster[event.frame])
+                print(game_state.player_states[opponent_id].bases[event.frame])
+                raise

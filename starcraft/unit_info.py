@@ -287,5 +287,18 @@ def is_flying_unit(unit_name):
     return unit_name in flying_units
 
 
-def can_produce(building_name, unit_name):
-    return False
+production = {
+    "Barracks": ["Marine", "Reaper", "Marauder", "Ghost"],
+    "Factory": ["Hellion", "WidowMine", "SiegeTank", "Cyclone", "Hellbat", "Thor"],
+    "Starport": ["Viking", "Medivac", "Liberator", "Raven", "Banshee", "Battlecruiser"],
+}
+
+
+def can_produce(building_name, unit):
+    if unit.race == "Zerg" and building_name in ["Lair", "Hatchery", "Hive"]:
+        return True
+    if building_name not in production:
+        return False
+    if unit.name not in production[building_name]:
+        return False
+    return True

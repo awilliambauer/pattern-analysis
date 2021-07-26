@@ -13,7 +13,7 @@ from sc2reader.engine.plugins import SelectionTracker, APMTracker
 import control_groups
 import scouting_detector
 from file_locations import REPLAY_FILE_DIRECTORY
-from base_plugins import BaseTracker, BaseType
+from base_plugins import BaseTracker
 from modified_rank_plugin import ModifiedRank
 from load_map_path_data import load_path_data
 from generate_replay_info import group_replays_by_map
@@ -54,55 +54,48 @@ def get_scouting_frequency(replay, map_path_data):
 
     try:
         scouting_instances_1, scouting_instances_2 = scouting_detector.get_scouting_instances(r, map_path_data)
-        check_1, check_2 = scouting_instances_1[0], scouting_instances_2[0]
+        scouting_count_1, scouting_count_2 = 0, 0
+        scouting_count_after_first_battle_1, scouting_count_after_first_battle_2 = 0, 0
+        first_scouting_time_1, first_scouting_time_2 = 0, 0
+        is_first_scouting_1, is_first_scouting_2 = True, True
+        scouting_mb_1_count, scouting_mb_2_count = 0, 0
+
+        # player 1's scouting instances
+        for scouting_instance in scouting_instances_1:
+            if scouting_instance.start_time > first_battle_start_frame:
+                scouting_count_after_first_battle_1 += 1
+            if is_first_scouting_1:
+                first_scouting_time_1 = scouting_instance.start_time / 22.4
+                is_first_scouting_1 = False
+            scouting_count_1 += 1
+
+        # player 2's scouting instances
+        for scouting_instance in scouting_instances_2:
+            if scouting_instance.start_time > first_battle_start_frame:
+                scouting_count_after_first_battle_2 += 1
+            if is_first_scouting_2:
+                first_scouting_time_2 = scouting_instance.start_time / 22.4
+                is_first_scouting_2 = False
+            scouting_count_2 += 1
+
+        # scouting rate (instances/seconds)         
+        scouting_freq_1 = scouting_count_1 / seconds
+        scouting_freq_2 = scouting_count_2 / seconds
+
+        # scouting rate after the first battle (instances/seconds)   
+        seconds_after_fb = (frames - first_battle_start_frame) / 22.4
+        scouting_freq_fb_1 = scouting_count_after_first_battle_1 / seconds_after_fb
+        scouting_freq_fb_2 = scouting_count_after_first_battle_2 / seconds_after_fb
+
+        # scouting opponent's main base ratio to total scouting instances
+        scouting_mb_ratio_1 = scouting_mb_1_count / scouting_count_1
+        scouting_mb_ratio_2 = scouting_mb_2_count / scouting_count_2
+
+        return scouting_freq_1, scouting_freq_fb_1, first_scouting_time_1, scouting_mb_ratio_1, \
+               scouting_freq_2, scouting_freq_fb_2, first_scouting_time_2, scouting_mb_ratio_2
     except:
         print("No scouting instance was detected")
         raise RuntimeError()
-    scouting_count_1, scouting_count_2 = 0, 0
-    scouting_count_after_first_battle_1, scouting_count_after_first_battle_2 = 0, 0
-    first_scouting_time_1, first_scouting_time_2 = 0, 0
-    is_first_scouting_1, is_first_scouting_2 = True, True
-    scouting_mb_1_count, scouting_mb_2_count = 0, 0
-
-    # player 1's scouting instances
-    for scouting_instance in scouting_instances_1:
-        if scouting_instance.start_time > first_battle_start_frame:
-            scouting_count_after_first_battle_1 += 1
-        if is_first_scouting_1:
-            first_scouting_time_1 = scouting_instance.start_time / 22.4
-            is_first_scouting_1 = False
-        if scouting_instance.scouting_type == BaseType.MAIN:
-            scouting_mb_1_count += 1
-        scouting_count_1 += 1
-
-    # player 2's scouting instances
-    for scouting_instance in scouting_instances_2:
-        if scouting_instance.start_time > first_battle_start_frame:
-            scouting_count_after_first_battle_2 += 1
-        if is_first_scouting_2:
-            first_scouting_time_2 = scouting_instance.start_time / 22.4
-            is_first_scouting_2 = False
-        if scouting_instance.scouting_type == BaseType.MAIN:
-            scouting_mb_2_count += 1
-        scouting_count_2 += 1
-
-
-    # scouting rate (instances/seconds)
-    scouting_freq_1 = scouting_count_1 / seconds
-    scouting_freq_2 = scouting_count_2 / seconds
-
-    # scouting rate after the first battle (instances/seconds)
-    seconds_after_fb = (frames - first_battle_start_frame) / 22.4
-    scouting_freq_fb_1 = scouting_count_after_first_battle_1 / seconds_after_fb
-    scouting_freq_fb_2 = scouting_count_after_first_battle_2 / seconds_after_fb
-
-    # scouting opponent's main base ratio to total scouting instances
-    scouting_mb_ratio_1 = scouting_mb_1_count / scouting_count_1
-    scouting_mb_ratio_2 = scouting_mb_2_count / scouting_count_2
-
-    return  scouting_freq_1, scouting_freq_fb_1, scouting_mb_ratio_1, first_scouting_time_1, \
-            scouting_freq_2, scouting_freq_fb_2, scouting_mb_ratio_2, first_scouting_time_2
-
 
 
 def generate_fields(replay_file, map_path_data):
@@ -216,16 +209,19 @@ def writeToCsv():
                                                     "CPS", "PeaceRate",
                                                     "BattleRate", "Win"])
         events_out.writeheader()
-        # count = 0
+        count = 0
         for map_name, replays in group_replays_by_map().items():
-            # if count > 1:
-            #     break
+            if count > 2:
+                break
             print("loading path data for map", map_name, "which has", len(replays), "replays")
             pool = Pool(min(cpu_count(), 15))
             map_path_data = load_path_data(map_name)
-            results = pool.starmap(generate_fields, zip(replays, repeat(map_path_data)))
+            if map_path_data is None:
+                print("no path data for map", map_name,"skipping")
+                continue
+            results = pool.starmap(generate_fields, zip(replays[:20], repeat(map_path_data)))
             pool.close()
-            # count += 1
+            count += 1
             pool.join()
             for fields in results:
                 if fields:  # generateFields will return None for invalid replays

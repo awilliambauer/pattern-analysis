@@ -17,11 +17,13 @@ import file_locations
 from load_map_path_data import load_path_data
 from sc2reader.engine.plugins import SelectionTracker, APMTracker
 from selection_plugin import ActiveSelection
+from battle_detector import buildBattleList, remove_scouting_during_battle, remove_scouting_during_battles_and_harassment
 from base_plugins import BaseTracker
 from generate_replay_info import group_replays_by_map
 import numpy as np
 import traceback
 from modified_rank_plugin import ModifiedRank
+
 try:
     from reprlib import repr
 except ImportError:
@@ -56,7 +58,8 @@ def generateFields(filename, which, map_path_data):
         except:
             print(filename, "cannot load using sc2reader due to an internal ValueError")
             raise
-        team1_times, team2_times = scouting_stats.scouting_times(r, which, map_path_data)
+        scouting_instances = scouting_detector.get_scouting_instances(r, map_path_data)
+        team1_times, team2_times = remove_scouting_during_battles_and_harassment(r, scouting_instances)
         team1_rank, team1_rel_rank, team2_rank, team2_rel_rank = scouting_stats.ranking_stats(r)
         team1_uid = r.players[0].detail_data['bnet']['uid']
         team2_uid = r.players[1].detail_data['bnet']['uid']
@@ -88,8 +91,8 @@ def writeToCsv(which, filename):
     # valid_game_ids.txt must be produced first by running scouting_stats.py
     # with the command line argument -w
     results = []
-    count = 0
     with Pool(min(cpu_count(), 60)) as pool:
+        count = 0
         for map_name_group, replays in group_replays_by_map().items():
             map_path_data = load_path_data(map_name_group)
             print("loaded path data for map", map_name_group, "with", len(replays), "replays")
@@ -100,7 +103,7 @@ def writeToCsv(which, filename):
             for result in new_results:
                 results.append(result)
     with open(filename, 'w', newline='') as my_csv:
-        events_out = csv.DictWriter(my_csv, fieldnames=["GameID", "UID", "Rank", "Race", "ScoutTime"])
+        events_out = csv.DictWriter(my_csv, fieldnames=["GameID", "UID", "Rank", "Race", "ScoutStartTime", "ScoutEndTime", "ScoutType"])
         events_out.writeheader()
         for fields in results:
             if fields:
@@ -111,14 +114,17 @@ def writeToCsv(which, filename):
                 race = fields[7]
                 for scouting_time in times:
                     events_out.writerow(
-                        {"GameID": game_id, "UID": uid, "Rank": rank, "Race": race, "ScoutTime": scouting_time})
+                        {"GameID": game_id, "UID": uid, "Rank": rank, "Race": race,
+                         "ScoutStartTime": scouting_time.start_time, "ScoutEndTime": scouting_time.end_time, "ScoutType": scouting_time.scouting_type})
                 uid = fields[4]
                 rank = fields[5]
                 times = fields[6]
                 race = fields[8]
                 for scouting_time in times:
                     events_out.writerow(
-                        {"GameID": game_id, "UID": uid, "Rank": rank, "Race": race, "ScoutTime": scouting_time})
+                        {"GameID": game_id, "UID": uid, "Rank": rank, "Race": race,
+                         "ScoutStartTime": scouting_time.start_time, "ScoutEndTime": scouting_time.end_time,
+                         "ScoutType": scouting_time.scouting_type})
 
 
 if __name__ == "__main__":
@@ -133,13 +139,12 @@ if __name__ == "__main__":
     #     sc2reader.log_utils.add_log_handler(logging.StreamHandler(sys.stdout), "INFO")
 
     t1 = time.time()
-    #writeToCsv(1, "scouting_time_fraction.csv")
-    writeToCsv(2, "scouting_time_seconds.csv")
+    # writeToCsv(1, "scouting_time_fraction.csv")
+    writeToCsv(2, "scouting_time_seconds_new.csv")
     deltatime = time.time() - t1
     print("Run time: ", "{:2d}".format(int(deltatime // 60)), "minutes and", "{:05.2f}".format(deltatime % 60),
           "seconds")
-    with open("missing_unit_speeds.txt", "r") as file:
-        file.writelines(scouting_detector.missing_units)
-    with open("missing_unit_vision.txt", "r") as file:
-        file.writelines(unit_prediction.missing_units)
-
+    # with open("missing_unit_speeds.txt", "r") as file:
+    #     file.writelines(scouting_detector.missing_units)
+    # with open("missing_unit_vision.txt", "r") as file:
+    #     file.writelines(unit_prediction.missing_units)
