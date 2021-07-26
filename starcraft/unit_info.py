@@ -234,6 +234,8 @@ missing_units_movement = set()
 
 
 def get_unit_movement_speed(unit_name, **options):
+    if unit_name is None:
+        return None
     if "Burrowed" in unit_name and ("Roach" not in unit_name and "Infestor" not in unit_name):
         return 0.0
     if "Changeling" in unit_name and unit_name != "Changeling":

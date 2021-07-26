@@ -11,7 +11,7 @@ import csv
 import traceback
 
 
-def analysis_function_wrapper(function, map_path_data, filename):
+def analysis_function_wrapper(filename, function, map_path_data):
     try:
         start_time = time.time()
         print("Analyzing", filename)
@@ -47,11 +47,13 @@ def run(function, replay_filter=lambda x: True, threads=60) -> List[Dict]:
             map_time = time.time()
             new_results = pool.map(partial(analysis_function_wrapper, function=function, map_path_data=map_path_data),
                                    replays)
-            results += new_results
+            for result_group in new_results:
+                for result in result_group:
+                    if result is None:
+                        count_errors_this_map += 1
+                    else:
+                        results.append(result)
             count_errors_this_map = 0
-            for result in new_results:
-                if result is None:
-                    count_errors_this_map += 1
             count_errors += count_errors_this_map
             print(time.time() - map_time, "s to finish processing map", map_name_group, len(replays), "replays,",
                   count_errors_this_map, "errors", count, "/", replay_count, " done")
@@ -65,7 +67,7 @@ def run(function, replay_filter=lambda x: True, threads=60) -> List[Dict]:
 
 def save(results, output_file):
     output_file_adjusted = output_file[:-4] if output_file.endswith(".csv") else output_file
-    output_file_adjusted += datetime.datetime.now().date()
+    output_file_adjusted += datetime.datetime.now().date().__str__()
     output_file_adjusted += ".csv"
     first_result_fields = results[0]._fields
     # assume that every result has the same fields
@@ -73,9 +75,4 @@ def save(results, output_file):
         events_out = csv.DictWriter(my_csv, fieldnames=first_result_fields)
         events_out.writeheader()
         for result in results:
-            if result:
-                if not isinstance(result, list):
-                    rows = [result]
-                else:
-                    rows = result
-                events_out.writerows(map(lambda tuple: tuple._asdict(), rows))
+            events_out.writerow(result._asdict())

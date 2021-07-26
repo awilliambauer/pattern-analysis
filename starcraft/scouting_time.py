@@ -17,13 +17,19 @@ import file_locations
 from load_map_path_data import load_path_data
 from sc2reader.engine.plugins import SelectionTracker, APMTracker
 from selection_plugin import ActiveSelection
-from battle_detector import buildBattleList, remove_scouting_during_battle, remove_scouting_during_battles_and_harassment
+from battle_detector import buildBattleList, remove_scouting_during_battle, \
+    remove_scouting_during_battles_and_harassment
 from base_plugins import BaseTracker
 from generate_replay_info import group_replays_by_map
 import numpy as np
 import traceback
 from modified_rank_plugin import ModifiedRank
 from data_analysis_helper import run, save
+from collections import namedtuple
+
+scouting_instance_fields = namedtuple("scouting_instance_fields",
+                                      ("GameId", "UID1", "UID2", "Rank1", "Rank2", "Race1", "Race2",
+                                       "ScoutingStartTime", "ScoutingEndTime"))
 
 try:
     from reprlib import repr
@@ -65,9 +71,17 @@ def generateFields(filename, map_path_data):
         team2_uid = r.players[1].detail_data['bnet']['uid']
         team1_race = r.players[0].play_race
         team2_race = r.players[1].play_race
-        fields = [game_id, team1_uid, team1_rank, team1_times, team2_uid, team2_rank, team2_times, team1_race,
-                  team2_race]
-        return fields
+        results = []
+        for instance in team1_times:
+            results.append(
+                scouting_instance_fields(game_id, team1_uid, team2_uid, team1_rank, team2_rank, team1_race, team2_race,
+                                         instance.start_time, instance.end_time))
+        for instance in team2_times:
+            results.append(
+                scouting_instance_fields(game_id, team2_uid, team1_uid, team2_rank, team1_rank, team2_race, team1_race,
+                                         instance.start_time, instance.end_time))
+
+        return results
 
     except KeyboardInterrupt:
         raise
@@ -105,7 +119,9 @@ def writeToCsv(which, filename):
             for result in new_results:
                 results.append(result)
     with open(filename, 'w', newline='') as my_csv:
-        events_out = csv.DictWriter(my_csv, fieldnames=["GameID", "UID", "Rank", "Race", "ScoutStartTime", "ScoutEndTime", "ScoutType"])
+        events_out = csv.DictWriter(my_csv,
+                                    fieldnames=["GameID", "UID", "Rank", "Race", "ScoutStartTime", "ScoutEndTime",
+                                                "ScoutType"])
         events_out.writeheader()
         for fields in results:
             if fields:
@@ -117,7 +133,8 @@ def writeToCsv(which, filename):
                 for scouting_time in times:
                     events_out.writerow(
                         {"GameID": game_id, "UID": uid, "Rank": rank, "Race": race,
-                         "ScoutStartTime": scouting_time.start_time, "ScoutEndTime": scouting_time.end_time, "ScoutType": scouting_time.scouting_type})
+                         "ScoutStartTime": scouting_time.start_time, "ScoutEndTime": scouting_time.end_time,
+                         "ScoutType": scouting_time.scouting_type})
                 uid = fields[4]
                 rank = fields[5]
                 times = fields[6]
