@@ -47,21 +47,28 @@ def run(function, replay_filter=lambda x: True, threads=60) -> List[Dict]:
             map_time = time.time()
             new_results = pool.map(partial(analysis_function_wrapper, function=function, map_path_data=map_path_data),
                                    replays)
-            for result_group in new_results:
-                for result in result_group:
-                    if result is None:
-                        count_errors_this_map += 1
-                    else:
-                        results.append(result)
             count_errors_this_map = 0
+            for result_group in new_results:
+                if result_group is None:
+                    count_errors_this_map += 1
+                elif isinstance(result_group, list):
+                    for result in result_group:
+                        if result is None:
+                            count_errors_this_map += 1
+                        else:
+                            results.append(result)
+                else:
+                    results.append(result_group)
+
             count_errors += count_errors_this_map
             print(time.time() - map_time, "s to finish processing map", map_name_group, len(replays), "replays,",
                   count_errors_this_map, "errors", count, "/", replay_count, " done")
     deltatime = time.time() - start_time
-    print("Analyzed", replay_count, "replays, Run time: ", "{:2d}".format(int(deltatime // 60)), "minutes and",
+    print("Analyzed", count, "/", replay_count, "replays, Run time: ", "{:2d}".format(int(deltatime // 60)),
+          "minutes and",
           "{:05.2f}".format(deltatime % 60),
           "seconds")
-    print("Time per replay:", replay_count / deltatime)
+    print("Time per replay:", count / deltatime)
     return results
 
 
