@@ -293,6 +293,8 @@ production = {
     "Barracks": ["Marine", "Reaper", "Marauder", "Ghost"],
     "Factory": ["Hellion", "WidowMine", "SiegeTank", "Cyclone", "Hellbat", "Thor"],
     "Starport": ["Viking", "Medivac", "Liberator", "Raven", "Banshee", "Battlecruiser"],
+    "Gateway": ["Zealot", "Sentry", "Stalker", "Adept", "HighTemplar", "DarkTemplar"],
+    "Stargate": ["Phoenix", "VoidRay", "Tempest", "Carrier", "Oracle"],
 }
 
 
@@ -304,3 +306,10 @@ def can_produce(building_name, unit):
     if unit.name not in production[building_name]:
         return False
     return True
+
+
+townhalls = ["Hatchery", "Lair", "Hive", "Nexus", "CommandCenter", "OrbitalCommand", "PlanetaryFortress"]
+
+
+def is_townhall(building_name):
+    return building_name in townhalls
