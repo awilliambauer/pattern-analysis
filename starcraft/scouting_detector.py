@@ -2,7 +2,7 @@ from typing import List, Tuple
 from sc2.position import Point2
 from sc2reader.events.game import GameEvent
 from unit_prediction import get_position_estimate_along_path, window
-from unit_info import get_unit_vision_radius, get_unit_movement_speed, is_flying_unit, can_produce
+from unit_info import get_unit_vision_radius, get_unit_movement_speed, is_flying_unit, can_produce, is_townhall
 import sc2reader
 from math import dist
 from enum import Enum
@@ -64,8 +64,8 @@ class _UnitState:
         return position_on_path
 
 
-PotentialScoutingGroup = namedtuple("PotentialScoutingGroup",
-                                    ["frame", "units_scouting", "units_being_scouted", "base_cluster"])
+ScoutingGroup = namedtuple("ScoutingGroup",
+                           ["frame", "units_scouting", "units_being_scouted", "base_cluster"])
 
 
 class _PlayerState:
@@ -76,9 +76,11 @@ class _PlayerState:
         self.upgrades = []
         self.bases = player.bases
         self.base_cluster = player.base_cluster
-        self.potential_scouting_groups = []  # a list of PotentialScoutingGroups
+        self.potential_scouting_groups = []  # a list of ScoutingGroups that are potentially scouting now, given the
+        # right camera movement
+        self.actual_scouting_groups = []  # a list of ScoutingGroups that are definitely scouting now
         self.buildings_unseen = []
-        self.rallies = {}  # building_id: rally_point_queue
+        self.rallies = {}  # building_id: (worker_rally_point_queue, regular_rally_point_queue)
 
 
 class _GameState:
@@ -235,6 +237,7 @@ def handle_unit_born_event(event, game_state):
         rally = game_state.player_states[event.control_pid].rallies[closest_compatible_building[0]]
         unit_state = game_state.get_unit_state(event.unit.id)
         if unit_state.pos is not None:
+            # TODO add worker rally
             starting_point = unit_state.pos
             path_queue = []
             rally_idx = 0
@@ -274,8 +277,8 @@ def handle_scanner_sweep(event, game_state):
         return
     most_common_base_cluster = max(base_clusters.items(), key=lambda cluster_count: cluster_count[1])[0]
     game_state.player_states[event.player.pid].potential_scouting_groups.append(
-        PotentialScoutingGroup(event.frame, ["ScannerSweep"], buildings_being_scouted,
-                               base_clusters_labeled[most_common_base_cluster]))
+        ScoutingGroup(event.frame, ["ScannerSweep"], buildings_being_scouted,
+                      base_clusters_labeled[most_common_base_cluster]))
 
 
 def handle_move_command(event, game_state):
@@ -290,13 +293,24 @@ def handle_move_command(event, game_state):
     # print("sending", event.active_selection, "to", target_location, "at sec", cur_frame / 22.4)
     for selected_unit in event.active_selection:
         if selected_unit.is_building:
+            worker_rally = False
+            if is_townhall(selected_unit.name):
+                if isinstance(event,
+                              sc2reader.events.game.TargetUnitCommandEvent) and event.target_unit is not None and "Mineral" in event.target_unit.name:
+                    # it is a worker rally to mineral patch
+                    print("worker rally")
+                    worker_rally = True
             rallies = game_state.player_states[selected_unit.owner.pid].rallies
-            if event.flag["queued"]:
-                if selected_unit not in rallies:
-                    rallies[selected_unit.id] = []
-                rallies[selected_unit.id].append(event.location[:2])
+            if selected_unit in rallies:
+                current_rally = rallies[selected_unit]
             else:
-                rallies[selected_unit.id] = [event.location[:2]]
+                current_rally = [[], []]
+            idx = 0 if worker_rally else 1
+            if event.flag["queued"]:
+                current_rally[idx].append(event.location[:2])
+            else:
+                current_rally[idx] = [event.location[:2]]
+            rallies[selected_unit.id] = current_rally
             continue
         if not game_state.unit_pos_exists(selected_unit.id):
             # print("missing previous information about", selected_unit.name)
@@ -342,7 +356,14 @@ def handle_camera_event(event, game_state):
                                                                                      1]) < SCOUTING_CAMERA_DISTANCE_FROM_BASE,
                                                    game_state.player_states[opponent_id].bases[event.frame].items())))
 
-    actual_scouting_groups = []
+    finished_scouting_groups = []
+
+    for actual_scouting_group in game_state.player_states[player_id].actual_scouting_groups:
+        # if there are no more buildings scouted by this group in range of the camera
+        if not any(filter(lambda unit: unit.id in buildings_in_range_of_camera,
+                          actual_scouting_group.units_being_scouted)):
+            finished_scouting_groups.append(actual_scouting_group)
+            game_state.player_states[player_id].actual_scouting_groups.remove(actual_scouting_group)
 
     for potential_scouting_group in game_state.player_states[player_id].potential_scouting_groups:
         time_since_arrived = event.frame - potential_scouting_group.frame
@@ -354,11 +375,14 @@ def handle_camera_event(event, game_state):
         if not any(filter(lambda unit: unit.id in buildings_in_range_of_camera,
                           potential_scouting_group.units_being_scouted)):
             continue
-        actual_scouting_groups.append(potential_scouting_group)
+        scouting_group_copy = ScoutingGroup(event.frame, potential_scouting_group.units_scouting,
+                                            potential_scouting_group.units_being_scouted,
+                                            potential_scouting_group.base_cluster)
+        game_state.player_states[player_id].actual_scouting_groups.append(scouting_group_copy)
 
-    return [ScoutingInstance(player_id, event.frame, event.frame, scouting_group.base_cluster.center,
+    return [ScoutingInstance(player_id, scouting_group.frame, event.frame, scouting_group.base_cluster.center,
                              scouting_group.units_scouting, scouting_group.units_being_scouted,
-                             scouting_group.base_cluster.base_type) for scouting_group in actual_scouting_groups]
+                             scouting_group.base_cluster.base_type) for scouting_group in finished_scouting_groups]
 
 
 def handle_game_tick_event(event, game_state):
@@ -381,7 +405,8 @@ def handle_game_tick_event(event, game_state):
                     if building_id not in units_scouting_base:
                         units_scouting_base[building_id] = []
                     units_scouting_base[building_id].append(unit_state.unit_data)
-
+                    # print("second", cur_frame / 22.4, unit_data.unit.name,
+                    #       "views base")
         for building_id, units_scouting in units_scouting_base.items():
             try:
                 base_cluster = game_state.player_states[opponent_id].base_cluster[event.frame][building_id]
@@ -392,8 +417,7 @@ def handle_game_tick_event(event, game_state):
                 for group in matching_potential_scouting_groups:
                     existing_potential_scouting_groups.remove(group)
                 building_unit = game_state.id_to_object[building_id]
-
-                scouting_group = PotentialScoutingGroup(event.frame, units_scouting, [building_unit], base_cluster)
+                scouting_group = ScoutingGroup(event.frame, units_scouting, [building_unit], base_cluster)
                 existing_potential_scouting_groups.append(scouting_group)
             except:
                 print(building_id)
