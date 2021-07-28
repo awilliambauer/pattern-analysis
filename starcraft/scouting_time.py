@@ -28,8 +28,8 @@ from data_analysis_helper import run, save
 from collections import namedtuple
 
 scouting_instance_fields = namedtuple("scouting_instance_fields",
-                                      ("GameId", "UID1", "UID2", "Rank1", "Rank2", "Race1", "Race2",
-                                       "ScoutingStartTime", "ScoutingEndTime"))
+                                      ("GameID", "UID", "PID", "Rank", "Race",
+                                       "ScoutingStartTime", "ScoutingEndTime", "ScoutingType"))
 
 try:
     from reprlib import repr
@@ -64,8 +64,8 @@ def generateFields(filename, map_path_data):
         except:
             print(filename, "cannot load using sc2reader due to an internal ValueError")
             raise
-        scouting_instances = scouting_detector.get_scouting_instances(r, map_path_data)
-        team1_times, team2_times = remove_scouting_during_battles_and_harassment(r, scouting_instances)
+        team1_times, team2_times = scouting_detector.get_scouting_instances(r, map_path_data)
+        # team1_times, team2_times = remove_scouting_during_battles_and_harassment(r, scouting_instances)
         team1_rank, team1_rel_rank, team2_rank, team2_rel_rank = scouting_stats.ranking_stats(r)
         team1_uid = r.players[0].detail_data['bnet']['uid']
         team2_uid = r.players[1].detail_data['bnet']['uid']
@@ -74,13 +74,11 @@ def generateFields(filename, map_path_data):
         results = []
         for instance in team1_times:
             results.append(
-                scouting_instance_fields(game_id, team1_uid, team2_uid, team1_rank, team2_rank, team1_race, team2_race,
-                                         instance.start_time, instance.end_time))
+                scouting_instance_fields(game_id, team1_uid, 1, team1_rank, team1_race, instance.start_time,
+                                         instance.end_time, instance.scouting_type))
         for instance in team2_times:
-            results.append(
-                scouting_instance_fields(game_id, team2_uid, team1_uid, team2_rank, team1_rank, team2_race, team1_race,
-                                         instance.start_time, instance.end_time))
-
+            results.append(scouting_instance_fields(game_id, team2_uid, 2, team2_rank, team2_race, instance.start_time,
+                                                    instance.end_time, instance.scouting_type))
         return results
 
     except KeyboardInterrupt:
