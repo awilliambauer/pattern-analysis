@@ -154,7 +154,7 @@ def remove_scouting_during_battle(battle_list, scouting_list):
     scouting_list_no_battles = []
     for scouting_instance in scouting_list:
         during_battle = False
-        for frame in range(scouting_instance.start_time, scouting_instance.end_time, 23):
+        for frame in range(scouting_instance.start_time, scouting_instance.end_time + 1, 23):
             if duringBattle(frame, battle_list, 10 * 22.4):
                 during_battle = True
                 break

@@ -64,8 +64,8 @@ def generateFields(filename, map_path_data):
         except:
             print(filename, "cannot load using sc2reader due to an internal ValueError")
             raise
-        scouting_instances = scouting_detector.get_scouting_instances(r, map_path_data)
-        team1_times, team2_times = remove_scouting_during_battles_and_harassment(r, scouting_instances)
+        team1_times, team2_times = scouting_detector.get_scouting_instances(r, map_path_data)
+        # team1_times, team2_times = remove_scouting_during_battles_and_harassment(r, scouting_instances)
         team1_rank, team1_rel_rank, team2_rank, team2_rel_rank = scouting_stats.ranking_stats(r)
         team1_uid = r.players[0].detail_data['bnet']['uid']
         team2_uid = r.players[1].detail_data['bnet']['uid']
