@@ -295,6 +295,10 @@ production = {
     "Starport": ["Viking", "Medivac", "Liberator", "Raven", "Banshee", "Battlecruiser"],
     "Gateway": ["Zealot", "Sentry", "Stalker", "Adept", "HighTemplar", "DarkTemplar"],
     "Stargate": ["Phoenix", "VoidRay", "Tempest", "Carrier", "Oracle"],
+    "CommandCenter": ["SCV"],
+    "OrbitalCommand": ["SCV"],
+    "PlanetaryFortress": ["SCV"],
+    "Nexus": ["Probe", "Mothership"]
 }
 
 

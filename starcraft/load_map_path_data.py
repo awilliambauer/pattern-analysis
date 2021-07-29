@@ -30,7 +30,7 @@ class MapPathData:
         self.map_name = map_name
         self.chunks = chunks
 
-    def find_eligible_dest(self, source, dest):
+    def find_eligible_source_and_dest(self, source, dest):
         """
         Finds the nearest destination to dest for which there exists a path between source and that destination.
         This is found by iterating in a circle of radius 2 around the destination until either a valid path is found or
@@ -40,10 +40,19 @@ class MapPathData:
         untried_dests = list(map(lambda pt: (pt[0] * PATH_RESOLUTION, pt[1] * PATH_RESOLUTION),
                                  _get_grid_points_in_circle(2,
                                                             (dest[0] // PATH_RESOLUTION, dest[1] // PATH_RESOLUTION))))
-        for dest in untried_dests:
-            chunk_idx = dest[1] // PATH_ROW_CHUNK_SIZE
-            if (source[0], source[1], dest[0], dest[1]) in self.chunks[chunk_idx]:
-                return dest
+        untried_dests.remove(dest)
+        untried_dests.insert(0, dest)
+        untried_sources = list(map(lambda pt: (pt[0] * PATH_RESOLUTION, pt[1] * PATH_RESOLUTION),
+                                   _get_grid_points_in_circle(2,
+                                                              (source[0] // PATH_RESOLUTION,
+                                                               source[1] // PATH_RESOLUTION))))
+        untried_sources.remove(source)
+        untried_sources.insert(0, source)
+        for new_source in untried_sources:
+            for new_dest in untried_dests:
+                chunk_idx = new_dest[1] // PATH_ROW_CHUNK_SIZE
+                if (new_source[0], new_source[1], new_dest[0], new_dest[1]) in self.chunks[chunk_idx]:
+                    return new_source, new_dest
         return None
 
     def get_path(self, source, dest) -> Optional[List[Point2]]:
@@ -59,14 +68,17 @@ class MapPathData:
         if nearest_source == nearest_dest:
             # you are close enough that we consider you already there
             return None
-        nearest_eligible_dest = self.find_eligible_dest(nearest_source, nearest_dest)
+        nearest_eligible_source, nearest_eligible_dest = self.find_eligible_source_and_dest(nearest_source,
+                                                                                            nearest_dest)
         if nearest_eligible_dest is None:
+            print("no eligible dest", nearest_source[0] / 4, nearest_source[1] / 4, nearest_dest[0] / 4,
+                  nearest_dest[1] / 4)
             # no destination in the neighborhood of dest which we can path to
             return None
 
         chunk_idx = int(nearest_eligible_dest[1] // PATH_ROW_CHUNK_SIZE)  # is int() here redundant?
         path = []
-        next_point = nearest_source
+        next_point = nearest_eligible_source
         # because we don't store the whole path in the file, we just store the next step, we need to walk
         # along these steps and save them in a list. This becomes the path
         while next_point[0] != nearest_eligible_dest[0] or next_point[1] != nearest_eligible_dest[1]:
@@ -116,7 +128,7 @@ def load_path_data(map_file_name):
     with Pool(min(cpu_count(), min(20, len(chunk_file_names)))) as pool:
         chunks = pool.map(_load_path_data_chunk, chunk_file_names)
     chunks = [chunk for name, chunk in sorted(chunks, key=lambda name_and_chunk: name_and_chunk[0])]
-    print("Time:", time.time() - t,"s")
+    print("Time:", time.time() - t, "s")
     return MapPathData(map_file_name, chunks)
 
 

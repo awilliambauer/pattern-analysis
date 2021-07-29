@@ -8,6 +8,7 @@ import sc2reader
 from multiprocessing import Pool, cpu_count
 import csv
 import traceback
+from collections import defaultdict
 import random
 import file_locations
 from replay_verification import map_pretty_name_to_file
@@ -56,7 +57,8 @@ def group_replays_by_map(replay_filter=lambda x: True):
     maps = {}
     with open(file_locations.REPLAY_INFO_FILE, "r") as replays_info:
         reader = csv.DictReader(replays_info)
-        rows = random.choices(list(reader), k=10000)
+        # rows = random.choices(list(reader), k=10)
+        rows = reader
         for row in rows:
             if not replay_filter(row):
                 continue
