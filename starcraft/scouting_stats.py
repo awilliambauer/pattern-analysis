@@ -3,10 +3,6 @@
 # July 2021
 
 import scouting_detector
-import csv
-import time
-from itertools import repeat
-from multiprocessing import Pool, cpu_count
 import math
 import sc2reader
 from sc2reader.engine.plugins import SelectionTracker, APMTracker
@@ -15,33 +11,27 @@ import scouting_detector
 from file_locations import REPLAY_FILE_DIRECTORY
 from base_plugins import BaseTracker, BaseType
 from modified_rank_plugin import ModifiedRank
-from load_map_path_data import load_path_data
-from generate_replay_info import group_replays_by_map
 from selection_plugin import ActiveSelection
-from sc2.position import Point2
 import traceback
 import battle_detector
 from collections import namedtuple
+from data_analysis_helper import run, save
 
-# creating the fields based on who won
+# creating the fields based on who won as a named tuple
 fields_tuple = namedtuple('fields_tuple', ['game_id',
-                                           'team1_uid', 'team1_rank', 'team1_freq',
-                                           'team1_freq_fb', 'team1_scout_mb', 'team1_first_scouting',
-                                           'team1_apm', 'team1_rel_apm',
-                                           'team1_cps', 'team1_peace_rate',
-                                           'team1_battle_rate', "win_1",
-                                           'team2_uid', 'team2_rank', 'team2_freq',
-                                           'team2_freq_fb', 'team2_scout_mb', 'team2_first_scouting',
-                                           'team2_apm', 'team2_rel_apm',
-                                           'team2_cps', 'team2_peace_rate',
-                                           'team2_battle_rate', "win_2"])
+                                           'uid', 'rank', 'scout_freq',
+                                           'scout_freq_fb', 'scout_mb', 'scout_first',
+                                           'apm', 'rel_apm',
+                                           'cps', 'peace_rate',
+                                           'battle_rate', "win",])
 
 
 def get_scouting_frequency(replay, map_path_data):
     '''get_scouting_frequency takes in a previously loaded replay
     from sc2reader and returns the scouting frequency (instances per second),
-    the scouting_frequnecy after the first battle, and the frame of the first
-    scouting instance for each player.'''
+    the scouting_frequnecy after the first battle, the ratio of the number of 
+    scouting instances of the opponent's mainbase to the total number of scouting 
+    instances, and the frame of the first scouting instance for each player.'''
     r = replay
     frames = r.frames
     seconds = r.real_length.total_seconds()
@@ -107,7 +97,7 @@ def get_scouting_frequency(replay, map_path_data):
 
 def generate_fields(replay_file, map_path_data):
     """generate_fields takes in a filename of a replay, loads it and gathers necessary
-    statistics, and returns the statistics in a tuple. It is to be used to write
+    statistics, and returns the statistics in a named tuple. It is to be used to write
     these stats to a csv."""
     try:
         # convert replay file name to path
@@ -148,31 +138,32 @@ def generate_fields(replay_file, map_path_data):
         team2_uid = replay.players[1].detail_data['bnet']['uid']
 
         if winner == 1:
-            fields = fields_tuple(game_id,
+            fields_1 = fields_tuple(game_id,
                                   team1_uid, team1_rank, team1_freq,
                                   team1_freq_fb, team1_scout_mb, team1_first_scouting,
                                   team1_apm, team1_rel_apm,
                                   team1_cps, team1_peace_rate,
-                                  team1_battle_rate, 1,
+                                  team1_battle_rate, 1)
+            fields_2 = fields_tuple(game_id,
                                   team2_uid, team2_rank, team2_freq,
                                   team2_freq_fb, team2_scout_mb, team2_first_scouting,
                                   team2_apm, team2_rel_apm,
                                   team2_cps, team2_peace_rate,
                                   team2_battle_rate, 0)
         elif winner == 2:
-            fields = fields_tuple(game_id,
+            fields_1 = fields_tuple(game_id,
                                   team1_uid, team1_rank, team1_freq,
                                   team1_freq_fb, team1_scout_mb, team1_first_scouting,
                                   team1_apm, team1_rel_apm,
                                   team1_cps, team1_peace_rate,
-                                  team1_battle_rate, 0,
+                                  team1_battle_rate, 0)
+            fields_2 = fields_tuple(game_id,
                                   team2_uid, team2_rank, team2_freq,
                                   team2_freq_fb, team2_scout_mb, team2_first_scouting,
                                   team2_apm, team2_rel_apm,
                                   team2_cps, team2_peace_rate,
                                   team2_battle_rate, 1)
-        # print("generated fields for replay")
-        return fields
+        return [fields_1, fields_2]
     except:
         print("exception while generating scouting stats for replay", replay_file)
         traceback.print_exc()
@@ -203,55 +194,6 @@ def ranking_stats(replay):
     return p1_rank, p1_rel, p2_rank, p2_rel
 
 
-def writeToCsv():
-    '''writeToCsv writes the scouting stats of each player in a SC2 game
-    to a line in a .csv file.'''
-    with open("scouting_stats_cluster.csv", 'w', newline='') as fp:
-        events_out = csv.DictWriter(fp, fieldnames=["GameID", "UID", "Rank",
-                                                    "ScoutingFrequency",
-                                                    "ScoutingFrequencyAfterFirstBattle",
-                                                    "ScoutingMainBaseRate",
-                                                    "FirstScoutingTime",
-                                                    "APM", "RelativeAPM",
-                                                    "CPS", "PeaceRate",
-                                                    "BattleRate", "Win"])
-        events_out.writeheader()
-        # count = 0
-        for map_name, replays in group_replays_by_map().items():
-            # if count > 1:
-            #     break
-            print("loading path data for map", map_name, "which has", len(replays), "replays")
-            pool = Pool(min(cpu_count(), 15))
-            map_path_data = load_path_data(map_name)
-            results = pool.starmap(generate_fields, zip(replays, repeat(map_path_data)))
-            pool.close()
-            # count += 1
-            pool.join()
-            for fields in results:
-                if fields:  # generateFields will return None for invalid replays
-                    # writing 1 line to the csv for each player and their respective stats
-                    events_out.writerow({"GameID": fields.game_id, "UID": fields.team1_uid,
-                                         "Rank": fields.team1_rank,
-                                         "ScoutingFrequency": fields.team1_freq,
-                                         "ScoutingFrequencyAfterFirstBattle": fields.team1_freq_fb,
-                                         "ScoutingMainBaseRate": fields.team1_scout_mb,
-                                         "FirstScoutingTime": fields.team1_first_scouting,
-                                         "APM": fields.team1_apm, "RelativeAPM": fields.team1_rel_apm,
-                                         "CPS": fields.team1_cps, "PeaceRate": fields.team1_peace_rate,
-                                         "BattleRate": fields.team1_battle_rate,
-                                         "Win": fields.win_1})
-                    events_out.writerow({"GameID": fields.game_id, "UID": fields.team2_uid,
-                                         "Rank": fields.team2_rank,
-                                         "ScoutingFrequency": fields.team2_freq,
-                                         "ScoutingFrequencyAfterFirstBattle": fields.team2_freq_fb,
-                                         "ScoutingMainBaseRate": fields.team2_scout_mb,
-                                         "FirstScoutingTime": fields.team2_first_scouting,
-                                         "APM": fields.team2_apm, "RelativeAPM": fields.team2_rel_apm,
-                                         "CPS": fields.team2_cps, "PeaceRate": fields.team2_peace_rate,
-                                         "BattleRate": fields.team2_battle_rate,
-                                         "Win": fields.win_2})
-
-
 if __name__ == "__main__":
     '''This main function parses command line arguments and calls
     writeToCsv, which will write statistics to a csv for each
@@ -261,8 +203,5 @@ if __name__ == "__main__":
     sc2reader.engine.register_plugin(ActiveSelection())
     sc2reader.engine.register_plugin(BaseTracker())
     sc2reader.engine.register_plugin(ModifiedRank())
-    t1 = time.time()
-    writeToCsv()
-    deltatime = time.time() - t1
-    print("Run time: ", "{:2d}".format(int(deltatime // 60)), "minutes and", "{:05.2f}".format(deltatime % 60),
-          "seconds")
+    results = run(generate_fields, threads = 10)
+    save(results, "sc2_prediction_data")

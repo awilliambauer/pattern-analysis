@@ -220,8 +220,8 @@ old_scouting <- read.csv("scouting_time_seconds_gm_only.csv") %>%
 new_scouting <- read.csv("scouting_instances_gm2021-07-27.csv") %>% 
   filter(!is.na(Rank1))
 
-length(unique(old_scouting$GameID)) 
-length(unique(new_scouting$GameID)) 
+# length(unique(old_scouting$GameID)) 
+# length(unique(new_scouting$GameID)) 
 
 old_scouting_count <- old_scouting %>% count(GameID, UID)
 new_scouting_count <- new_scouting %>% count(GameID, UID)
@@ -253,7 +253,7 @@ new_scouting_player <- new_scouting %>%
 
 ggplot(new_scouting_player, aes(x = League, y = sum_duration)) +
   geom_boxplot() +
-  scale_y_log10() +
+  # scale_y_log10() +
   labs(y = "Sum of scouting duration per player")
 
 
