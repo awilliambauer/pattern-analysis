@@ -90,6 +90,8 @@ missing_units_vision = set()
 
 
 def get_unit_vision_radius(unit_name):
+    if unit_name is None:
+        return None
     if "Changeling" in unit_name and unit_name != "Changeling":
         return get_unit_vision_radius("Changeling")
     if unit_name not in unit_vision_ranges:
@@ -286,6 +288,8 @@ flying_units = ["Observer",
 
 
 def is_flying_unit(unit_name):
+    if unit_name is None:
+        return False
     return unit_name in flying_units
 
 
