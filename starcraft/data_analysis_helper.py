@@ -33,6 +33,7 @@ def run(function, replay_filter=lambda x: True, threads=60) -> List[Dict]:
     count_errors = 0
     replay_map_groups = group_replays_by_map(replay_filter)
     replay_count = sum(map(lambda name_replay: len(name_replay[1]), replay_map_groups.items()))
+    results_count = 0
     print(len(replay_map_groups.keys()), "maps", replay_count, "replays")
     with Pool(min(threads, cpu_count())) as pool:
         for map_name_group, replays in replay_map_groups.items():
@@ -52,12 +53,18 @@ def run(function, replay_filter=lambda x: True, threads=60) -> List[Dict]:
                 if result_group is None:
                     count_errors_this_map += 1
                 elif isinstance(result_group, list):
+                    error_this_group = False
                     for result in result_group:
                         if result is None:
-                            count_errors_this_map += 1
+                            error_this_group = True
                         else:
                             results.append(result)
+                    if error_this_group:
+                        count_errors_this_map += 1
+                    else:
+                        results_count += 1
                 else:
+                    results_count += 1
                     results.append(result_group)
 
             count_errors += count_errors_this_map
@@ -69,6 +76,8 @@ def run(function, replay_filter=lambda x: True, threads=60) -> List[Dict]:
           "{:05.2f}".format(deltatime % 60),
           "seconds")
     print("Time per replay:", count / deltatime)
+    print(results_count, "total results")
+    print(count_errors, "total errors")
     return results
 
 

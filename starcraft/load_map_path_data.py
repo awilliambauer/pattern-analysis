@@ -68,14 +68,12 @@ class MapPathData:
         if nearest_source == nearest_dest:
             # you are close enough that we consider you already there
             return None
-        nearest_eligible_source, nearest_eligible_dest = self.find_eligible_source_and_dest(nearest_source,
+        nearest_eligible_source_and_dest = self.find_eligible_source_and_dest(nearest_source,
                                                                                             nearest_dest)
-        if nearest_eligible_dest is None:
-            print("no eligible dest", nearest_source[0] / 4, nearest_source[1] / 4, nearest_dest[0] / 4,
-                  nearest_dest[1] / 4)
+        if nearest_eligible_source_and_dest is None:
             # no destination in the neighborhood of dest which we can path to
             return None
-
+        nearest_eligible_source, nearest_eligible_dest = nearest_eligible_source_and_dest
         chunk_idx = int(nearest_eligible_dest[1] // PATH_ROW_CHUNK_SIZE)  # is int() here redundant?
         path = []
         next_point = nearest_eligible_source

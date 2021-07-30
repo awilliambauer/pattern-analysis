@@ -23,7 +23,7 @@ fields_tuple = namedtuple('fields_tuple', ['game_id',
                                            'scout_freq_fb', 'scout_mb', 'scout_first',
                                            'apm', 'rel_apm',
                                            'cps', 'peace_rate',
-                                           'battle_rate', "win",])
+                                           'battle_rate', "win", ])
 
 
 def get_scouting_frequency(replay, map_path_data):
@@ -40,14 +40,15 @@ def get_scouting_frequency(replay, map_path_data):
         first_battle_start_frame = battles[0][0]
     except:
         print("Battle time or peace time is zero")
-        raise RuntimeError()
+        return None
 
     try:
         scouting_instances_1, scouting_instances_2 = scouting_detector.get_scouting_instances(r, map_path_data)
         check_1, check_2 = scouting_instances_1[0], scouting_instances_2[0]
     except:
         print("No scouting instance was detected")
-        raise RuntimeError()
+        traceback.print_exc()
+        return None
     scouting_count_1, scouting_count_2 = 0, 0
     scouting_count_after_first_battle_1, scouting_count_after_first_battle_2 = 0, 0
     first_scouting_time_1, first_scouting_time_2 = 0, 0
@@ -76,7 +77,6 @@ def get_scouting_frequency(replay, map_path_data):
             scouting_mb_2_count += 1
         scouting_count_2 += 1
 
-
     # scouting rate (instances/seconds)
     scouting_freq_1 = scouting_count_1 / seconds
     scouting_freq_2 = scouting_count_2 / seconds
@@ -90,9 +90,8 @@ def get_scouting_frequency(replay, map_path_data):
     scouting_mb_ratio_1 = scouting_mb_1_count / scouting_count_1
     scouting_mb_ratio_2 = scouting_mb_2_count / scouting_count_2
 
-    return  scouting_freq_1, scouting_freq_fb_1, scouting_mb_ratio_1, first_scouting_time_1, \
-            scouting_freq_2, scouting_freq_fb_2, scouting_mb_ratio_2, first_scouting_time_2
-
+    return scouting_freq_1, scouting_freq_fb_1, scouting_mb_ratio_1, first_scouting_time_1, \
+           scouting_freq_2, scouting_freq_fb_2, scouting_mb_ratio_2, first_scouting_time_2
 
 
 def generate_fields(replay_file, map_path_data):
@@ -116,9 +115,13 @@ def generate_fields(replay_file, map_path_data):
             game_id = "ds-" + game_id
 
         # Scouting stats
+        freq_results = get_scouting_frequency(replay, map_path_data)
+        if freq_results is None:
+            print("No scouting instances for replay", replay_file)
+            return None
         team1_freq, team1_freq_fb, team1_scout_mb, team1_first_scouting, \
         team2_freq, team2_freq_fb, team2_scout_mb, team2_first_scouting, \
-            = get_scouting_frequency(replay, map_path_data)
+            = freq_results
         winner = replay.winner.number
         team1_rank, team1_rel_rank, team2_rank, team2_rel_rank = ranking_stats(replay)
 
@@ -139,34 +142,34 @@ def generate_fields(replay_file, map_path_data):
 
         if winner == 1:
             fields_1 = fields_tuple(game_id,
-                                  team1_uid, team1_rank, team1_freq,
-                                  team1_freq_fb, team1_scout_mb, team1_first_scouting,
-                                  team1_apm, team1_rel_apm,
-                                  team1_cps, team1_peace_rate,
-                                  team1_battle_rate, 1)
+                                    team1_uid, team1_rank, team1_freq,
+                                    team1_freq_fb, team1_scout_mb, team1_first_scouting,
+                                    team1_apm, team1_rel_apm,
+                                    team1_cps, team1_peace_rate,
+                                    team1_battle_rate, 1)
             fields_2 = fields_tuple(game_id,
-                                  team2_uid, team2_rank, team2_freq,
-                                  team2_freq_fb, team2_scout_mb, team2_first_scouting,
-                                  team2_apm, team2_rel_apm,
-                                  team2_cps, team2_peace_rate,
-                                  team2_battle_rate, 0)
+                                    team2_uid, team2_rank, team2_freq,
+                                    team2_freq_fb, team2_scout_mb, team2_first_scouting,
+                                    team2_apm, team2_rel_apm,
+                                    team2_cps, team2_peace_rate,
+                                    team2_battle_rate, 0)
         elif winner == 2:
             fields_1 = fields_tuple(game_id,
-                                  team1_uid, team1_rank, team1_freq,
-                                  team1_freq_fb, team1_scout_mb, team1_first_scouting,
-                                  team1_apm, team1_rel_apm,
-                                  team1_cps, team1_peace_rate,
-                                  team1_battle_rate, 0)
+                                    team1_uid, team1_rank, team1_freq,
+                                    team1_freq_fb, team1_scout_mb, team1_first_scouting,
+                                    team1_apm, team1_rel_apm,
+                                    team1_cps, team1_peace_rate,
+                                    team1_battle_rate, 0)
             fields_2 = fields_tuple(game_id,
-                                  team2_uid, team2_rank, team2_freq,
-                                  team2_freq_fb, team2_scout_mb, team2_first_scouting,
-                                  team2_apm, team2_rel_apm,
-                                  team2_cps, team2_peace_rate,
-                                  team2_battle_rate, 1)
+                                    team2_uid, team2_rank, team2_freq,
+                                    team2_freq_fb, team2_scout_mb, team2_first_scouting,
+                                    team2_apm, team2_rel_apm,
+                                    team2_cps, team2_peace_rate,
+                                    team2_battle_rate, 1)
         return [fields_1, fields_2]
     except:
         print("exception while generating scouting stats for replay", replay_file)
-        # traceback.print_exc()
+        traceback.print_exc()
         return None
 
 
@@ -203,5 +206,5 @@ if __name__ == "__main__":
     sc2reader.engine.register_plugin(ActiveSelection())
     sc2reader.engine.register_plugin(BaseTracker())
     sc2reader.engine.register_plugin(ModifiedRank())
-    results = run(generate_fields, threads = 10)
+    results = run(generate_fields, threads=10)
     save(results, "sc2_prediction_data")

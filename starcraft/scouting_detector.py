@@ -424,7 +424,7 @@ def handle_game_tick_event(event, game_state):
                 continue
             if not (unit_state.unit_data.is_army or unit_state.unit_data.is_worker):
                 continue
-            if unit_state.owner.pid != player_id:
+            if unit_state.owner is not None and unit_state.owner.pid != player_id:
                 continue
             for building_id, location in game_state.player_states[opponent_id].bases[event.frame].items():
                 if dist(location, unit_state.pos) < get_unit_vision_radius(unit_state.unit_data.name) * 1.5:
