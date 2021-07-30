@@ -76,7 +76,7 @@ def run(function, replay_filter=lambda x: True, threads=60) -> List[Dict]:
           "{:05.2f}".format(deltatime % 60),
           "seconds")
     print("Time per replay:", count / deltatime)
-    print(results_count, "total results")
+    print(results_count, "total replays successfully processed for", len(results), "total results")
     print(count_errors, "total errors")
     return results
 
