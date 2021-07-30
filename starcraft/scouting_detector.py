@@ -64,8 +64,12 @@ class _UnitState:
         return position_on_path
 
 
-ScoutingGroup = namedtuple("ScoutingGroup",
-                           ["frame", "units_scouting", "units_being_scouted", "base_cluster"])
+class ScoutingGroup(namedtuple("ScoutingGroup",
+                               ["frame", "units_scouting", "units_being_scouted", "base_cluster"])):
+    def __eq__(self, other):
+        if not isinstance(other, ScoutingGroup):
+            return False
+        return other.frame == self.frame and other.units_scouting == self.units_scouting and other.units_being_scouted == self.units_being_scouted and other.base_cluster.label == self.base_cluster.label
 
 
 class _PlayerState:
@@ -318,7 +322,8 @@ def handle_move_command(event, game_state):
             worker_rally = False
             if is_townhall(selected_unit.name):
                 if isinstance(event,
-                              sc2reader.events.game.TargetUnitCommandEvent) and event.target is not None and (
+                              sc2reader.events.game.TargetUnitCommandEvent) and event.target is not None and \
+                        event.target.name is not None and (
                         "Mineral" in event.target.name or "Vespene" in event.target.name):
                     # it is a worker rally to mineral patch
                     worker_rally = True
@@ -364,7 +369,7 @@ def handle_move_command(event, game_state):
 
 
 def handle_camera_event(event, game_state):
-    if event.player.is_observer or event.player.is_referee:
+    if event.player is None or event.player.is_observer or event.player.is_referee:
         return
     player_id = event.player.pid
     if player_id == 1:
@@ -385,7 +390,6 @@ def handle_camera_event(event, game_state):
         if not any(filter(lambda unit: unit.id in buildings_in_range_of_camera,
                           actual_scouting_group.units_being_scouted)):
             finished_scouting_groups.append(actual_scouting_group)
-            # print(actual_scouting_group, "finished scouting for player", player_id)
             game_state.player_states[player_id].actual_scouting_groups.remove(actual_scouting_group)
 
     for potential_scouting_group in game_state.player_states[player_id].potential_scouting_groups:

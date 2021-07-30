@@ -15,6 +15,8 @@ from replay_verification import map_pretty_name_to_file
 from load_map_path_data import get_all_possible_names
 import csv
 
+from starcraft.modified_rank_plugin import ModifiedRank
+
 
 def get_map_name_groups():
     """
@@ -57,8 +59,8 @@ def group_replays_by_map(replay_filter=lambda x: True):
     maps = {}
     with open(file_locations.REPLAY_INFO_FILE, "r") as replays_info:
         reader = csv.DictReader(replays_info)
-        # rows = random.choices(list(reader), k=10)
-        rows = reader
+        rows = random.choices(list(reader), k=1000)
+        # rows = reader
         for row in rows:
             if not replay_filter(row):
                 continue
@@ -84,7 +86,7 @@ def _generate_replay_entry(file):
         player_1_info = _generate_player_specific_entry(loaded_replay.players[0], 1)
         player_2_info = _generate_player_specific_entry(loaded_replay.players[1], 2)
         other_info = {"ReplayID": file,
-                      "Map": map_pretty_name_to_file(loaded_replay.map_name)}
+                      "Map": map_pretty_name_to_file(loaded_replay.map_name), "Winner": loaded_replay.winner.number}
         other_info.update(player_1_info)
         other_info.update(player_2_info)
         return other_info
@@ -106,12 +108,13 @@ def generate_replay_info_csv():
     the replays as needed. The values are: ReplayID (the filename of the replay), Map (the localized map name of the
     replay), and for each player in the replay, their UID, race and rank.
     """
+    sc2reader.engine.register_plugin(ModifiedRank())
     valid_games = None
     with open(file_locations.VALID_REPLAY_FILENAMES_FILE, "r") as f:
         valid_games = [line[:-1] for line in f.readlines()]
     with open(file_locations.REPLAY_INFO_FILE, 'w', newline='') as fp:
         events_out = csv.DictWriter(fp,
-                                    fieldnames=["ReplayID", "Map", "UID1", "UID2", "Race1", "Race2", "Rank1", "Rank2"])
+                                    fieldnames=["ReplayID", "Map", "UID1", "UID2", "Race1", "Race2", "Rank1", "Rank2", "Winner"])
         events_out.writeheader()
         pool = Pool(min(cpu_count(), 60))
         entries = pool.map(_generate_replay_entry,
