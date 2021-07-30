@@ -166,7 +166,7 @@ def generate_fields(replay_file, map_path_data):
         return [fields_1, fields_2]
     except:
         print("exception while generating scouting stats for replay", replay_file)
-        traceback.print_exc()
+        # traceback.print_exc()
         return None
 
 
