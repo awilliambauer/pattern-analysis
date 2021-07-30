@@ -22,7 +22,8 @@ fields_tuple = namedtuple('fields_tuple', ['game_id',
                                            'uid', 'rank', 'scout_freq',
                                            'scout_freq_fb', 'scout_mb', 'scout_first',
                                            'apm', 'rel_apm',
-                                           'cps', 'peace_rate',
+                                           'cps', 'rel_cps',
+                                           'peace_rate',
                                            'battle_rate', "win",])
 
 
@@ -47,7 +48,7 @@ def get_scouting_frequency(replay, map_path_data):
         check_1, check_2 = scouting_instances_1[0], scouting_instances_2[0]
     except:
         print("No scouting instance was detected")
-        raise RuntimeError()
+        return 0, 0, 0, 0, 0, 0, 0, 0
     scouting_count_1, scouting_count_2 = 0, 0
     scouting_count_after_first_battle_1, scouting_count_after_first_battle_2 = 0, 0
     first_scouting_time_1, first_scouting_time_2 = 0, 0
@@ -126,6 +127,8 @@ def generate_fields(replay_file, map_path_data):
         team1_cps, team1_peace_rate, team1_battle_rate, team2_cps, team2_peace_rate, team2_battle_rate, \
         team1_peace_rb, team2_peace_rb, team1_battle_rb, team2_battle_rb, \
         team1_cps_cg, team2_cps_cg = control_groups.control_group_stats(replay)
+        team1_rel_cps = team1_cps - team2_cps
+        team2_rel_cps = team2_cps - team1_cps
 
         # APM stats
         team1_apm = replay.players[0].avg_apm
@@ -142,27 +145,27 @@ def generate_fields(replay_file, map_path_data):
                                   team1_uid, team1_rank, team1_freq,
                                   team1_freq_fb, team1_scout_mb, team1_first_scouting,
                                   team1_apm, team1_rel_apm,
-                                  team1_cps, team1_peace_rate,
-                                  team1_battle_rate, 1)
+                                  team1_cps, team1_rel_cps,
+                                  team1_peace_rate, team1_battle_rate, 1)
             fields_2 = fields_tuple(game_id,
                                   team2_uid, team2_rank, team2_freq,
                                   team2_freq_fb, team2_scout_mb, team2_first_scouting,
                                   team2_apm, team2_rel_apm,
-                                  team2_cps, team2_peace_rate,
-                                  team2_battle_rate, 0)
+                                  team2_cps, team2_rel_cps,
+                                  team2_peace_rate, team2_battle_rate, 0)
         elif winner == 2:
             fields_1 = fields_tuple(game_id,
                                   team1_uid, team1_rank, team1_freq,
                                   team1_freq_fb, team1_scout_mb, team1_first_scouting,
                                   team1_apm, team1_rel_apm,
-                                  team1_cps, team1_peace_rate,
-                                  team1_battle_rate, 0)
+                                  team1_cps, team1_rel_cps,
+                                  team1_peace_rate, team1_battle_rate, 0)
             fields_2 = fields_tuple(game_id,
                                   team2_uid, team2_rank, team2_freq,
                                   team2_freq_fb, team2_scout_mb, team2_first_scouting,
                                   team2_apm, team2_rel_apm,
-                                  team2_cps, team2_peace_rate,
-                                  team2_battle_rate, 1)
+                                  team2_cps, team2_rel_cps,
+                                  team2_peace_rate, team2_battle_rate, 1)
         return [fields_1, fields_2]
     except:
         print("exception while generating scouting stats for replay", replay_file)
