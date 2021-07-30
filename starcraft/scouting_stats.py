@@ -43,12 +43,7 @@ def get_scouting_frequency(replay, map_path_data):
         print("Battle time or peace time is zero")
         return None
 
-    try:
-        scouting_instances_1, scouting_instances_2 = scouting_detector.get_scouting_instances(r, map_path_data)
-        check_1, check_2 = scouting_instances_1[0], scouting_instances_2[0]
-    except:
-        print("No scouting instance was detected")
-        return 0, 0, 0, 0, 0, 0, 0, 0
+    scouting_instances_1, scouting_instances_2 = scouting_detector.get_scouting_instances(r, map_path_data)
     scouting_count_1, scouting_count_2 = 0, 0
     scouting_count_after_first_battle_1, scouting_count_after_first_battle_2 = 0, 0
     first_scouting_time_1, first_scouting_time_2 = 0, 0
@@ -56,26 +51,38 @@ def get_scouting_frequency(replay, map_path_data):
     scouting_mb_1_count, scouting_mb_2_count = 0, 0
 
     # player 1's scouting instances
-    for scouting_instance in scouting_instances_1:
-        if scouting_instance.start_time > first_battle_start_frame:
-            scouting_count_after_first_battle_1 += 1
-        if is_first_scouting_1:
-            first_scouting_time_1 = scouting_instance.start_time / 22.4
-            is_first_scouting_1 = False
-        if scouting_instance.scouting_type == BaseType.MAIN:
-            scouting_mb_1_count += 1
-        scouting_count_1 += 1
-
+    if len(scouting_instances_1) > 0:
+        for scouting_instance in scouting_instances_1:
+            if scouting_instance.start_time > first_battle_start_frame:
+                scouting_count_after_first_battle_1 += 1
+            if is_first_scouting_1:
+                first_scouting_time_1 = scouting_instance.start_time / 22.4
+                is_first_scouting_1 = False
+            if scouting_instance.scouting_type == BaseType.MAIN:
+                scouting_mb_1_count += 1
+            scouting_count_1 += 1
+        # scouting opponent's main base ratio to total scouting instances
+        scouting_mb_ratio_1 = scouting_mb_1_count / scouting_count_1
+    else:
+        print("No scouting instance was detected for player 1")
+        scouting_mb_ratio_1 = 0
+        
     # player 2's scouting instances
-    for scouting_instance in scouting_instances_2:
-        if scouting_instance.start_time > first_battle_start_frame:
-            scouting_count_after_first_battle_2 += 1
-        if is_first_scouting_2:
-            first_scouting_time_2 = scouting_instance.start_time / 22.4
-            is_first_scouting_2 = False
-        if scouting_instance.scouting_type == BaseType.MAIN:
-            scouting_mb_2_count += 1
-        scouting_count_2 += 1
+    if len(scouting_instances_2) > 0:
+        for scouting_instance in scouting_instances_2:
+            if scouting_instance.start_time > first_battle_start_frame:
+                scouting_count_after_first_battle_2 += 1
+            if is_first_scouting_2:
+                first_scouting_time_2 = scouting_instance.start_time / 22.4
+                is_first_scouting_2 = False
+            if scouting_instance.scouting_type == BaseType.MAIN:
+                scouting_mb_2_count += 1
+            scouting_count_2 += 1
+        # scouting opponent's main base ratio to total scouting instances
+        scouting_mb_ratio_2 = scouting_mb_2_count / scouting_count_2
+    else:
+        print("No scouting instance was detected for player 2")
+        scouting_mb_ratio_2 = 0
 
     # scouting rate (instances/seconds)
     scouting_freq_1 = scouting_count_1 / seconds
@@ -85,10 +92,6 @@ def get_scouting_frequency(replay, map_path_data):
     seconds_after_fb = (frames - first_battle_start_frame) / 22.4
     scouting_freq_fb_1 = scouting_count_after_first_battle_1 / seconds_after_fb
     scouting_freq_fb_2 = scouting_count_after_first_battle_2 / seconds_after_fb
-
-    # scouting opponent's main base ratio to total scouting instances
-    scouting_mb_ratio_1 = scouting_mb_1_count / scouting_count_1
-    scouting_mb_ratio_2 = scouting_mb_2_count / scouting_count_2
 
     return scouting_freq_1, scouting_freq_fb_1, scouting_mb_ratio_1, first_scouting_time_1, \
            scouting_freq_2, scouting_freq_fb_2, scouting_mb_ratio_2, first_scouting_time_2
@@ -115,13 +118,9 @@ def generate_fields(replay_file, map_path_data):
             game_id = "ds-" + game_id
 
         # Scouting stats
-        freq_results = get_scouting_frequency(replay, map_path_data)
-        if freq_results is None:
-            print("No scouting instances for replay", replay_file)
-            return None
         team1_freq, team1_freq_fb, team1_scout_mb, team1_first_scouting, \
         team2_freq, team2_freq_fb, team2_scout_mb, team2_first_scouting, \
-            = freq_results
+            = get_scouting_frequency(replay, map_path_data)
         winner = replay.winner.number
         team1_rank, team1_rel_rank, team2_rank, team2_rel_rank = ranking_stats(replay)
 
@@ -172,7 +171,6 @@ def generate_fields(replay_file, map_path_data):
     except:
         print("exception while generating scouting stats for replay", replay_file)
         traceback.print_exc()
-        return None
 
 
 def ranking_stats(replay):
@@ -208,5 +206,5 @@ if __name__ == "__main__":
     sc2reader.engine.register_plugin(ActiveSelection())
     sc2reader.engine.register_plugin(BaseTracker())
     sc2reader.engine.register_plugin(ModifiedRank())
-    results = run(generate_fields, threads=10)
+    results = run(generate_fields, threads = 15)
     save(results, "sc2_prediction_data")
