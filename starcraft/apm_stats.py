@@ -34,7 +34,6 @@ def get_apm_stats(replay, battles):
     team2_avg_apm = replay.players[1].avg_apm/1.4
     
     frames = replay.frames
-    seconds = replay.real_length.total_seconds()
     game_events = replay.game_events
     
     team1_seconds = replay.humans[0].seconds_played/1.4
@@ -46,7 +45,8 @@ def get_apm_stats(replay, battles):
     aps_wmup_count = {1 : 0, 2 : 0}
     aps_non_wmup_count = {1 : 0, 2 : 0}
     
-    battle_time = 0
+    battle_time_1, battle_time_2 = 0, 0
+    peace_time_1, peace_time_2 = 0, 0
     
     for event in game_events:
         if  isinstance(event, sc2reader.events.game.ControlGroupEvent) or \
@@ -55,8 +55,12 @@ def get_apm_stats(replay, battles):
             second = event.second
             frame = event.frame
             team = event.player.pid
+            # if not players
+            if team != 1 and team != 2:
+                continue
+            # print(team)
             if isMacro(event.active_selection):
-                if battle_detector.duringBattle(frame, battles):
+                if battle_detector.duringBattle(frame, battles, margin = 0):
                     aps_battle_count[team] += 1
                 else:
                     aps_peace_count[team] += 1
@@ -69,30 +73,33 @@ def get_apm_stats(replay, battles):
                 
     # Calculating total peacetime and total battletime (in seconds) for the game
     for battle in battles:
-        starttime = (battle[0]/frames)*seconds
-        endtime = (battle[1]/frames)*seconds
-        duration = endtime - starttime
-        battle_time += duration
-    peace_time = seconds - battle_time
+        # player 1
+        starttime_1 = (battle[0]/frames)*team1_seconds
+        endtime_1 = (battle[1]/frames)*team1_seconds
+        duration_1 = endtime_1 - starttime_1
+        battle_time_1 += duration_1
+        # player 2
+        starttime_2 = (battle[0]/frames)*team2_seconds
+        endtime_2 = (battle[1]/frames)*team2_seconds
+        duration_2 = endtime_2 - starttime_2
+        battle_time_2 += duration_2
+    peace_time_1 = team1_seconds - battle_time_1
+    peace_time_2 = team2_seconds - battle_time_2
+
+    if battle_time_1 == 0 or battle_time_2 == 0 or \
+        peace_time_1 == 0 or peace_time_2 == 0:
+        print("battle time or peace time is zero")
+        raise RuntimeError()
     
-    team1_apm_battle = aps_battle_count[1] / (battle_time / 60)
-    team2_apm_battle = aps_battle_count[2] / (battle_time / 60)
-    team1_apm_peace = aps_peace_count[1] / (peace_time / 60)
-    team2_apm_peace = aps_peace_count[2] / (peace_time / 60)
+    team1_apm_battle = aps_battle_count[1] / (battle_time_1 / 60)
+    team2_apm_battle = aps_battle_count[2] / (battle_time_2 / 60)
+    team1_apm_peace = aps_peace_count[1] / (peace_time_1 / 60)
+    team2_apm_peace = aps_peace_count[2] / (peace_time_2 / 60)
     
     team1_apm_wmup = aps_wmup_count[1] / (86 / 60)
     team1_apm_non_wmup = aps_non_wmup_count[1] / ((team1_seconds - 86) / 60)
     team2_apm_wmup = aps_wmup_count[2] / (86 / 60)
     team2_apm_non_wmup = aps_non_wmup_count[2] / ((team2_seconds - 86) / 60)
-    
-    # print("default", team_apm_count[1]/team1_seconds * 60, "calculated:", team1_avg_apm)
-    # print("default", team_apm_count[2]/team2_seconds * 60, "calculated:", team2_avg_apm)
-    
-    # sum_1 = aps_wmup_count[1] + aps_non_wmup_count[1]
-    # sum_2 = aps_wmup_count[2] + aps_non_wmup_count[2]
-    
-    # print("total ", team_apm_count[1], "count 1 ", aps_wmup_count[1], "count 2", aps_non_wmup_count[1], "seconds", team1_seconds)
-    # print("total ", team_apm_count[2], "count 1 ", aps_wmup_count[2], "count 2", aps_non_wmup_count[2], "seconds", team2_seconds)
     
     return  team1_apm_battle, team1_apm_peace, team1_avg_apm, team1_apm_wmup, team1_apm_non_wmup, \
             team2_apm_battle, team2_apm_peace, team2_avg_apm, team2_apm_wmup, team2_apm_non_wmup   
@@ -194,6 +201,6 @@ if __name__ == "__main__":
     sc2reader.engine.register_plugin(ActiveSelection())
     sc2reader.engine.register_plugin(ModifiedRank())
     # results = run(generate_fields, threads = 15, replay_filter = lambda replay: replay['ReplayID'] in \
-        # ['gggreplays_261224.SC2Replay', 'gggreplays_308021.SC2Replay', 'gggreplays_301713.SC2Replay'])
+    #     ['gggreplays_324488.SC2Replay'])
     results = run(generate_fields, threads = 15)
-    save(results, "apm_stats_data_test")
+    save(results, "apm_stats_data")
