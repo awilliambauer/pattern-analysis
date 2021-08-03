@@ -11,11 +11,11 @@ import csv
 import traceback
 
 
-def analysis_function_wrapper(filename, function, map_path_data):
+def analysis_function_wrapper(filename, function, map_path_data=None):
     try:
         start_time = time.time()
         print("Analyzing", filename)
-        results = function(filename, map_path_data)
+        results = function(filename, map_path_data) if map_path_data is not None else function(filename)
         print("Analyzed replay in", time.time() - start_time)
         return results
     except KeyboardInterrupt:
@@ -26,12 +26,12 @@ def analysis_function_wrapper(filename, function, map_path_data):
         return None
 
 
-def run(function, replay_filter=lambda x: True, threads=60) -> List[Dict]:
+def run(function, replay_filter=lambda x: True, threads=60, n=-1) -> List[Dict]:
     start_time = time.time()
     results = []
     count = 0
     count_errors = 0
-    replay_map_groups = group_replays_by_map(replay_filter)
+    replay_map_groups = group_replays_by_map(replay_filter, n)
     replay_count = sum(map(lambda name_replay: len(name_replay[1]), replay_map_groups.items()))
     results_count = 0
     print(len(replay_map_groups.keys()), "maps", replay_count, "replays")
@@ -46,7 +46,10 @@ def run(function, replay_filter=lambda x: True, threads=60) -> List[Dict]:
             print("loaded path data for map", map_name_group, "with", len(replays), "replays")
             count += len(replays)
             map_time = time.time()
-            new_results = pool.map(partial(analysis_function_wrapper, function=function, map_path_data=map_path_data),
+            analysis_function = partial(analysis_function_wrapper, function=function,
+                                        map_path_data=map_path_data) if function.func_code.co_argcount == 2 else partial(
+                analysis_function_wrapper, function=function)
+            new_results = pool.map(analysis_function,
                                    replays)
             count_errors_this_map = 0
             for result_group in new_results:
@@ -83,7 +86,7 @@ def run(function, replay_filter=lambda x: True, threads=60) -> List[Dict]:
 
 def save(results, output_file):
     output_file_adjusted = output_file[:-4] if output_file.endswith(".csv") else output_file
-    output_file_adjusted += datetime.datetime.now().date().__str__()
+    output_file_adjusted += "-" + datetime.datetime.now().date().__str__()
     output_file_adjusted += ".csv"
     first_result_fields = results[0]._fields
     # assume that every result has the same fields

@@ -15,7 +15,7 @@ from replay_verification import map_pretty_name_to_file
 from load_map_path_data import get_all_possible_names
 import csv
 
-from starcraft.modified_rank_plugin import ModifiedRank
+from modified_rank_plugin import ModifiedRank
 
 
 def get_map_name_groups():
@@ -50,7 +50,7 @@ def get_map_name_groups():
     return map_name_clusters
 
 
-def group_replays_by_map(replay_filter=lambda x: True):
+def group_replays_by_map(replay_filter=lambda x: True, count=-1):
     """
     :return: a dictionary of map name groups to replays that took place on that map. See get_map_name_groups for more
     info.
@@ -59,8 +59,7 @@ def group_replays_by_map(replay_filter=lambda x: True):
     maps = {}
     with open(file_locations.REPLAY_INFO_FILE, "r") as replays_info:
         reader = csv.DictReader(replays_info)
-        rows = random.choices(list(reader), k=1000)
-        # rows = reader
+        rows = (random.choices(list(reader), k=count)) if count != -1 else reader
         for row in rows:
             if not replay_filter(row):
                 continue
@@ -114,7 +113,8 @@ def generate_replay_info_csv():
         valid_games = [line[:-1] for line in f.readlines()]
     with open(file_locations.REPLAY_INFO_FILE, 'w', newline='') as fp:
         events_out = csv.DictWriter(fp,
-                                    fieldnames=["ReplayID", "Map", "UID1", "UID2", "Race1", "Race2", "Rank1", "Rank2", "Winner"])
+                                    fieldnames=["ReplayID", "Map", "UID1", "UID2", "Race1", "Race2", "Rank1", "Rank2",
+                                                "Winner"])
         events_out.writeheader()
         pool = Pool(min(cpu_count(), 60))
         entries = pool.map(_generate_replay_entry,
