@@ -367,7 +367,7 @@ def get_pattern_masks(uid: str, pid: str, idx: Tuple[int, int], target_pts: Iter
     return pdict
 
 
-def get_patterns(mrfs: Dict[int, np.ndarray], clusters: np.ndarray, puz_idx_lookup: dict) -> List[PatternInstance]:
+def get_patterns(mrfs: Dict[int, np.ndarray], clusters: np.ndarray, puz_idx_lookup: dict, user) -> List[PatternInstance]:
     """
 
     :param mrfs:
@@ -383,7 +383,11 @@ def get_patterns(mrfs: Dict[int, np.ndarray], clusters: np.ndarray, puz_idx_look
         if clusters[0] == cid:
             starts = [0] + starts
         for start in starts:
-            key = next(key for key, r in puz_idx_lookup.items() if start in range(*r))
+            try:
+                key = next(key for key, r in puz_idx_lookup.items() if start in range(*r) and (user == "all" or key[0] == user))
+            except StopIteration:
+                # in some cases (e.g., user models) we can get a (possibly spurious) pattern that starts at the boundary
+                key = next(key for key, r in puz_idx_lookup.items() if start in range(r[0], r[1] + 1) and (user == "all" or key[0] == user))
             uid = key[0]
             pid = key[1]
             end = next(i for i, c in enumerate(clusters[start:], start) if c != cid or i + 1 == len(clusters))
@@ -396,7 +400,7 @@ def get_patterns(mrfs: Dict[int, np.ndarray], clusters: np.ndarray, puz_idx_look
 def get_pattern_lookups(krange: Iterable[int], sub_clusters: SubClusters,
                         sub_mrfs: SubMRFs, subseries_lookups: Dict[int, Dict[int, SubSeriesLookup]],
                         cluster_lookup: Dict[int, np.ndarray], mrf_lookup: Dict[int, Dict[int, np.ndarray]],
-                        puz_idx_lookup: dict) -> Dict[int, PatternLookup]:
+                        puz_idx_lookup: dict, user: str) -> Dict[int, PatternLookup]:
     """
     sub_clusters = sub_lookup["clusters"]
     mrf_lookup and cluster_lookup need to be label-indexed (i.e., mrf_lookup = mrf_lookup["all"])
@@ -404,7 +408,7 @@ def get_pattern_lookups(krange: Iterable[int], sub_clusters: SubClusters,
     # maps k to either "base" -> list of first-order patterns or cluster id -> sub_k -> list of patterns
     patterns: Dict[int, Dict[Union[int, str], Union[List[PatternInstance], Dict[int, List[PatternInstance]]]]] = {}
     for k in krange:
-        patterns[k] = {"base": get_patterns(mrf_lookup[k], cluster_lookup[k], puz_idx_lookup)}
+        patterns[k] = {"base": get_patterns(mrf_lookup[k], cluster_lookup[k], puz_idx_lookup, user)}
         cids: Set[int] = {p.cid for p in patterns[k]["base"]}
         for cid in cids:
             patterns[k][cid] = {0: [p for p in patterns[k]["base"] if p.cid == cid]}
@@ -417,7 +421,7 @@ def get_pattern_lookups(krange: Iterable[int], sub_clusters: SubClusters,
                         len(sub_idx_lookup) <= sub_k:
                     continue
                 patterns[k][cid][sub_k] = get_patterns(sub_mrfs[k][cid][sub_k], sub_clusters[k][cid][sub_k],
-                                                       sub_idx_lookup)
+                                                       sub_idx_lookup, user)
     return patterns
 
 
@@ -436,103 +440,103 @@ def predict_from_saved_model(test_data: np.ndarray, saved_model: dict) -> np.nda
     test_ticc.pool.close()
     return cs
 
+# TODO update for user models, need to take target user into account for puz_idx_lookup to work correctly
+# def compute_pattern_times(k: int, subs: tuple, data: pd.DataFrame, cluster_lookup: Dict[int, np.ndarray],
+#                           mrf_lookup: Dict[int, Dict[int, np.ndarray]], puz_idx_lookup: dict) -> pd.DataFrame:
+#     """
 
-def compute_pattern_times(k: int, subs: tuple, data: pd.DataFrame, cluster_lookup: Dict[int, np.ndarray],
-                          mrf_lookup: Dict[int, Dict[int, np.ndarray]], puz_idx_lookup: dict) -> pd.DataFrame:
-    """
-
-    :param k:
-    :param subs:
-    :param data:
-    :param cluster_lookup:
-    :param mrf_lookup:
-    :param puz_idx_lookup:
-    :return:
-    """
-    cluster_times = []
-    print("computing pattern times")
-    for _, r in data.iterrows():
-        if r.relevant_sids is None or (r.uid, r.pid) not in puz_idx_lookup:
-            continue
-        deltas = sorted([d for d in r.deltas if d.sid in r.relevant_sids], key=lambda x: x.timestamp)
-        ts = np.array([d.timestamp for d in deltas])
-        actions = np.array([sum(d.action_diff.values()) for d in deltas])
-        if actions.sum() == 0:
-            print("SKIPPING {} {}, no actions recorded".format(r.uid, r.pid))
-            continue
-        result_dict = {'uid': r.uid, 'pid': r.pid}
-        valid = True
-        puz_cs = cluster_lookup[k][slice(*puz_idx_lookup[(r.uid, r.pid)])]
-        if len(ts) != len(puz_cs):
-            print("SKIPPING {} {}, k={}, mismatch between number of timestamps and cluster data".format(r.uid, r.pid, k))
-            valid = False
-            continue
-        for ci, sub_k in subs:
-            if sub_k == 0:
-                #result_dict["pattern_{}_time".format(ci)] = time_played(ts[puz_cs == ci])
-                #result_dict["pattern_{}_ratio".format(ci)] = result_dict["pattern_{}_time".format(ci)] / r.relevant_time
-                result_dict["pattern_{}_action".format(ci)] = sum(actions[puz_cs == ci])
-                #result_dict["pattern_{}_action_ratio".format(ci)] = result_dict["pattern_{}_action".format(ci)] / actions.sum()
-        if valid:
-            cluster_times.append(result_dict)
-    return data.merge(pd.DataFrame(data=cluster_times), on=['pid', 'uid'])
+#     :param k:
+#     :param subs:
+#     :param data:
+#     :param cluster_lookup:
+#     :param mrf_lookup:
+#     :param puz_idx_lookup:
+#     :return:
+#     """
+#     cluster_times = []
+#     print("computing pattern times")
+#     for _, r in data.iterrows():
+#         if r.relevant_sids is None or (r.uid, r.pid) not in puz_idx_lookup:
+#             continue
+#         deltas = sorted([d for d in r.deltas if d.sid in r.relevant_sids], key=lambda x: x.timestamp)
+#         ts = np.array([d.timestamp for d in deltas])
+#         actions = np.array([sum(d.action_diff.values()) for d in deltas])
+#         if actions.sum() == 0:
+#             print("SKIPPING {} {}, no actions recorded".format(r.uid, r.pid))
+#             continue
+#         result_dict = {'uid': r.uid, 'pid': r.pid}
+#         valid = True
+#         puz_cs = cluster_lookup[k][slice(*puz_idx_lookup[(r.uid, r.pid)])]
+#         if len(ts) != len(puz_cs):
+#             print("SKIPPING {} {}, k={}, mismatch between number of timestamps and cluster data".format(r.uid, r.pid, k))
+#             valid = False
+#             continue
+#         for ci, sub_k in subs:
+#             if sub_k == 0:
+#                 #result_dict["pattern_{}_time".format(ci)] = time_played(ts[puz_cs == ci])
+#                 #result_dict["pattern_{}_ratio".format(ci)] = result_dict["pattern_{}_time".format(ci)] / r.relevant_time
+#                 result_dict["pattern_{}_action".format(ci)] = sum(actions[puz_cs == ci])
+#                 #result_dict["pattern_{}_action_ratio".format(ci)] = result_dict["pattern_{}_action".format(ci)] / actions.sum()
+#         if valid:
+#             cluster_times.append(result_dict)
+#     return data.merge(pd.DataFrame(data=cluster_times), on=['pid', 'uid'])
 
 
-def compute_subpattern_times(k: int, subs: Tuple[int, int], data: pd.DataFrame, cluster_lookup: Dict[int, np.ndarray],
-                             sub_clusters: SubClusters, subseries_lookups: Dict[int, Dict[int, SubSeriesLookup]],
-                             puz_idx_lookup: dict) -> pd.DataFrame:
-    """
+# def compute_subpattern_times(k: int, subs: Tuple[int, int], data: pd.DataFrame, cluster_lookup: Dict[int, np.ndarray],
+#                              sub_clusters: SubClusters, subseries_lookups: Dict[int, Dict[int, SubSeriesLookup]],
+#                              puz_idx_lookup: dict) -> pd.DataFrame:
+#     """
 
-    :param k:
-    :param subs:
-    :param data:
-    :param cluster_lookup:
-    :param sub_clusters:
-    :param subseries_lookups:
-    :param puz_idx_lookup:
-    :return:
-    """
-    results = {}
-    print("generating timestamps")
-    for _, r in data.iterrows():
-        if r.relevant_sids is None or (r.uid, r.pid) not in puz_idx_lookup:
-            continue
-        deltas = sorted([d for d in r.deltas if d.sid in r.relevant_sids], key=lambda x: x.timestamp)
-        ts = np.array([d.timestamp for d in deltas])
-        actions = np.array([sum(d.action_diff.values()) for d in deltas])
-        if actions.sum() == 0:
-            print("SKIPPING {} {}, no actions recorded".format(r.uid, r.pid))
-            continue
-        results[(r.uid, r.pid)] = {"times": {'uid': r.uid, 'pid': r.pid}, "ts": ts, "actions": actions, "valid": True}
-    print("computing subpattern times")
-    all_clusters = cluster_lookup[k]
-    for cid, sub_k in subs:
-        if sub_k == 0:
-            continue
-        all_subclusters = all_clusters.astype(np.str)
-        labels = ["{}{}".format(cid, string.ascii_uppercase[x]) for x in range(sub_k)]
-        cs = sub_clusters[k][cid][sub_k]
-        for (_, _, start_idx), (s, e) in subseries_lookups[k][cid].idx_lookup.items():
-            all_subclusters[start_idx: start_idx + (min(e, len(cs)) - s)] = [labels[c] for c in cs[s:e]]
-        for uid, pid in results:
-            puz_cs = all_subclusters[slice(*puz_idx_lookup[(uid, pid)])]
-            ts = results[(uid, pid)]["ts"]
-            actions = results[(uid, pid)]["actions"]
-            if len(ts) != len(puz_cs):
-                results[(uid, pid)]["valid"] = False
-                continue
-            for scid in labels:
-                #results[(uid, pid)]["times"]["subpattern_{}_time".format(scid)] = time_played(ts[puz_cs == scid])
-                #results[(uid, pid)]["times"]["subpattern_{}_ratio".format(scid)] = results[(uid, pid)]["times"]["subpattern_{}_time".format(scid)] / r.relevant_time
-                results[(uid, pid)]["times"]["pattern_{}_action".format(scid)] = sum(actions[puz_cs == scid])
-                #results[(uid, pid)]["times"]["subpattern_{}_action_ratio".format(scid)] = results[(uid, pid)]["times"]["subpattern_{}_action".format(scid)] / actions.sum()
-    sub_cluster_times = [v["times"] for v in results.values() if v["valid"]]
-    return data.merge(pd.DataFrame(data=sub_cluster_times), on=['pid', 'uid'])
+#     :param k:
+#     :param subs:
+#     :param data:
+#     :param cluster_lookup:
+#     :param sub_clusters:
+#     :param subseries_lookups:
+#     :param puz_idx_lookup:
+#     :return:
+#     """
+#     results = {}
+#     print("generating timestamps")
+#     for _, r in data.iterrows():
+#         if r.relevant_sids is None or (r.uid, r.pid) not in puz_idx_lookup:
+#             continue
+#         deltas = sorted([d for d in r.deltas if d.sid in r.relevant_sids], key=lambda x: x.timestamp)
+#         ts = np.array([d.timestamp for d in deltas])
+#         actions = np.array([sum(d.action_diff.values()) for d in deltas])
+#         if actions.sum() == 0:
+#             print("SKIPPING {} {}, no actions recorded".format(r.uid, r.pid))
+#             continue
+#         results[(r.uid, r.pid)] = {"times": {'uid': r.uid, 'pid': r.pid}, "ts": ts, "actions": actions, "valid": True}
+#     print("computing subpattern times")
+#     all_clusters = cluster_lookup[k]
+#     for cid, sub_k in subs:
+#         if sub_k == 0:
+#             continue
+#         all_subclusters = all_clusters.astype(np.str)
+#         labels = ["{}{}".format(cid, string.ascii_uppercase[x]) for x in range(sub_k)]
+#         cs = sub_clusters[k][cid][sub_k]
+#         for (_, _, start_idx), (s, e) in subseries_lookups[k][cid].idx_lookup.items():
+#             all_subclusters[start_idx: start_idx + (min(e, len(cs)) - s)] = [labels[c] for c in cs[s:e]]
+#         for uid, pid in results:
+#             puz_cs = all_subclusters[slice(*puz_idx_lookup[(uid, pid)])]
+#             ts = results[(uid, pid)]["ts"]
+#             actions = results[(uid, pid)]["actions"]
+#             if len(ts) != len(puz_cs):
+#                 results[(uid, pid)]["valid"] = False
+#                 continue
+#             for scid in labels:
+#                 #results[(uid, pid)]["times"]["subpattern_{}_time".format(scid)] = time_played(ts[puz_cs == scid])
+#                 #results[(uid, pid)]["times"]["subpattern_{}_ratio".format(scid)] = results[(uid, pid)]["times"]["subpattern_{}_time".format(scid)] / r.relevant_time
+#                 results[(uid, pid)]["times"]["pattern_{}_action".format(scid)] = sum(actions[puz_cs == scid])
+#                 #results[(uid, pid)]["times"]["subpattern_{}_action_ratio".format(scid)] = results[(uid, pid)]["times"]["subpattern_{}_action".format(scid)] / actions.sum()
+#     sub_cluster_times = [v["times"] for v in results.values() if v["valid"]]
+#     return data.merge(pd.DataFrame(data=sub_cluster_times), on=['pid', 'uid'])
 
 
 def get_predicted_lookups(all_series: np.ndarray, k: int, model_lookup: Dict[int, dict],
                           sub_models: Dict[int, Dict[int, Dict[int, dict]]],
-                          mrf_lookup: Dict[int, Dict[int, np.ndarray]], puz_idx_lookup: dict, noise: np.ndarray) \
+                          mrf_lookup: Dict[int, Dict[int, np.ndarray]], puz_idx_lookup: dict, noise: np.ndarray, user: str) \
         -> Tuple[np.ndarray, Dict[int, SubSeriesLookup], Dict[int, Dict[int, np.ndarray]]]:
     """
 
@@ -546,10 +550,10 @@ def get_predicted_lookups(all_series: np.ndarray, k: int, model_lookup: Dict[int
     :return:
     """
     clusters = predict_from_saved_model(all_series, model_lookup[k])
-    patterns = get_patterns(mrf_lookup[k], clusters, puz_idx_lookup)
+    patterns = get_patterns(mrf_lookup[k], clusters, puz_idx_lookup, user)
     subseries = make_subseries_lookup(k, patterns, mrf_lookup[k], all_series, noise)
     sub_clusters = {}
-    for cid in sub_models[k]:
+    for cid in sub_models.get(k, []):
         if cid in subseries:
             sub_clusters[cid] = {}
             for sub_k in sub_models[k][cid]:
@@ -682,13 +686,17 @@ def find_best_dispersion_model(all_series: np.ndarray, pattern_lookups: Dict[int
     return min(sorted(disp_ranks.keys()), key=lambda kc: disp_ranks[kc] + mode_ranks[kc])
 
 
-def score_param(param, model, X, y, cv):
+def score_param(param, model, X, y, cv, groups):
     # feature selection under these params
-    selector = RFECV(model(**param), step=1, cv=cv)
-    selector.fit(X, y)
-    X_sel = selector.transform(X)
+    X_sel = X
+    support = np.array([True])
+    if (X.shape[1] > 1):  # RFECV breaks if there's just one feature
+        selector = RFECV(model(**param), step=1, cv=cv)
+        selector.fit(X, y, groups)
+        X_sel = selector.transform(X)
+        support = selector.get_support()
     # score for these params is CV score fitting on X_sel
-    return np.mean(cross_val_score(model(**param), X_sel, y, cv=cv)), selector.get_support()
+    return np.mean(cross_val_score(model(**param), X_sel, y, groups=groups, cv=cv)), support
 
 
 def load_eval_model(model_dir):

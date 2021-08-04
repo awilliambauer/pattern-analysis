@@ -141,10 +141,10 @@ def plot_model():
             idx_lookup = pickle.load(fp)
         noise = np.array([-1] * len(field_lookup[race]))
         subseries_lookups = {}
-        patterns = get_patterns(mrf_lookup[race][k], cluster_lookup[race][k], idx_lookup)
+        patterns = get_patterns(mrf_lookup[race][k], cluster_lookup[race][k], idx_lookup, "all")
         subseries_lookups[k] = make_subseries_lookup(k, patterns, mrf_lookup[race][k], all_series, noise)
         pattern_lookups = get_pattern_lookups(krange, {20: {}}, {}, subseries_lookups,
-                                             cluster_lookup[race], mrf_lookup[race], idx_lookup)
+                                             cluster_lookup[race], mrf_lookup[race], idx_lookup, "all")
         for x, ((uid, gid, _), idx) in enumerate(idx_lookup.items()):
             print(f"plotting {x} out of {len(idx_lookup)} {race} series\r", end="")
             masks = get_pattern_masks(uid, gid, idx, [str(i) for i in pattern_lookups[20].keys() if i != "base"], {}, pattern_lookups[20], {})
@@ -279,7 +279,7 @@ if __name__ == "__main__":
         valid_k = no_dups.intersection(handles_noise)
 
         for k in valid_k:
-            patterns = get_patterns(mrf_lookup[race][k], cluster_lookup[race][k], idx_lookup)
+            patterns = get_patterns(mrf_lookup[race][k], cluster_lookup[race][k], idx_lookup, "all")
             subseries_lookups[k] = make_subseries_lookup(k, patterns, mrf_lookup[race][k], all_series, noise)
 
         try:
@@ -293,7 +293,7 @@ if __name__ == "__main__":
         print("saving final model output for", race)
         sub_clusters = sub_lookup.clusters
         pattern_lookup = get_pattern_lookups(valid_k, sub_clusters, sub_lookup.mrfs, subseries_lookups,
-                                             cluster_lookup[race], mrf_lookup[race], idx_lookup)
+                                             cluster_lookup[race], mrf_lookup[race], idx_lookup, "all")
 
         os.makedirs(f"{results_path_race}/eval", exist_ok=True)
         with open(f"{results_path_race}/eval/cluster_lookup.pickle", "wb") as fp:

@@ -86,10 +86,8 @@ if __name__ == "__main__":
         for k in krange:
             null_clusters = [cid for cid in mrf_lookup[uid][k] if is_null_cluster(mrf_lookup[uid][k][cid])]
             if handles_noise(series, null_clusters, cluster_lookup[uid][k], noise):
-                # get_patterns assumes the ranges in puz_idx_lookup correspond to the indexes of cluster_lookup[uid][k]
-                # in this context, that's only true for entries for the current uid, so we filter
                 patterns = get_patterns(mrf_lookup[uid][k], cluster_lookup[uid][k],
-                                        {(u, pid): v for (u, pid), v in puz_idx_lookup.items() if u == uid})
+                                        puz_idx_lookup, uid)
                 subseries_lookups[uid][k] = make_subseries_lookup(k, patterns, mrf_lookup[uid][k], series, noise)
             else:
                 logging.debug(f"k = {k} model fails to handle noise for uid = {uid}")
