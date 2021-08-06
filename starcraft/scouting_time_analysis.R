@@ -175,10 +175,9 @@ scouting_pros_terran <- scouting %>% group_by(GameID) %>%
 write.csv(scouting_pros_terran, "scouting_one_player.csv")
 
 # verify Zimri's data
-scouting_2 <- read.csv("scouting_time_seconds_new.csv") %>% 
-  filter(Rank == 7)
-scouting_num_replay <- scouting_2 %>% 
-  filter(Rank == 7) %>% 
+scouting_2 <- new_scouting
+scouting_num_replay <- new_scouting %>% 
+  # filter(Rank == 7) %>% 
   group_by(Race) %>% 
   summarise(num_replay = n_distinct(GameID) * 2)
 
@@ -187,28 +186,28 @@ terran_num_replay <- (scouting_num_replay %>% filter(Race == "Terran"))[[1, 2]]
 zerg_num_replay <- (scouting_num_replay %>% filter(Race == "Zerg"))[[1, 2]]
 
 protoss <- ggplot(data = subset(scouting_2, Race == 'Protoss'), 
-                  aes(x = ScoutStartTime/22.4, y = ..count../protoss_num_replay)) +
+                  aes(x = ScoutStartSec, y = ..count../protoss_num_replay)) +
   geom_histogram(color = bronze_col, fill = bronze_col,
-                 bins = 25, alpha = 0.6) + 
+                 bins = 30, alpha = 0.6) + 
   labs(y="Scouting Instances/Replay", x = "Gametime-Protoss") +
   xlim(0, 3000) + 
-  ylim(0, 1.4)
+  ylim(0, 0.7)
 
 terran <- ggplot(data = subset(scouting_2, Race == 'Terran'), 
-                 aes(x = ScoutStartTime/22.4, y = ..count../terran_num_replay)) +
+                 aes(x = ScoutStartSec, y = ..count../terran_num_replay)) +
   geom_histogram(color = silver_col, fill = silver_col,
-                 bins = 25, alpha = 0.6) + 
+                 bins = 30, alpha = 0.6) + 
   labs(y="Scouting Instances/Replay", x = "Gametime-Terran") +
   xlim(0, 3000) + 
-  ylim(0, 1.4)
+  ylim(0, 0.7)
 
 zerg <- ggplot(data = subset(scouting_2, Race == 'Zerg'), 
-               aes(x = ScoutStartTime/22.4, y = ..count../zerg_num_replay)) +
+               aes(x = ScoutStartSec, y = ..count../zerg_num_replay)) +
   geom_histogram(color = gold_col, fill = gold_col,
-                 bins = 25, alpha = 0.6) + 
+                 bins = 30, alpha = 0.6) + 
   labs(y="Scouting Instances/Replay", x = "Gametime-Zerg") +
   xlim(0, 3000) + 
-  ylim(0, 1.4)
+  ylim(0, 0.7)
 
 grid.arrange(protoss, terran, zerg)
 
@@ -217,8 +216,8 @@ grid.arrange(protoss, terran, zerg)
 
 old_scouting <- read.csv("scouting_time_seconds_gm_only.csv") %>% 
   filter(Rank == 7)
-new_scouting <- read.csv("scouting_instances_gm2021-07-27.csv") %>% 
-  filter(!is.na(Rank1))
+new_scouting <- read.csv("scouting_instances2021-07-29.csv") %>% 
+  filter(!is.na(Rank))
 
 # length(unique(old_scouting$GameID)) 
 # length(unique(new_scouting$GameID)) 
@@ -232,10 +231,10 @@ merged_count <- new_scouting_count %>%
   slice_max(diff_scouting_count, n = 20)
 
 # duration of scouting
-new_scouting$Rank1 <- as.factor(new_scouting$Rank1)
+new_scouting$Rank <- as.factor(new_scouting$Rank)
 new_scouting <- new_scouting %>% 
   mutate(duration = (ScoutingEndTime - ScoutingStartTime)/22.4,
-         League = fct_recode(Rank1,
+         League = fct_recode(Rank,
                              "Bronze" = "1",
                              "Silver" = "2",
                              "Gold" = "3",
@@ -272,7 +271,7 @@ for(i in 1:nrow(new_scouting)) {
 # === slow code ends here ==================================== #
 
 
-scouting_num_replay <- new_scouting_frame %>% 
+scouting_num_replay <- new_scouting %>% 
   group_by(League) %>% 
   summarise(num_replay = n_distinct(GameID) * 2)
 
@@ -284,60 +283,60 @@ diamond_num_replay <- (scouting_num_replay %>% filter(League == "Diamond"))[[1, 
 master_num_replay <- (scouting_num_replay %>% filter(League == "Master"))[[1, 2]]
 gmaster_num_replay <- (scouting_num_replay %>% filter(League == "Grandmaster"))[[1, 2]]
 
-bronze <- ggplot(data = subset(new_scouting_frame, League == 'Bronze'), 
-                 aes(x = frame/22.4, y = ..count../bronze_num_replay)) +
+bronze <- ggplot(data = subset(new_scouting, League == 'Bronze'), 
+                 aes(x = ScoutStartSec, y = ..count../bronze_num_replay)) +
   geom_histogram(color = bronze_col, fill = bronze_col,
                  bins = 30, alpha = 0.6) + 
   labs(y="Scouting Instances in a frame/Replay", x = "Gametime-Bronze") +
-  xlim(0, 1500) + 
-  ylim(0, 2.5)
+  xlim(0, 3000) + 
+  ylim(0, 1)
 
-silver <- ggplot(data = subset(new_scouting_frame, League == 'Silver'), 
-                 aes(x = frame, y = ..count../silver_num_replay)) +
+silver <- ggplot(data = subset(new_scouting, League == 'Silver'), 
+                 aes(x = ScoutStartSec, y = ..count../silver_num_replay)) +
   geom_histogram(color = silver_col, fill = silver_col,
-                 bins = 40, alpha = 0.6) + 
+                 bins = 30, alpha = 0.6) + 
   labs(y="Scouting Instances in a frame/Replay", x = "Gametime-Silver") +
-  xlim(0, 1500)+ 
-  ylim(0, 2.5)
+  xlim(0, 3000)+ 
+  ylim(0, 1)
 
-gold <- ggplot(data = subset(new_scouting_frame, League == 'Gold'), 
-               aes(x = frame, y = ..count../gold_num_replay)) +
+gold <- ggplot(data = subset(new_scouting, League == 'Gold'), 
+               aes(x = ScoutStartSec, y = ..count../gold_num_replay)) +
   geom_histogram(color = gold_col, fill = gold_col,
-                 bins = 40, alpha = 0.6) + 
+                 bins = 30, alpha = 0.6) + 
   labs(y="Scouting Instances in a frame/Replay", x = "Gametime-Gold") +
-  xlim(0, 1500)+ 
-  ylim(0, 2.5)
+  xlim(0, 3000)+ 
+  ylim(0, 1)
 
-platinum <- ggplot(data = subset(new_scouting_frame, League == 'Platinum'), 
-                   aes(x = frame, y = ..count../platinum_num_replay)) +
+platinum <- ggplot(data = subset(new_scouting, League == 'Platinum'), 
+                   aes(x = ScoutStartSec, y = ..count../platinum_num_replay)) +
   geom_histogram(color = plat_col, fill = plat_col,
-                 bins = 40, alpha = 0.6) + 
+                 bins = 30, alpha = 0.6) + 
   labs(y="Scouting Instances in a frame/Replay", x = "Gametime-Platinum") +
-  xlim(0, 1500)+ 
-  ylim(0, 2.5)
-diamond <- ggplot(data = subset(new_scouting_frame, League == 'Diamond'), 
-                  aes(x = frame, y = ..count../diamond_num_replay)) +
+  xlim(0, 3000)+ 
+  ylim(0, 1)
+diamond <- ggplot(data = subset(new_scouting, League == 'Diamond'), 
+                  aes(x = ScoutStartSec, y = ..count../diamond_num_replay)) +
   geom_histogram(color = diam_col, fill = diam_col,
-                 bins = 40, alpha = 0.6) + 
+                 bins = 30, alpha = 0.6) + 
   labs(y="Scouting Instances in a frame/Replay", x = "Gametime-Diamond") +
-  xlim(0, 1500)+ 
-  ylim(0, 2.5)
+  xlim(0, 3000)+ 
+  ylim(0, 1)
 
-master <- ggplot(data = subset(new_scouting_frame, League == 'Master'), 
-                 aes(x = frame, y = ..count../master_num_replay)) +
+master <- ggplot(data = subset(new_scouting, League == 'Master'), 
+                 aes(x = ScoutStartSec, y = ..count../master_num_replay)) +
   geom_histogram(color = mast_col, fill = mast_col,
-                 bins = 40, alpha = 0.6) + 
+                 bins = 30, alpha = 0.6) + 
   labs(y="Scouting Instances in a frame/Replay", x = "Gametime-Master") +
-  xlim(0, 1500)+ 
-  ylim(0, 2.5)
+  xlim(0, 3000)+ 
+  ylim(0, 1)
 
-gmaster <- ggplot(data = subset(new_scouting_frame, League == 'Grandmaster'), 
-                  aes(x = frame, y = ..count../gmaster_num_replay)) +
+gmaster <- ggplot(data = subset(new_scouting, League == 'Grandmaster'), 
+                  aes(x = ScoutStartSec, y = ..count../gmaster_num_replay)) +
   geom_histogram(color = gmast_col, fill = gmast_col,
-                 bins = 40, alpha = 0.6) + 
+                 bins = 30, alpha = 0.6) + 
   labs(y="Scouting Instances in a frame/Replay", x = "Gametime-Grandmaster") +
-  xlim(0, 1500) + 
-  ylim(0, 2.5)
+  xlim(0, 3000) + 
+  ylim(0, 1)
 
 grid.arrange(bronze, silver, gold, platinum, 
              diamond, master, gmaster)

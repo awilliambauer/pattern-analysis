@@ -101,8 +101,8 @@ if __name__ == "__main__":
     else:
         logging.debug("Running TICC")
         run_TICC({"all": all_series}, results_path, krange)
-        if config.evolver:
-            run_TICC({"all_evol": evol_all_series}, results_path, krange, num_proc=8)
+        # if config.evolver:
+        #     run_TICC({"all_evol": evol_all_series}, results_path, krange, num_proc=8)
 
     logging.debug("Loading TICC output")
     cluster_lookup, mrf_lookup, model_lookup, bic_lookup = load_TICC_output(results_path, ["all"], krange)
@@ -110,7 +110,7 @@ if __name__ == "__main__":
     logging.debug("Making subseries")
     subseries_lookups: Dict[int, Dict[int, SubSeriesLookup]] = {}
     for k in krange:
-        patterns = get_patterns(mrf_lookup["all"][k], cluster_lookup["all"][k], puz_idx_lookup)
+        patterns = get_patterns(mrf_lookup["all"][k], cluster_lookup["all"][k], puz_idx_lookup, "all")
         subseries_lookups[k] = make_subseries_lookup(k, patterns, mrf_lookup["all"][k], all_series, noise)
 
     if all(os.path.exists(f"{results_path}/all/subpatterns/k{k}") for k in config.sub_krange) and not config.overwrite:
@@ -124,7 +124,7 @@ if __name__ == "__main__":
 
     sub_clusters = sub_lookup.clusters
     pattern_lookup = get_pattern_lookups(krange, sub_clusters, sub_lookup.mrfs, subseries_lookups,
-                                         cluster_lookup["all"], mrf_lookup["all"], puz_idx_lookup)
+                                         cluster_lookup["all"], mrf_lookup["all"], puz_idx_lookup, "all")
     os.makedirs(f"{results_path}/eval", exist_ok=True)
     with open(f"{results_path}/eval/cluster_lookup.pickle", "wb") as fp:
         pickle.dump(cluster_lookup, fp)
@@ -158,7 +158,7 @@ if __name__ == "__main__":
         plot_labeled_series(np.arange(len(ser)), ser, {}, action_labels,
                             f"{results_path}/all/{uid}_series_all_k{best_k}.png")
 
-    patterns = get_patterns(mrf_lookup["all"][best_k], all_clusters, puz_idx_lookup)
+    patterns = get_patterns(mrf_lookup["all"][best_k], all_clusters, puz_idx_lookup, "all")
 
     cluster_times = []
     for uid, ser in series_lookup.items():
@@ -239,7 +239,7 @@ if __name__ == "__main__":
     subseries_lookup = {}
     for k in krange:
         logging.debug("getting patterns for k={}".format(k))
-        patterns = get_patterns(data, mrf_lookup["all"][k], cluster_lookup["all"][k], puz_idx_lookup, soln_lookup)
+        patterns = get_patterns(data, mrf_lookup["all"][k], cluster_lookup["all"][k], puz_idx_lookup, soln_lookup, "all")
         if not os.path.exists(results_path + "/subpatterns_k{}".format(k)):
             os.makedirs(results_path + "/subpatterns_k{}".format(k))
         subseries_lookup.setdefault(k, {})
