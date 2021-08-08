@@ -126,7 +126,7 @@ def generate_fields(replay_file, map_path_data):
             game_id = "ds-" + game_id
 
         battles, harassing = battle_detector.buildBattleList(replay)
-        winner = replay.winner.number
+        winner = replay.winner.players[0].pid
         team1_rank, team1_rel_rank, team2_rank, team2_rel_rank = ranking_stats(replay)
         
         # APM stats
