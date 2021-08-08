@@ -132,8 +132,8 @@ def generate_fields(replay_file, map_path_data):
         team2_rel_cps = team2_cps - team1_cps
 
         # APM stats
-        team1_apm = replay.players[0].avg_apm
-        team2_apm = replay.players[1].avg_apm
+        team1_apm = replay.players[0].avg_apm/1.4
+        team2_apm = replay.players[1].avg_apm/1.4
         team1_rel_apm = team1_apm - team2_apm
         team2_rel_apm = team2_apm - team1_apm
 
@@ -207,4 +207,6 @@ if __name__ == "__main__":
     sc2reader.engine.register_plugin(BaseTracker())
     sc2reader.engine.register_plugin(ModifiedRank())
     results = run(generate_fields, threads = 15)
-    save(results, "sc2_prediction_data")
+    # results = run(generate_fields, threads = 15, replay_filter = lambda replay: replay['ReplayID'] in \
+    #     ['spawningtool_58791.SC2Replay', 'gggreplays_324488.SC2Replay'])
+    save(results, "sc2_prediction_data_test")
