@@ -47,8 +47,7 @@ def run(function, replay_filter=lambda x: True, threads=60, n=-1) -> List[Dict]:
             count += len(replays)
             map_time = time.time()
             analysis_function = partial(analysis_function_wrapper, function=function,
-                                        map_path_data=map_path_data) if function.func_code.co_argcount == 2 else partial(
-                analysis_function_wrapper, function=function)
+                                        map_path_data=map_path_data)
             new_results = pool.map(analysis_function,
                                    replays)
             count_errors_this_map = 0
