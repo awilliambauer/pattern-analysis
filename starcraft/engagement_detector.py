@@ -10,8 +10,8 @@ from collections import namedtuple
 from math import dist
 
 from sc2reader.events import UnitBornEvent, UnitDiedEvent, UnitInitEvent
-from starcraft.base_plugins import BaseCluster, BaseType
-from starcraft.sc2reader.factories.plugins.utils import GameState
+from base_plugins import BaseCluster, BaseType
+from sc2reader.factories.plugins.utils import GameState
 
 
 class Engagement(namedtuple("Engagement", ("start_time", "end_time", "sides", "base_cluster"))):
@@ -146,7 +146,7 @@ def get_engagements(replay):
                 if unit.died_at - engagement.end_time > MAX_DEATH_SPACING_FRAMES:
                     # engagement is too temporally separated
                     continue
-                if engagement.base_cluster not in nearest_base_clusters:
+                if not any(filter(lambda base_cluster: base_cluster.label == engagement.base_cluster.label, nearest_base_clusters)):
                     # engagement is not taking place at a base cluster that this could be at
                     continue
                 # this engagement is one which our unit could possibly be in
