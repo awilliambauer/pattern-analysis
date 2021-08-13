@@ -85,7 +85,8 @@ def _generate_replay_entry(file):
         player_1_info = _generate_player_specific_entry(loaded_replay.players[0], 1)
         player_2_info = _generate_player_specific_entry(loaded_replay.players[1], 2)
         other_info = {"ReplayID": file,
-                      "Map": map_pretty_name_to_file(loaded_replay.map_name), "Winner": loaded_replay.winner.number}
+                      "Map": map_pretty_name_to_file(loaded_replay.map_name),
+                      "Winner": loaded_replay.winner.players[0].pid}
         other_info.update(player_1_info)
         other_info.update(player_2_info)
         return other_info

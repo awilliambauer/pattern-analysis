@@ -60,9 +60,9 @@ def generateFields(filename):
         team2_list = [game_id, team2_uid, team2_rank] + analysis_dict[2]
 
         # creating the fields based on who won
-        if r.winner.number == 1:
+        if r.winner.players[0].pid == 1:
             fields = team1_list + [1] + team2_list + [0]
-        elif r.winner.number == 2:
+        elif r.winner.players[0].pid == 2:
             fields = team1_list + [0] + team2_list + [1]
         return fields
     except:
