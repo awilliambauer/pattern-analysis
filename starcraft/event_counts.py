@@ -67,10 +67,10 @@ def generateFields(filename):
 
         team1_set, team1_add, team1_get, team1_all, team2_set, team2_add, team2_get, team2_all = event_counts(r)
 
-        if r.winner.number == 1:
+        if r.winner.players[0].pid == 1:
             fields = (game_id, team1_uid, team1_rank, team1_set, team1_add, team1_get, team1_all, 1,
                     game_id, team2_uid, team2_rank, team2_set, team2_add, team2_get, team2_all, 0)
-        elif r.winner.number == 2:
+        elif r.winner.players[0].pid == 2:
             fields = (game_id, team1_uid, team1_rank, team1_set, team1_add, team1_get, team1_all, 0,
                     game_id, team2_uid, team2_rank, team2_set, team2_add, team2_get, team2_all, 1)
 

@@ -11,6 +11,7 @@ from data_analysis_helper import run, save
 
 EngagementResult = namedtuple("EngagementResult", (
     "GameID", "StartTimeSeconds", "EndTimeSeconds", "BaseClusterType", "BaseClusterPlayer",
+    "BaseClusterCenterX", "BaseClusterCenterY",
     "AverageDeathPosX1", "AverageDeathPosY1",
     "TotalArmyValue1", "TotalArmySupply1", "ArmySupplyLost1", "ArmyValueLost1", "TotalWorkerSupply1",
     "WorkerSupplyLost1", "TotalBuildingCount1", "BuildingCountLost1", "AverageDeathPosX2", "AverageDeathPosY2",
@@ -18,7 +19,7 @@ EngagementResult = namedtuple("EngagementResult", (
     "WorkerSupplyLost2", "TotalBuildingCount2", "BuildingCountLost2"))
 
 
-def get_engagement_results(filename):
+def get_engagement_results(filename, map_path_data):
     '''generateFields takes in a filename of a replay, loads it and gathers necessary
     statistics, and returns the statistics in a tuple. It is to be used to write
     these stats to a csv. It also takes in an integer (1 or 2), which indicates
@@ -57,7 +58,8 @@ def get_engagement_results(filename):
             results.append(
                 EngagementResult(game_id, engagement.start_time / 22.4, engagement.end_time / 22.4,
                                  engagement.base_cluster.base_type,
-                                 engagement.base_cluster.player_id, average_death_x_1, average_death_y_1,
+                                 engagement.base_cluster.player_id, engagement.base_cluster.center[0],
+                                 engagement.base_cluster.center[1], average_death_x_1, average_death_y_1,
                                  side_1.total_army_value,
                                  side_1.total_army_supply, side_1.army_supply_lost, side_1.army_value_lost,
                                  side_1.total_worker_supply,
@@ -85,5 +87,5 @@ if __name__ == '__main__':
     #     bt.logger.setLevel(logging.ERROR)
     #     bt.logger.addHandler(logging.StreamHandler(sys.stdout))
     sc2reader.engine.register_plugin(bt)
-    results = run(get_engagement_results, n=10000)
+    results = run(get_engagement_results)
     save(results, "engagements")
