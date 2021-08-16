@@ -50,6 +50,12 @@ def get_map_name_groups():
     return map_name_clusters
 
 
+def get_replay_info(replay_filter=lambda x: True, count=-1):
+    with open(file_locations.REPLAY_INFO_FILE, "r") as replays_info:
+        reader = csv.DictReader(replays_info)
+        return (random.choices(list(filter(replay_filter, reader)), k=count)) if count != -1 else list(filter(replay_filter, reader))
+
+
 def group_replays_by_map(replay_filter=lambda x: True, count=-1):
     """
     :return: a dictionary of map name groups to replays that took place on that map. See get_map_name_groups for more
@@ -57,23 +63,20 @@ def group_replays_by_map(replay_filter=lambda x: True, count=-1):
     """
     map_name_groups = get_map_name_groups()
     maps = {}
-    with open(file_locations.REPLAY_INFO_FILE, "r") as replays_info:
-        reader = csv.DictReader(replays_info)
-        rows = (random.choices(list(reader), k=count)) if count != -1 else reader
-        for row in rows:
-            if not replay_filter(row):
-                continue
-            matching_map_name_group = None
-            for map_name_group in map_name_groups:
-                if row["Map"] in map_name_group:
-                    matching_map_name_group = tuple(map_name_group)
-                    break
-            if matching_map_name_group is None:
-                print("no map name group for replay", row)  # i think this should be impossible...
-                continue
-            if matching_map_name_group not in maps:
-                maps[matching_map_name_group] = []
-            maps[matching_map_name_group].append(row["ReplayID"])
+    for row in get_replay_info(replay_filter, count):
+        if not replay_filter(row):
+            continue
+        matching_map_name_group = None
+        for map_name_group in map_name_groups:
+            if row["Map"] in map_name_group:
+                matching_map_name_group = tuple(map_name_group)
+                break
+        if matching_map_name_group is None:
+            print("no map name group for replay", row)  # i think this should be impossible...
+            continue
+        if matching_map_name_group not in maps:
+            maps[matching_map_name_group] = []
+        maps[matching_map_name_group].append(row["ReplayID"])
     return maps
 
 
@@ -86,7 +89,8 @@ def _generate_replay_entry(file):
         player_2_info = _generate_player_specific_entry(loaded_replay.players[1], 2)
         other_info = {"ReplayID": file,
                       "Map": map_pretty_name_to_file(loaded_replay.map_name),
-                      "Winner": loaded_replay.winner.players[0].pid}
+                      "Winner": loaded_replay.winner.players[0].pid,
+                      "GameLengthSeconds": loaded_replay.real_time}
         other_info.update(player_1_info)
         other_info.update(player_2_info)
         return other_info
@@ -98,7 +102,7 @@ def _generate_replay_entry(file):
 
 def _generate_player_specific_entry(player, number):
     return {"UID" + str(number): player.detail_data['bnet']['uid'], "Race" + str(number): player.play_race,
-            "Rank" + str(number): player.highest_league}
+            "Rank" + str(number): player.highest_league, "Region" + str(number): player.region}
 
 
 def generate_replay_info_csv():
@@ -114,8 +118,8 @@ def generate_replay_info_csv():
         valid_games = [line[:-1] for line in f.readlines()]
     with open(file_locations.REPLAY_INFO_FILE, 'w', newline='') as fp:
         events_out = csv.DictWriter(fp,
-                                    fieldnames=["ReplayID", "Map", "UID1", "UID2", "Race1", "Race2", "Rank1", "Rank2",
-                                                "Winner"])
+                                    fieldnames=["ReplayID", "Map", "UID1", "UID2", "Race1", "Race2", "Rank1", "Rank2", "Region1", "Region2"
+                                                "Winner", "GameLengthSeconds"])
         events_out.writeheader()
         pool = Pool(min(cpu_count(), 60))
         entries = pool.map(_generate_replay_entry,
