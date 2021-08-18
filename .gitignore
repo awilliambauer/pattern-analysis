@@ -28,3 +28,4 @@ starcraft/old_results
 data/
 starcraft/sample_replays
 .ipynb_checkpoints
+.DS_Store
