@@ -29,7 +29,7 @@ from collections import namedtuple
 
 scouting_instance_fields = namedtuple("scouting_instance_fields",
                                       ("GameID", "UID", "PID", "Rank", "Race",
-                                       "ScoutingStartTime", "ScoutingEndTime", "ScoutingType"))
+                                       "ScoutingStartTime", "ScoutingEndTime", "ScoutingType", "LocationX", "LocationY", "DuringEngagement", "Winner"))
 
 try:
     from reprlib import repr
@@ -75,10 +75,10 @@ def generateFields(filename, map_path_data):
         for instance in team1_times:
             results.append(
                 scouting_instance_fields(game_id, team1_uid, 1, team1_rank, team1_race, instance.start_time,
-                                         instance.end_time, instance.scouting_type))
+                                         instance.end_time, instance.scouting_type, instance.location[0], instance.location[1], instance.during_battle, r.winner.players[0].pid))
         for instance in team2_times:
             results.append(scouting_instance_fields(game_id, team2_uid, 2, team2_rank, team2_race, instance.start_time,
-                                                    instance.end_time, instance.scouting_type))
+                                                    instance.end_time, instance.scouting_type,  instance.location[0], instance.location[1], instance.during_battle, r.winner.players[0].pid))
         return results
 
     except KeyboardInterrupt:

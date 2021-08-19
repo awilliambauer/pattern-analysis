@@ -53,7 +53,8 @@ def get_map_name_groups():
 def get_replay_info(replay_filter=lambda x: True, count=-1):
     with open(file_locations.REPLAY_INFO_FILE, "r") as replays_info:
         reader = csv.DictReader(replays_info)
-        return (random.choices(list(filter(replay_filter, reader)), k=count)) if count != -1 else list(filter(replay_filter, reader))
+        return (random.choices(list(filter(replay_filter, reader)), k=count)) if count != -1 else list(
+            filter(replay_filter, reader))
 
 
 def group_replays_by_map(replay_filter=lambda x: True, count=-1):
@@ -81,6 +82,7 @@ def group_replays_by_map(replay_filter=lambda x: True, count=-1):
 
 
 def _generate_replay_entry(file):
+    print("replay entry", file)
     if not file.endswith("SC2Replay"):
         return None
     try:
@@ -90,9 +92,10 @@ def _generate_replay_entry(file):
         other_info = {"ReplayID": file,
                       "Map": map_pretty_name_to_file(loaded_replay.map_name),
                       "Winner": loaded_replay.winner.players[0].pid,
-                      "GameLengthSeconds": loaded_replay.real_time}
+                      "GameLengthSeconds": loaded_replay.real_length}
         other_info.update(player_1_info)
         other_info.update(player_2_info)
+        print("returing")
         return other_info
     except:
         print("error loading replay")
@@ -118,15 +121,16 @@ def generate_replay_info_csv():
         valid_games = [line[:-1] for line in f.readlines()]
     with open(file_locations.REPLAY_INFO_FILE, 'w', newline='') as fp:
         events_out = csv.DictWriter(fp,
-                                    fieldnames=["ReplayID", "Map", "UID1", "UID2", "Race1", "Race2", "Rank1", "Rank2", "Region1", "Region2"
+                                    fieldnames=["ReplayID", "Map", "UID1", "UID2", "Race1", "Race2", "Rank1", "Rank2",
+                                                "Region1", "Region2",
                                                 "Winner", "GameLengthSeconds"])
         events_out.writeheader()
-        pool = Pool(min(cpu_count(), 60))
-        entries = pool.map(_generate_replay_entry,
-                           filter(lambda file: file in valid_games, os.listdir(file_locations.REPLAY_FILE_DIRECTORY)))
-        for entry in entries:
-            if entry is not None:
-                events_out.writerow(entry)
+        with Pool(min(cpu_count(), 60)) as pool:
+            entries = pool.map(_generate_replay_entry,
+                               filter(lambda file: file in valid_games, os.listdir(file_locations.REPLAY_FILE_DIRECTORY)))
+            for entry in entries:
+                if entry is not None:
+                    events_out.writerow(entry)
 
 
 def test():

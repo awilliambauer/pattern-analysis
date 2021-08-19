@@ -9,6 +9,7 @@ from enum import Enum
 from collections import defaultdict, namedtuple
 from battle_detector import remove_scouting_during_battles_and_harassment, buildBattleList, \
     remove_scouting_during_battle
+from engagement_detector import get_engagements
 
 # MAGIC CONSTANTS
 # the distance a unit or camera view needs to be from any base of an opponent before it's scouting
@@ -18,7 +19,7 @@ SCOUTING_UNIT_DISTANCE_FROM_BASE = 25
 # considered scouting
 SCOUTING_MAX_TIME_AFTER_UNIT_ARRIVES = 30 * 22.4
 # the maximum time between instances of scouting after which they are considered separate
-SCOUTING_MAX_TIME_TO_JOIN = 10 * 22.4
+SCOUTING_MAX_TIME_TO_JOIN = 8 * 22.4
 
 
 class _UnitState:
@@ -127,7 +128,7 @@ class _GameState:
 
 
 class ScoutingInstance:
-    def __init__(self, player, start_time, end_time, location, units_used, units_scouted, scouting_type):
+    def __init__(self, player, start_time, end_time, location, units_used, units_scouted, scouting_type, during_battle):
         self.player = player
         self.start_time = start_time
         self.end_time = end_time
@@ -135,6 +136,7 @@ class ScoutingInstance:
         self.units_used = units_used
         self.units_scouted = units_scouted
         self.scouting_type = scouting_type
+        self.during_battle = during_battle
 
     def __str__(self):
         return str(self.player) + ": " + str(self.start_time) + "-" + str(self.end_time) + \
@@ -171,12 +173,15 @@ def get_scouting_instances(replay, map_path_data) -> Tuple[List[ScoutingInstance
             if new_scouting_instances is not None:
                 for scouting_instance in new_scouting_instances:
                     unjoined_scouting_instances.append(scouting_instance)
-    battles, harassment = buildBattleList(replay)
-    unjoined_scouting_instances_no_harassment = remove_scouting_during_battle(harassment, unjoined_scouting_instances)
-    unjoined_scouting_instances_no_battles = remove_scouting_during_battle(battles,
-                                                                           unjoined_scouting_instances_no_harassment)
+    engagements = get_engagements(replay)
+    for scouting_instance in unjoined_scouting_instances:
+        for engagement in engagements:
+            if not (
+                    engagement.end_time < scouting_instance.start_time or engagement.start_time > scouting_instance.end_time):
+                scouting_instance.during_battle = True
+                break
     scouting_instances_per_player = {1: [], 2: []}
-    for scouting_instance in unjoined_scouting_instances_no_battles:
+    for scouting_instance in unjoined_scouting_instances:
         scouting_instances_per_player[scouting_instance.player].append(scouting_instance)
     for pid in [1, 2]:
         scouting_instances = scouting_instances_per_player[pid]
@@ -200,7 +205,8 @@ def get_scouting_instances(replay, map_path_data) -> Tuple[List[ScoutingInstance
                     combined_units_scouted.append(unit)
             merged = ScoutingInstance(first.player, first.start_time, second.end_time,
                                       (first.location + second.location) / 2, combined_units_used,
-                                      combined_units_scouted, first.scouting_type)
+                                      combined_units_scouted, first.scouting_type,
+                                      first.during_battle or second.during_battle)
             scouting_instances.insert(idx, merged)
 
     return scouting_instances_per_player[1], scouting_instances_per_player[2]
@@ -236,7 +242,7 @@ def handle_end_game_event(event, game_state):
                 ScoutingInstance(player_id, scouting_group.frame, game_state.replay.frames,
                                  scouting_group.base_cluster.center,
                                  scouting_group.units_scouting, scouting_group.units_being_scouted,
-                                 scouting_group.base_cluster.base_type))
+                                 scouting_group.base_cluster.base_type, False))
     return scouting_instances
 
 
@@ -412,7 +418,7 @@ def handle_camera_event(event, game_state):
 
     return [ScoutingInstance(player_id, scouting_group.frame, event.frame, scouting_group.base_cluster.center,
                              scouting_group.units_scouting, scouting_group.units_being_scouted,
-                             scouting_group.base_cluster.base_type) for scouting_group in finished_scouting_groups]
+                             scouting_group.base_cluster.base_type, False) for scouting_group in finished_scouting_groups]
 
 
 def handle_game_tick_event(event, game_state):
