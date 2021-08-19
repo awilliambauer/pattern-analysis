@@ -53,8 +53,8 @@ def get_camera_hotkey_counts_data(filename, map_path_data):
         rank1 = r.players[0].highest_league
         rank2 = r.players[1].highest_league
         hotkey_usage_1, hotkey_usage_2 = get_camera_hotkey_counts(r)
-        return CameraHotkeyResult(game_id, uid1, uid2, rank1, rank2, race1, race2, hotkey_usage_2,
-                                  hotkey_usage_1, r.winner.players[0].pid)
+        return CameraHotkeyResult(game_id, uid1, uid2, rank1, rank2, race1, race2, hotkey_usage_1,
+                                  hotkey_usage_2, r.winner.players[0].pid)
     except KeyboardInterrupt:
         raise
     except:
