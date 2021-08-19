@@ -18,6 +18,16 @@ Rank  4:   0.0067	  0.0040
 Rank  5:   0.0078	  0.0042
 Rank  6:   0.0083	  0.0044
 Rank  7:   0.0102	  0.0047
+Scouting Rate (non-engagement) (mean) (std)
+Overall:   0.0029   0.0030
+Rank  0:   0.0025   0.0028
+Rank  1:   0.0016   0.0021
+Rank  2:   0.0018   0.0023
+Rank  3:   0.0022   0.0024
+Rank  4:   0.0026   0.0027
+Rank  5:   0.0031   0.0030
+Rank  6:   0.0033   0.0031
+Rank  7:   0.0041   0.0033
 CPM (mean) (std)
 Overall:  44.6958	 57.0220
 Rank  0:  23.0343	 36.3511
