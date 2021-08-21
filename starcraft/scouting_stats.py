@@ -1,6 +1,6 @@
 # Used to write statistics about player's scouting behavior in StarCraft 2 to a csv
 # Alison Cameron, David Chu, Zimri Leisher
-# July 2021
+# August 2021
 
 import scouting_detector
 import math
@@ -30,10 +30,7 @@ fields_tuple = namedtuple('fields_tuple', ['game_id',
 
 def get_scouting_frequency(replay, map_path_data):
     '''get_scouting_frequency takes in a previously loaded replay
-    from sc2reader and returns the scouting frequency (instances per second),
-    the scouting_frequnecy after the first battle, the ratio of the number of 
-    scouting instances of the opponent's mainbase to the total number of scouting 
-    instances, and the frame of the first scouting instance for each player.'''
+    from sc2reader and returns sc2 game statistics.'''
     r = replay
     frames = r.frames
     # seconds = r.real_length.total_seconds()

@@ -4,8 +4,12 @@ library(tidyverse)
 # import data
 df <- read.csv("engagements-2021-08-11.csv")
 df_rank <- read.csv("replays_info.csv") 
+df_rank_old <- read.csv("replays_info_old.csv") %>% 
+  select(ReplayID, GameLengthSeconds)
 
 # wrangle data
+df_rank <- df_rank %>% 
+  inner_join(df_rank_old, by = c("ReplayID"))
 df_rank_long <- df_rank %>% 
   mutate(uid_rank_1 = str_c(UID1, Race1, Rank1, sep = " "),
          uid_rank_2 = str_c(UID2, Race2, Rank2, sep = " ")) %>% 
@@ -553,52 +557,68 @@ df_joined_player <- df_joined_extended %>%
          rel_total_army_value_2 = TotalArmyValue2 - TotalArmyValue1,
          rel_total_army_value = ifelse(str_detect(combined_field, "1"),
                                        rel_total_army_value_1,
-                                       rel_total_army_value_2))
+                                       rel_total_army_value_2),
+         opponent_lost_worker = ifelse(str_detect(combined_field, "1"),
+                                       WorkerSupplyLost2 > 0,
+                                       WorkerSupplyLost1 > 0))
   
 
 
-df_joined_player_same_army_value <- df_joined_extended %>% 
-  mutate(diff_army_value_lost_1 = ArmyValueLost1 - ArmyValueLost2,
-         diff_army_value_lost_2 = ArmyValueLost2 - ArmyValueLost1,
-         diff_army_value_lost = ifelse(str_detect(combined_field, "1"),
-                                       diff_army_value_lost_1,
-                                       diff_army_value_lost_2), 
-         rel_total_army_value_1 = TotalArmyValue1 - TotalArmyValue2,
-         rel_total_army_value_2 = TotalArmyValue2 - TotalArmyValue1,
-         rel_total_army_value = ifelse(str_detect(combined_field, "1"),
-                                       rel_total_army_value_1,
-                                       rel_total_army_value_2),
-         opponent_lost_worker_1 = WorkerSupplyLost2 > 0, 
-         opponent_lost_worker_2 = WorkerSupplyLost1 > 0,
-         opponent_lost_worker = ifelse(str_detect(combined_field, "1"),
-                                       opponent_lost_worker_1,
-                                       opponent_lost_worker_2), 
-         Status = ifelse(BaseClusterPlayer == -1, "None",
-                         ifelse(str_detect(combined_field, 
-                                           as.character(BaseClusterPlayer)),
-                                "Defense", "Offense")),
-         value_lost_1 = ifelse(Status == "Offense", 
-                             ArmyValueLost1, 
-                             ArmyValueLost1 + WorkerSupplyLost1 + BuildingCountLost1),
-         value_lost_2 = ifelse(Status == "Offense", 
-                               ArmyValueLost2, 
-                               ArmyValueLost2 + WorkerSupplyLost2 + BuildingCountLost2),
-         rel_value_lost = ifelse(str_detect(combined_field, "1"),
-                                 value_lost_1 - value_lost_2,
-                                 value_lost_2 - value_lost_1),
-         total_value_1 = ifelse(Status == "Offense", 
-                              TotalArmyValue1,
-                              TotalArmyValue1 + TotalWorkerSupply1 + TotalBuildingCount1),
-         total_value_2 = ifelse(Status == "Offense", 
-                                TotalArmyValue2,
-                                TotalArmyValue2+ TotalWorkerSupply2 + TotalBuildingCount2),
-         rel_total_value = ifelse(str_detect(combined_field, "1"),
-                                  total_value_1 - total_value_2,
-                                  total_value_2 - total_value_1)) %>% 
-  filter(abs(diff_army_value_lost) < 0.01*max(ArmyValueLost1, ArmyValueLost2))
+# df_joined_player_same_army_value <- df_joined_extended %>% 
+#   mutate(diff_army_value_lost_1 = ArmyValueLost1 - ArmyValueLost2,
+#          diff_army_value_lost_2 = ArmyValueLost2 - ArmyValueLost1,
+#          diff_army_value_lost = ifelse(str_detect(combined_field, "1"),
+#                                        diff_army_value_lost_1,
+#                                        diff_army_value_lost_2), 
+#          rel_total_army_value_1 = TotalArmyValue1 - TotalArmyValue2,
+#          rel_total_army_value_2 = TotalArmyValue2 - TotalArmyValue1,
+#          rel_total_army_value = ifelse(str_detect(combined_field, "1"),
+#                                        rel_total_army_value_1,
+#                                        rel_total_army_value_2),
+#          opponent_lost_worker_1 = WorkerSupplyLost2 > 0, 
+#          opponent_lost_worker_2 = WorkerSupplyLost1 > 0,
+#          opponent_lost_worker = ifelse(str_detect(combined_field, "1"),
+#                                        opponent_lost_worker_1,
+#                                        opponent_lost_worker_2), 
+#          Status = ifelse(BaseClusterPlayer == -1, "None",
+#                          ifelse(str_detect(combined_field, 
+#                                            as.character(BaseClusterPlayer)),
+#                                 "Defense", "Offense")),
+#          value_lost_1 = ifelse(Status == "Offense", 
+#                              ArmyValueLost1, 
+#                              ArmyValueLost1 + WorkerSupplyLost1 + BuildingCountLost1),
+#          value_lost_2 = ifelse(Status == "Offense", 
+#                                ArmyValueLost2, 
+#                                ArmyValueLost2 + WorkerSupplyLost2 + BuildingCountLost2),
+#          rel_value_lost = ifelse(str_detect(combined_field, "1"),
+#                                  value_lost_1 - value_lost_2,
+#                                  value_lost_2 - value_lost_1),
+#          total_value_1 = ifelse(Status == "Offense", 
+#                               TotalArmyValue1,
+#                               TotalArmyValue1 + TotalWorkerSupply1 + TotalBuildingCount1),
+#          total_value_2 = ifelse(Status == "Offense", 
+#                                 TotalArmyValue2,
+#                                 TotalArmyValue2+ TotalWorkerSupply2 + TotalBuildingCount2),
+#          rel_total_value = ifelse(str_detect(combined_field, "1"),
+#                                   total_value_1 - total_value_2,
+#                                   total_value_2 - total_value_1)) %>% 
+#   filter(abs(diff_army_value_lost) < 0.01*max(ArmyValueLost1, ArmyValueLost2))
+# 
+# 
+# df_joined_player_same_army_value <- df_joined_player_same_army_value %>% 
+#   filter(Rank != 0, Rank != 8) %>% 
+#   mutate(League = fct_recode(Rank,
+#                              "Bronze" = "1",
+#                              "Silver" = "2",
+#                              "Gold" = "3",
+#                              "Platinum" = "4",
+#                              "Diamond" = "5",
+#                              "Master" = "6",
+#                              "Grandmaster" = "7"))
 
 
-df_joined_player_same_army_value <- df_joined_player_same_army_value %>% 
+
+df_joined_player <- df_joined_player %>% 
   filter(Rank != 0, Rank != 8) %>% 
   mutate(League = fct_recode(Rank,
                              "Bronze" = "1",
@@ -609,43 +629,23 @@ df_joined_player_same_army_value <- df_joined_player_same_army_value %>%
                              "Master" = "6",
                              "Grandmaster" = "7"))
 
-
-
-df_joined_player <- df_joined_player %>% 
-  select(GameID, UID, Rank, Race, StartTimeSeconds, EndTimeSeconds, BaseClusterType, 
-         BaseClusterPlayer, Map, ArmyValue, ArmySupply, ArmySupplyLost, 
-         ArmyValueLost, WorkerSupply, WorkerSupplyLost, win, diff_army_value_lost,
-         rel_total_army_value, combined_field) %>% 
-  filter(Rank != 0, Rank != 8) %>% 
-  mutate(League = fct_recode(Rank,
-                             "Bronze" = "1",
-                             "Silver" = "2",
-                             "Gold" = "3",
-                             "Platinum" = "4",
-                             "Diamond" = "5",
-                             "Master" = "6",
-                             "Grandmaster" = "7"))
-
-df_joined_player <- df_joined_player %>% 
+df_joined_player_used_graph <- df_joined_player %>% 
   mutate(Status = ifelse(BaseClusterPlayer == -1, "None",
                          ifelse(str_detect(combined_field, 
                                            as.character(BaseClusterPlayer)),
-                                "Defense", "Offense")))
+                                "Defense", "Offense")),
+         Status_worker_lost = ifelse(Status == "Offense", 
+                                     ifelse(opponent_lost_worker, 
+                                            "Offense_Enemy_Lose_Workers",
+                                            "Offense_Enemy_Not_Lose_Workers"),
+                                     Status),
+         Status_army = ifelse(Status == "Offense", 
+                              ifelse(rel_total_army_value > 0,
+                                     "Offense_Greater_Army",
+                                     "Offense_Smaller_Army"),
+                              Status)) %>% 
+  select(win, Status, Status_worker_lost, Status_army, League)
          
-
-scouting_num_replay <- df_joined_player %>% 
-  group_by(League) %>% 
-  summarise(num_replay = n_distinct(GameID) * 2)
-
-bronze_num_replay <- (scouting_num_replay %>% filter(League == "Bronze"))[[1, 2]]
-silver_num_replay <- (scouting_num_replay %>% filter(League == "Silver"))[[1, 2]]
-gold_num_replay <- (scouting_num_replay %>% filter(League == "Gold"))[[1, 2]]
-platinum_num_replay <- (scouting_num_replay %>% filter(League == "Platinum"))[[1, 2]]
-diamond_num_replay <- (scouting_num_replay %>% filter(League == "Diamond"))[[1, 2]]
-master_num_replay <- (scouting_num_replay %>% filter(League == "Master"))[[1, 2]]
-gmaster_num_replay <- (scouting_num_replay %>% filter(League == "Grandmaster"))[[1, 2]]
-# write.csv(df_joined_extended, "engagement_data2021-08-05.csv")
-
 win_per <- df_joined_player %>% 
   group_by(League, diff_army_value_lost) %>% 
   summarise(win_per = mean(win))
@@ -660,37 +660,59 @@ ggplot(win_per, aes(x = diff_army_value_lost, y = win_per)) +
   facet_wrap(~League) +
   xlim(-10000, 10000)
 
-
-win_per_base_same_value <- df_joined_player_same_army_value %>% 
-  group_by(League, opponent_lost_worker) %>% 
-  summarise(win_per = mean(win))
-
-win_per_base_same_value_status <- df_joined_player_same_army_value %>% 
+win_per_base <- df_joined_player_used_graph %>% 
   group_by(League, Status) %>% 
   summarise(win_per = mean(win))
 
-win_per_base <- df_joined_player %>% 
-  group_by(League, Status) %>% 
+win_per_base_1 <- df_joined_player_used_graph %>% 
+  group_by(League, Status_worker_lost) %>% 
   summarise(win_per = mean(win))
+
+win_per_base_2 <- df_joined_player_used_graph %>% 
+  group_by(League, Status_army) %>% 
+  summarise(win_per = mean(win))
+
+novice_col <- "#4d4dff"
+prof_col <- "#36b3b3"
+expert_col <- "#884dff"
+
+bronze_col <- "#4d4dff"
+silver_col <- "#36b3b3"
+gold_col <- "#884dff"
+plat_col <- "#00e5e6"
 
 # win percentage ~ status
-a <- ggplot(win_per_base_same_value, aes(x = opponent_lost_worker, y = win_per)) +
-  geom_col(aes(fill = opponent_lost_worker)) + 
-  geom_point() +
-  geom_line(group = 1) +
-  labs(y=y_title, x = "Status of engagement") +
-  facet_wrap(~League) +
-  coord_cartesian(ylim = c(0.3, 0.65))
-
-b <- ggplot(win_per_base_same_value_status, aes(x = Status, y = win_per)) +
+base <- ggplot(win_per_base, aes(x = Status, y = win_per)) +
   geom_col(aes(fill = Status)) + 
   geom_point() +
   geom_line(group = 1) +
   labs(y=y_title, x = "Status of engagement") +
   facet_wrap(~League) +
-  coord_cartesian(ylim = c(0.3, 0.65))
+  coord_cartesian(ylim = c(0.3, 0.65)) +
+  theme(axis.text.x=element_blank()) +
+  scale_fill_manual(values = c(novice_col, prof_col, expert_col))
 
-grid.arrange(a, b)
+base_1 <- ggplot(win_per_base_1, aes(x = Status_worker_lost, y = win_per)) +
+  geom_col(aes(fill = Status_worker_lost)) + 
+  geom_point() +
+  geom_line(group = 1) +
+  labs(y=y_title, x = "Status of engagement") +
+  facet_wrap(~League) +
+  coord_cartesian(ylim = c(0.3, 1)) +
+  theme(axis.text.x=element_blank()) +
+  scale_fill_manual(values = c(bronze_col, silver_col, gold_col, plat_col))
+
+base_2 <- ggplot(win_per_base_2, aes(x = Status_army, y = win_per)) +
+  geom_col(aes(fill = Status_army)) + 
+  geom_point() +
+  geom_line(group = 1) +
+  labs(y=y_title, x = "Status of engagement") +
+  facet_wrap(~League) +
+  coord_cartesian(ylim = c(0.3, 1)) +
+  theme(axis.text.x=element_blank()) +
+  scale_fill_manual(values = c(bronze_col, silver_col, gold_col, plat_col))
+
+grid.arrange(base, base_1, base_2)
 
 win_per_base_amry_lost <- df_joined_player %>% 
   group_by(League, Status, diff_army_value_lost) %>% 

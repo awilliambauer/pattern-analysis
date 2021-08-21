@@ -2,22 +2,27 @@
 library(dplyr)
 
 # import data
-moc <- read.csv("master_of_control_stats_new.csv") %>% 
-  filter(!is.na(Rank))
+# moc <- read.csv("master_of_control_stats_new.csv") %>%
+#   filter(!is.na(Rank))
+moc <- read.csv("sc2_prediction_data2021-08-03.csv") %>%
+  filter(!is.na(rank))
+# moc <- read.csv("scouting_stats_cluster.csv") %>%
+#   filter(!is.na(Rank))
 
 # wrangle data
-moc$Rank <- as.factor(moc$Rank)
+moc$rank <- as.factor(moc$rank)
 moc <- moc %>% 
-  mutate(League = fct_recode(Rank,
+  mutate(League = fct_recode(rank,
                              "Bronze" = "1",
                              "Silver" = "2",
                              "Gold" = "3",
                              "Platinum" = "4",
                              "Diamond" = "5",
                              "Master" = "6",
-                             "Grandmaster" = "7"),
-         Command_rate = CRWarmUp/CRNonWarmUp) %>% 
-  group_by(UID) %>% 
+                             "Grandmaster" = "7")) 
+
+%>% 
+  group_by(uid) %>% 
   filter(n_distinct(League) == 1) %>% 
   ungroup()
 
@@ -65,7 +70,7 @@ moc_test <- moc_sample %>%
 # ======================= # Warmup # ======================= #
 ggplot(moc, aes(x = League, y = Command_rate)) +
   geom_boxplot() +
-  scale_y_log10()
+  y
   
 
 # ======================= # Aggregate Group Control # ======================= #
@@ -75,30 +80,30 @@ ggplot(moc_sample, aes(x = CPS, color = League, group = League)) +
                  position = 'identity', alpha = 0.5) +
   scale_color_hue(direction = -1)
 
-ggplot(moc, aes(x = CPS, color = League, group = League)) +
-  geom_histogram(data = subset(moc_sample, League == 'Bronze'),
-                 aes(y=..count../sum(..count..)), 
-                 fill = NA, size = 1.5, color = "pink") +
-  geom_histogram(data = subset(moc_sample, League == 'Silver'),
-                 aes(y=..count../sum(..count..)), 
-                 fill = NA, size = 1.5, color = "purple") +
-  geom_histogram(data = subset(moc_sample, League == 'Gold'),
-                 aes(y=..count../sum(..count..)), 
-                 fill = NA, size = 1.5, color = "blue") +
-  geom_histogram(data = subset(moc_sample, League == 'Platinum'),
-                 aes(y=..count../sum(..count..)), 
-                 fill = NA, size = 1.5, color = "lightgreen") +
-  geom_histogram(data = subset(moc_sample, League == 'Diamond'),
-                 aes(y=..count../sum(..count..)), 
-                 fill = NA, size = 1.5, color = "darkgreen") +
-  geom_histogram(data = subset(moc_sample, League == 'Master'),
-                 aes(y=..count../sum(..count..)), 
-                 fill = NA, size = 1.5, color = "brown") +
-  geom_histogram(data = subset(moc_sample, League == 'Grandmaster'),
-                 aes(y=..count../sum(..count..)), 
-                 fill = NA, size = 1.5, color = "red") +
-  scale_color_discrete(labels = c("Grandmaster", "Master", "Diamond", "Platinum",
-                                  "Gold", "Silver", "Bronze"))
+# ggplot(moc, aes(x = CPS, color = League, group = League)) +
+#   geom_histogram(data = subset(moc_sample, League == 'Bronze'),
+#                  aes(y=..count../sum(..count..)), 
+#                  fill = NA, size = 1.5, color = "pink") +
+#   geom_histogram(data = subset(moc_sample, League == 'Silver'),
+#                  aes(y=..count../sum(..count..)), 
+#                  fill = NA, size = 1.5, color = "purple") +
+#   geom_histogram(data = subset(moc_sample, League == 'Gold'),
+#                  aes(y=..count../sum(..count..)), 
+#                  fill = NA, size = 1.5, color = "blue") +
+#   geom_histogram(data = subset(moc_sample, League == 'Platinum'),
+#                  aes(y=..count../sum(..count..)), 
+#                  fill = NA, size = 1.5, color = "lightgreen") +
+#   geom_histogram(data = subset(moc_sample, League == 'Diamond'),
+#                  aes(y=..count../sum(..count..)), 
+#                  fill = NA, size = 1.5, color = "darkgreen") +
+#   geom_histogram(data = subset(moc_sample, League == 'Master'),
+#                  aes(y=..count../sum(..count..)), 
+#                  fill = NA, size = 1.5, color = "brown") +
+#   geom_histogram(data = subset(moc_sample, League == 'Grandmaster'),
+#                  aes(y=..count../sum(..count..)), 
+#                  fill = NA, size = 1.5, color = "red") +
+#   scale_color_discrete(labels = c("Grandmaster", "Master", "Diamond", "Platinum",
+#                                   "Gold", "Silver", "Bronze"))
 
 
 ggplot(moc, aes(x = CPS, color = League, group = League)) +
@@ -147,10 +152,10 @@ ggplot(temp_moc, aes(x = League, y = BattleRate)) +
   geom_boxplot() +
   scale_y_log10()
 
-median_macro <- moc %>% 
+median_macro_new <- moc %>% 
   group_by(League) %>% 
-  summarise(Median_peace = median(PeaceRate),
-            Median_battle = median(BattleRate))
+  summarise(Median_peace = median(peace_rate),
+            Median_battle = median(battle_rate))
 
 # ======= debuging ======= #
 

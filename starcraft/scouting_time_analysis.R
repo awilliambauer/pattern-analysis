@@ -2,7 +2,7 @@
 library(tidyverse)
 
 # import data
-scouting <- read.csv("scouting_stats_cluster.csv") %>% 
+scouting <- read.csv("scouting_instances_gm-2021-08-11.csv") %>% 
   filter(!is.na(Rank))
 
 # wrangle data
@@ -45,71 +45,103 @@ master_num_replay <- (scouting_num_replay %>% filter(League == "Master"))[[1, 2]
 gmaster_num_replay <- (scouting_num_replay %>% filter(League == "Grandmaster"))[[1, 2]]
 
 # ===================  when =================== #
+# 
+# ggplot(scouting, aes(x = ScoutTime, fill = League)) +
+#   geom_histogram() +
+#   facet_wrap(~ League) +
+#   xlim(0, 2000) +
+#   labs(title = "When do players scout (unnormalized)")
 
-ggplot(scouting, aes(x = ScoutTime, fill = League)) +
-  geom_histogram() +
-  facet_wrap(~ League) +
-  xlim(0, 2000) +
-  labs(title = "When do players scout (unnormalized)")
 
+
+# scouting_by_starttime <- scouting %>% 
+#   mutate(StartTimeSec = )
+#   count(League, ScoutingStartTime/22.4) 
+
+theme_set(theme_bw())
+xlim <- 3000
+ylim <- 1
+
+m <- max(table(scouting$ScoutingStartTime/22.4)/sum(table(scouting$ScoutingStartTime/22.4)))
+mm <- max(table(scouting$ScoutingStartTime/22.4))
+scaleF <- m/mm
+
+ggplot(data = scouting, aes(x = ScoutingStartTime/22.4)) +
+  geom_density(data = subset(scouting, League == 'Bronze'),
+               aes(y = 75 * ..count../bronze_num_replay)) +
+  geom_density(data = subset(scouting, League == 'Silver'),
+               aes(y = 75 * ..count../silver_num_replay)) +
+  geom_density(data = subset(scouting, League == 'Gold'),
+               aes(y = 80 * ..count../gold_num_replay)) +
+  geom_density(data = subset(scouting, League == 'Platinum'),
+               aes(y = 80 * ..count../platinum_num_replay)) +
+  geom_density(data = subset(scouting, League == 'Diamond'),
+               aes(y = 80 * ..count../diamond_num_replay)) +
+  geom_density(data = subset(scouting, League == 'Master'),
+               aes(y = 80 * ..count../master_num_replay)) +
+  geom_density(data = subset(scouting, League == 'Grandmaster'),
+               aes(y = 80 * ..count../gmaster_num_replay)) +
+  xlim(0, xlim) + 
+  ylim(0, 1)
 
 bronze <- ggplot(data = subset(scouting, League == 'Bronze'), 
-                 aes(x = ScoutTime, y = ..count../bronze_num_replay)) +
+                 aes(x = ScoutingStartTime/22.4, y = ..count../bronze_num_replay)) +
   geom_histogram(color = bronze_col, fill = bronze_col,
                  bins = 40, alpha = 0.6) + 
   labs(y="Scouting Instances/Replay", x = "Gametime-Bronze") +
-  xlim(0, 1500) + 
-  ylim(0, 2.5)
+  xlim(0, xlim) + 
+  ylim(0, ylim)
 
 silver <- ggplot(data = subset(scouting, League == 'Silver'), 
-                 aes(x = ScoutTime, y = ..count../silver_num_replay)) +
+                 aes(x = ScoutingStartTime/22.4, y = ..count../silver_num_replay)) +
   geom_histogram(color = silver_col, fill = silver_col,
                  bins = 40, alpha = 0.6) + 
   labs(y="Scouting Instances/Replay", x = "Gametime-Silver") +
-  xlim(0, 1500)+ 
-  ylim(0, 2.5)
+  xlim(0, xlim)+ 
+  ylim(0, ylim)
 
 gold <- ggplot(data = subset(scouting, League == 'Gold'), 
-                 aes(x = ScoutTime, y = ..count../gold_num_replay)) +
+                 aes(x = ScoutingStartTime/22.4, y = ..count../gold_num_replay)) +
   geom_histogram(color = gold_col, fill = gold_col,
                  bins = 40, alpha = 0.6) + 
   labs(y="Scouting Instances/Replay", x = "Gametime-Gold") +
-  xlim(0, 1500)+ 
-  ylim(0, 2.5)
+  xlim(0, xlim)+ 
+  ylim(0, ylim)
 
 platinum <- ggplot(data = subset(scouting, League == 'Platinum'), 
-                 aes(x = ScoutTime, y = ..count../platinum_num_replay)) +
+                 aes(x = ScoutingStartTime/22.4, y = ..count../platinum_num_replay)) +
   geom_histogram(color = plat_col, fill = plat_col,
                  bins = 40, alpha = 0.6) + 
   labs(y="Scouting Instances/Replay", x = "Gametime-Platinum") +
-  xlim(0, 1500)+ 
-  ylim(0, 2.5)
+  xlim(0, xlim)+ 
+  ylim(0, ylim)
+
 diamond <- ggplot(data = subset(scouting, League == 'Diamond'), 
-                  aes(x = ScoutTime, y = ..count../diamond_num_replay)) +
+                  aes(x = ScoutingStartTime/22.4, y = ..count../diamond_num_replay)) +
   geom_histogram(color = diam_col, fill = diam_col,
                  bins = 40, alpha = 0.6) + 
   labs(y="Scouting Instances/Replay", x = "Gametime-Diamond") +
-  xlim(0, 1500)+ 
-  ylim(0, 2.5)
+  xlim(0, xlim)+ 
+  ylim(0, ylim)
 
 master <- ggplot(data = subset(scouting, League == 'Master'), 
-                 aes(x = ScoutTime, y = ..count../master_num_replay)) +
+                 aes(x = ScoutingStartTime/22.4, y = ..count../master_num_replay)) +
   geom_histogram(color = mast_col, fill = mast_col,
                  bins = 40, alpha = 0.6) + 
   labs(y="Scouting Instances/Replay", x = "Gametime-Master") +
-  xlim(0, 1500)+ 
-  ylim(0, 2.5)
+  xlim(0, xlim)+ 
+  ylim(0, ylim)
 
 gmaster <- ggplot(data = subset(scouting, League == 'Grandmaster'), 
-                 aes(x = ScoutTime, y = ..count../gmaster_num_replay)) +
+                 aes(x = ScoutingStartTime/22.4, y = ..count../gmaster_num_replay)) +
   geom_histogram(color = gmast_col, fill = gmast_col,
                  bins = 40, alpha = 0.6) + 
   labs(y="Scouting Instances/Replay", x = "Gametime-Grandmaster") +
-  xlim(0, 1500) + 
-  ylim(0, 2.5)
+  xlim(0, xlim) + 
+  ylim(0, ylim)
 
 grid.arrange(bronze, silver, gold, platinum, 
-             diamond, master, gmaster)
+             diamond, master, gmaster, nrow = 2, ncol = 4)
 
 
 # how often
@@ -233,7 +265,7 @@ merged_count <- new_scouting_count %>%
 # duration of scouting
 new_scouting$Rank <- as.factor(new_scouting$Rank)
 new_scouting <- new_scouting %>% 
-  mutate(duration = (ScoutingEndTime - ScoutingStartTime)/22.4,
+  mutate(duration = (ScoutingEndTime - ScoutingStartTime/22.4)/22.4,
          League = fct_recode(Rank,
                              "Bronze" = "1",
                              "Silver" = "2",
@@ -243,7 +275,7 @@ new_scouting <- new_scouting %>%
                              "Master" = "6",
                              "Grandmaster" = "7"),
          ScoutEndSec = ScoutingEndTime/22.4,
-         ScoutStartSec = ScoutingStartTime/22.4)
+         ScoutStartSec = ScoutingStartTime/22.4/22.4)
 
 
 new_scouting_player <- new_scouting %>% 
