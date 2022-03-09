@@ -644,7 +644,19 @@ df_joined_player_used_graph <- df_joined_player %>%
                                      "Offense_Greater_Army",
                                      "Offense_Smaller_Army"),
                               Status)) %>% 
-  select(win, Status, Status_worker_lost, Status_army, League)
+  mutate(Skill = fct_collapse(League, 
+                              Novice = c("Bronze", "Silver"),
+                              Proficient = c("Platinum", "Diamond"),
+                              Expert = c("Grandmaster"))) %>% 
+  select(win, Status, Status_worker_lost, Status_army, Skill)
+
+df_joined_player_same_army <- df_joined_player %>% 
+  mutate(Status = ifelse(BaseClusterPlayer == -1, "None",
+                         ifelse(str_detect(combined_field, 
+                                           as.character(BaseClusterPlayer)),
+                                "Defense", "Offense"))) %>% 
+  filter(Status != "None",
+         abs(diff_army_value_lost) < 0.01*max(ArmyValueLost1, ArmyValueLost2))
          
 win_per <- df_joined_player %>% 
   group_by(League, diff_army_value_lost) %>% 
@@ -660,16 +672,28 @@ ggplot(win_per, aes(x = diff_army_value_lost, y = win_per)) +
   facet_wrap(~League) +
   xlim(-10000, 10000)
 
-win_per_base <- df_joined_player_used_graph %>% 
-  group_by(League, Status) %>% 
+df_joined_player_same_army_same_rank <- df_joined_player_same_army %>% 
+  filter(Rank1 == Rank2)
+
+win_per_base <- df_joined_player_same_army_same_rank %>% 
+  filter(League != "Gold", League != "Master") %>% 
+  mutate(Skill = fct_collapse(League, 
+                              Novice = c("Bronze", "Silver"),
+                              Proficient = c("Platinum", "Diamond"),
+                              Expert = c("Grandmaster"))) %>% 
+  group_by(Skill, Status) %>% 
   summarise(win_per = mean(win))
 
 win_per_base_1 <- df_joined_player_used_graph %>% 
-  group_by(League, Status_worker_lost) %>% 
+  filter(Status_worker_lost != "None",
+         Skill != "Gold", Skill != "Master") %>% 
+  group_by(Skill, Status_worker_lost) %>% 
   summarise(win_per = mean(win))
 
 win_per_base_2 <- df_joined_player_used_graph %>% 
-  group_by(League, Status_army) %>% 
+  filter(Status_army != "None", Status_army != "Defense",
+         Skill != "Gold", Skill != "Master") %>% 
+  group_by(Skill, Status_army) %>% 
   summarise(win_per = mean(win))
 
 novice_col <- "#4d4dff"
@@ -680,17 +704,45 @@ bronze_col <- "#4d4dff"
 silver_col <- "#36b3b3"
 gold_col <- "#884dff"
 plat_col <- "#00e5e6"
+diam_col <- "#3655b3"
+
+theme_set(theme_bw())
 
 # win percentage ~ status
-base <- ggplot(win_per_base, aes(x = Status, y = win_per)) +
-  geom_col(aes(fill = Status)) + 
-  geom_point() +
-  geom_line(group = 1) +
+ggplot(win_per_base, aes(x = Status, y = win_per)) +
+  geom_col(aes(fill = Status), alpha = 0.7) +
+  coord_cartesian(ylim = c(0, 1)) +
   labs(y=y_title, x = "Status of engagement") +
-  facet_wrap(~League) +
-  coord_cartesian(ylim = c(0.3, 0.65)) +
-  theme(axis.text.x=element_blank()) +
-  scale_fill_manual(values = c(novice_col, prof_col, expert_col))
+  facet_wrap(~Skill) +
+  theme(axis.text.x=element_blank(),
+        axis.title.x=element_blank()) +
+  scale_fill_manual(name = "Type of engagement",
+                    values = c(prof_col, expert_col))
+
+
+
+# win ~ detailed status
+ggplot() +
+  geom_col(data = win_per_base_1,
+           aes(x = Status_worker_lost, y = win_per, fill = Status_worker_lost),
+           alpha = 0.7) +
+  geom_col(data = win_per_base_2, 
+           aes(x = Status_army, y = win_per, fill = Status_army),
+           alpha = 0.7) +
+  labs(y=y_title, x = "Status of engagement") +
+  facet_wrap(~Skill) +
+  coord_cartesian(ylim = c(0, 1)) +
+  theme(axis.text.x=element_blank(),
+        axis.title.x=element_blank()) +
+  scale_fill_manual(name = "Type of engagement", 
+                    values = c(bronze_col, silver_col, gold_col, plat_col, diam_col),
+                    labels = c("Defense", "Offense where the opponent loses workers",
+                               "Offense where the opponent doesn't lose workers",
+                               "Offense where the offender has greater army",
+                               "Offense where the offender has smaller army")) +
+  guides(colour = guide_legend(override.aes = list(alpha = 0.7)))
+  
+  
 
 base_1 <- ggplot(win_per_base_1, aes(x = Status_worker_lost, y = win_per)) +
   geom_col(aes(fill = Status_worker_lost)) + 
@@ -811,5 +863,17 @@ ggplot(all_stats_check, aes(x = offense_count, y = scout_count)) +
   geom_jitter()
 
 summary(lm(data = all_stats_check, offense_count ~ scout_count))
+
+cpm_apm_warmup <- test_joined %>% group_by(Rank) %>%
+  summarise(cpm_median_warmup = median(CRWarmUp), 
+            cpm_median_non_warmup = median(CRNonWarmUp), 
+            apm_median_warmup = median(apm_warmup), 
+            apm_median_non_warmup = median(apm_non_warmup))
+
+cpm_apm_peace_battle <- test_joined %>% group_by(Rank) %>%
+  summarise(cpm_median_peace = median(PeaceRate), 
+            cpm_median_battle = median(BattleRate), 
+            apm_median_peace = median(apm_peace_macro), 
+            apm_median_battle = median(apm_battle_macro))
 
 write.csv(df_joined_player, "engagement_data_player.csv")

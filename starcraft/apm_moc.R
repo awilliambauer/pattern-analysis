@@ -37,7 +37,7 @@ ggplot(df_warmup, aes(x = League, y = apm_warmup/apm_non_warmup)) +
   theme_bw() +
   labs(y = "Warmup to Non-warmup Actions per Minute Ratio")
 
-# ======================= # Aggregate Group Control # ======================= #
+# ======================= # Aggregate Group Control APM # ======================= #
 order <- levels(df$League)
 bins <- 30
 size_border <- 1.75
@@ -78,3 +78,102 @@ ggplot(df, aes(x = apm, color = League, group = League)) +
   labs(x = "Average actions per minute", 
        y = "Number of players (normalized)")
   
+
+# ======= APM v Region ====== #
+
+df_region <- read.csv("replays_info_player.csv") %>% 
+  filter(Region != "")
+df_region_rank <- df_region %>% count(Region, Rank)
+
+ggplot(df_region_rank, aes(x = Rank, y = n)) + 
+  geom_bar(stat = "identity") + 
+  facet_wrap(~Region)
+
+df_apm <- df %>% select(game_id, uid, apm, League)
+df_region_rank_player <- df_region %>% 
+  inner_join(df_apm, by = c("GameID" = "game_id", "UID" = "uid"))
+
+# US 
+df_region_rank_player_us <- df_region_rank_player %>% 
+  filter(Region == "us")
+
+us_graph <- ggplot(df_region_rank_player_us, aes(x = apm, color = League, group = League)) +
+  geom_histogram(data = subset(df_region_rank_player_us, League == 'Bronze'),
+                 aes(y=..count../sum(..count..)), 
+                 fill = NA, size = size_border,
+                 binwidth = bins) +
+  geom_histogram(data = subset(df_region_rank_player_us, League == 'Silver'),
+                 aes(y=..count../sum(..count..)), 
+                 fill = NA, size = size_border,
+                 binwidth = bins) +
+  geom_histogram(data = subset(df_region_rank_player_us, League == 'Gold'),
+                 aes(y=..count../sum(..count..)), 
+                 fill = NA, size = size_border,
+                 binwidth = bins) +
+  geom_histogram(data = subset(df_region_rank_player_us, League == 'Platinum'),
+                 aes(y=..count../sum(..count..)), 
+                 fill = NA, size = size_border,
+                 binwidth = bins) +
+  geom_histogram(data = subset(df_region_rank_player_us, League == 'Diamond'),
+                 aes(y=..count../sum(..count..)), 
+                 fill = NA, size = size_border,
+                 binwidth = bins) +
+  geom_histogram(data = subset(df_region_rank_player_us, League == 'Master'),
+                 aes(y=..count../sum(..count..)), 
+                 fill = NA, size = size_border,
+                 binwidth = bins) +
+  geom_histogram(data = subset(df_region_rank_player_us, League == 'Grandmaster'),
+                 aes(y=..count../sum(..count..)), 
+                 fill = NA, size = size_border,
+                 binwidth = bins) +
+  xlim(0, 600) + 
+  scale_color_manual(breaks = rev(order), 
+                     values = rev(c("#ff00bf", "#5a00ff", "#008fff", "#01ff8c",
+                                    "#5cff00", "#ffba03", "#ff0029"))) +
+  theme_bw() + 
+  labs(x = "Average actions per minute (US)", 
+       y = "Number of players (normalized)")
+
+# EU 
+df_region_rank_player_eu <- df_region_rank_player %>% 
+  filter(Region == "eu")
+
+eu_graph <- ggplot(df_region_rank_player_eu, aes(x = apm, color = League, group = League)) +
+  geom_histogram(data = subset(df_region_rank_player_eu, League == 'Bronze'),
+                 aes(y=..count../sum(..count..)), 
+                 fill = NA, size = size_border,
+                 binwidth = bins) +
+  geom_histogram(data = subset(df_region_rank_player_eu, League == 'Silver'),
+                 aes(y=..count../sum(..count..)), 
+                 fill = NA, size = size_border,
+                 binwidth = bins) +
+  geom_histogram(data = subset(df_region_rank_player_eu, League == 'Gold'),
+                 aes(y=..count../sum(..count..)), 
+                 fill = NA, size = size_border,
+                 binwidth = bins) +
+  geom_histogram(data = subset(df_region_rank_player_us, League == 'Platinum'),
+                 aes(y=..count../sum(..count..)), 
+                 fill = NA, size = size_border,
+                 binwidth = bins) +
+  geom_histogram(data = subset(df_region_rank_player_eu, League == 'Diamond'),
+                 aes(y=..count../sum(..count..)), 
+                 fill = NA, size = size_border,
+                 binwidth = bins) +
+  geom_histogram(data = subset(df_region_rank_player_eu, League == 'Master'),
+                 aes(y=..count../sum(..count..)), 
+                 fill = NA, size = size_border,
+                 binwidth = bins) +
+  geom_histogram(data = subset(df_region_rank_player_eu, League == 'Grandmaster'),
+                 aes(y=..count../sum(..count..)), 
+                 fill = NA, size = size_border,
+                 binwidth = bins) +
+  xlim(0, 600) + 
+  scale_color_manual(breaks = rev(order), 
+                     values = rev(c("#ff00bf", "#5a00ff", "#008fff", "#01ff8c",
+                                    "#5cff00", "#ffba03", "#ff0029"))) +
+  theme_bw() + 
+  labs(x = "Average actions per minute (EU)", 
+       y = "Number of players (normalized)")
+
+# combine 2 graphs
+grid.arrange(us_graph, eu_graph)
